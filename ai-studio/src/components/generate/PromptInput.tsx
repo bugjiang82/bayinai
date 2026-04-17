@@ -117,6 +117,11 @@ export default function PromptInput({
                 const prompt = result.data.prompt;
                 setExtractedPrompt(prompt);
                 setShowCopyButton(true);
+                // 自动将提取的提示词插入到文本框中
+                onChange(prompt);
+                if (storageKey) {
+                  localStorage.setItem(storageKey, prompt);
+                }
               }
             }
           };
