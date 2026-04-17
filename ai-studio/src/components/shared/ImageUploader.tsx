@@ -79,7 +79,7 @@ export default function ImageUploader({
   };
 
   const handleFile = useCallback(
-    (f: File) => {
+    async (f: File) => {
       setError(null);
       const validationError = validateFile(f);
       if (validationError) {
@@ -92,28 +92,44 @@ export default function ImageUploader({
       reader.onload = (e) => {
         const previewUrl = e.target?.result as string;
         setPreview(previewUrl);
-        // 保存到本地存储
-        if (storageKey) {
-          localStorage.setItem(storageKey, previewUrl);
-        }
       };
       reader.readAsDataURL(f);
 
-      // Simulate upload progress
+      // 实际上传文件
       setIsUploading(true);
       setUploadProgress(0);
-      const interval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setIsUploading(false);
-            return 100;
-          }
-          return prev + Math.random() * 20 + 5;
+      
+      try {
+        const formData = new FormData();
+        formData.append('file', f);
+        
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
         });
-      }, 200);
-
-      onUpload?.(f);
+        
+        if (!response.ok) {
+          throw new Error('上传失败');
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+          // 上传成功，保存到本地存储
+          if (storageKey) {
+            localStorage.setItem(storageKey, result.data.url);
+          }
+          // 更新预览为服务器返回的URL
+          setPreview(result.data.url);
+          onUpload?.(f);
+        } else {
+          throw new Error(result.error || '上传失败');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '上传失败');
+      } finally {
+        setIsUploading(false);
+        setUploadProgress(100);
+      }
     },
     [maxSize, onUpload, storageKey, validateFile]
   );
