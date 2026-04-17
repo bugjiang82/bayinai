@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useRouter } from 'next/navigation';
 import { AuthProvider } from "@/providers/AuthProvider";
 import {
   Sparkles,
@@ -872,22 +873,47 @@ function CTASection() {
 /* ========================================
    Main Page Component
    ======================================== */
+function HomePageContent() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  
+  // 如果用户已登录，重定向到创作页面
+  React.useEffect(() => {
+    if (status === 'authenticated') {
+      router.push('/generate');
+    }
+  }, [status, router]);
+  
+  // 如果正在加载或已认证，不显示内容
+  if (status === 'loading' || status === 'authenticated') {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="animate-pulse text-zinc-500">加载中...</div>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="min-h-screen bg-[#0a0a0a]">
+      <Navbar />
+      <main>
+        <HeroSection />
+        <ShowcaseSection />
+        <FeaturesSection />
+        <AgentsSection />
+        <StatsSection />
+        <TutorialsSection />
+        <CTASection />
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
     <AuthProvider>
-      <div className="min-h-screen bg-[#0a0a0a]">
-        <Navbar />
-        <main>
-          <HeroSection />
-          <ShowcaseSection />
-          <FeaturesSection />
-          <AgentsSection />
-          <StatsSection />
-          <TutorialsSection />
-          <CTASection />
-        </main>
-        <Footer />
-      </div>
+      <HomePageContent />
     </AuthProvider>
   );
 }
