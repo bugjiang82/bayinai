@@ -142,7 +142,7 @@ export default function PromptInput({
       console.error('提取提示词失败:', error);
       setIsExtracting(false);
     }
-  }, []);
+  }, [onChange, storageKey]);
 
   // 复制提示词
   const handleCopyPrompt = useCallback(() => {
