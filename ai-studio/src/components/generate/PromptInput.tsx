@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { X, Sparkles, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ interface PromptInputProps {
   maxLength?: number;
   className?: string;
   showQuickPrompts?: boolean;
+  storageKey?: string;
 }
 
 export default function PromptInput({
@@ -31,23 +32,44 @@ export default function PromptInput({
   maxLength = 2000,
   className,
   showQuickPrompts = true,
+  storageKey = "prompt-input",
 }: PromptInputProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // 从本地存储加载数据
+  useEffect(() => {
+    if (storageKey && !value) {
+      const storedValue = localStorage.getItem(storageKey);
+      if (storedValue) {
+        onChange(storedValue);
+      }
+    }
+  }, [storageKey, value, onChange]);
+
+  // 保存数据到本地存储
+  useEffect(() => {
+    if (storageKey) {
+      localStorage.setItem(storageKey, value);
+    }
+  }, [storageKey, value]);
+
   const handleClear = useCallback(() => {
     onChange("");
-  }, [onChange]);
+    if (storageKey) {
+      localStorage.removeItem(storageKey);
+    }
+  }, [onChange, storageKey]);
 
   const handleInsertPrompt = useCallback(
     (prompt: string) => {
-      if (value) {
-        onChange(value + "，" + prompt);
-      } else {
-        onChange(prompt);
+      const newValue = value ? value + "，" + prompt : prompt;
+      onChange(newValue);
+      if (storageKey) {
+        localStorage.setItem(storageKey, newValue);
       }
       setShowSuggestions(false);
     },
-    [value, onChange]
+    [value, onChange, storageKey]
   );
 
   return (

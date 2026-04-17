@@ -62,6 +62,7 @@ interface ParamPanelProps {
   isGenerating: boolean;
   credits: number;
   className?: string;
+  storageKey?: string;
 }
 
 export default function ParamPanel({
@@ -81,6 +82,7 @@ export default function ParamPanel({
   isGenerating,
   credits,
   className,
+  storageKey = "text-to-image-prompt",
 }: ParamPanelProps) {
   const [showNegativePrompt, setShowNegativePrompt] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -106,6 +108,7 @@ export default function ParamPanel({
             value={prompt}
             onChange={onPromptChange}
             showQuickPrompts
+            storageKey={storageKey}
           />
         </div>
 
@@ -129,7 +132,13 @@ export default function ParamPanel({
             <div className="mt-2 animate-in fade-in-0 slide-in-from-top-2 duration-200">
               <textarea
                 value={negativePrompt}
-                onChange={(e) => onNegativePromptChange(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  onNegativePromptChange(value);
+                  // 保存到本地存储
+                  const negativeStorageKey = storageKey.replace("prompt", "negative-prompt");
+                  localStorage.setItem(negativeStorageKey, value);
+                }}
                 placeholder="输入不希望出现在图像中的内容..."
                 className="w-full min-h-[60px] resize-none rounded-lg bg-[#0f0f0f] border border-white/[0.08] px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 focus:border-indigo-500/30"
               />

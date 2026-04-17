@@ -35,15 +35,18 @@ export default function ImageToImagePage() {
   // Reference images
   const [referenceImages, setReferenceImages] = useState<string[]>(() => {
     const ref = searchParams.get("ref");
-    return ref ? [ref] : [];
+    if (ref) return [ref];
+    // 从本地存储加载
+    const storedImage = localStorage.getItem("image-to-image-reference");
+    return storedImage ? [storedImage] : [];
   });
   const [referenceWeight, setReferenceWeight] = useState(0.7);
   const [transformType, setTransformType] = useState<TransformType>("style-transfer");
 
   // Local state for params
-  const [prompt, setPrompt] = useState(store.currentParams.prompt);
+  const [prompt, setPrompt] = useState(store.currentParams.prompt || localStorage.getItem("image-to-image-prompt") || "");
   const [negativePrompt, setNegativePrompt] = useState(
-    store.currentParams.negativePrompt || ""
+    store.currentParams.negativePrompt || localStorage.getItem("image-to-image-negative-prompt") || ""
   );
   const [model, setModel] = useState<ModelType>(
     store.currentParams.model === "pro" ? "pro" : "flash"
@@ -74,7 +77,7 @@ export default function ImageToImagePage() {
         if (res.ok) {
           const json = await res.json();
           if (json.code === 0 && json.data?.list) {
-            setHistory(json.data.list.map((item: any) => ({
+            setHistory(json.data.list.map((item: { id: string; outputUrl: string; thumbnailUrl: string; prompt: string }) => ({
               id: item.id,
               url: item.outputUrl,
               thumb: item.thumbnailUrl || item.outputUrl,
@@ -92,12 +95,18 @@ export default function ImageToImagePage() {
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       setReferenceImages((prev) => [...prev, dataUrl]);
+      // 保存到本地存储
+      localStorage.setItem("image-to-image-reference", dataUrl);
     };
     reader.readAsDataURL(file);
   }, []);
 
   const handleRemoveImage = useCallback((index: number) => {
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
+    // 从本地存储移除
+    if (index === 0) {
+      localStorage.removeItem("image-to-image-reference");
+    }
   }, []);
 
   const handleGenerate = useCallback(async () => {
@@ -351,9 +360,15 @@ export default function ImageToImagePage() {
       <div className="w-[40%] flex flex-col min-w-[340px] max-w-[480px]">
         <ParamPanel
           prompt={prompt}
-          onPromptChange={setPrompt}
+          onPromptChange={(value) => {
+            setPrompt(value);
+            localStorage.setItem("image-to-image-prompt", value);
+          }}
           negativePrompt={negativePrompt}
-          onNegativePromptChange={setNegativePrompt}
+          onNegativePromptChange={(value) => {
+            setNegativePrompt(value);
+            localStorage.setItem("image-to-image-negative-prompt", value);
+          }}
           model={model}
           onModelChange={setModel}
           selectedSize={selectedSize}
