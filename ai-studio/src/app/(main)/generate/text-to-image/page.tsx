@@ -19,9 +19,9 @@ export default function TextToImagePage() {
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Local state for params
-  const [prompt, setPrompt] = useState(store.currentParams.prompt || localStorage.getItem("text-to-image-prompt") || "");
+  const [prompt, setPrompt] = useState(store.currentParams.prompt || "");
   const [negativePrompt, setNegativePrompt] = useState(
-    store.currentParams.negativePrompt || localStorage.getItem("text-to-image-negative-prompt") || ""
+    store.currentParams.negativePrompt || ""
   );
   const [model, setModel] = useState<ModelType>(
     store.currentParams.model === "pro" ? "pro" : "flash"
@@ -45,6 +45,19 @@ export default function TextToImagePage() {
       mode: "text-to-image",
     });
   }, [prompt, negativePrompt, model, setParams]);
+
+  // Load from localStorage on component mount
+  useEffect(() => {
+    const savedPrompt = localStorage.getItem("text-to-image-prompt");
+    const savedNegativePrompt = localStorage.getItem("text-to-image-negative-prompt");
+    
+    if (savedPrompt) {
+      setPrompt(savedPrompt);
+    }
+    if (savedNegativePrompt) {
+      setNegativePrompt(savedNegativePrompt);
+    }
+  }, []);
 
   // Cleanup interval on unmount
   useEffect(() => {

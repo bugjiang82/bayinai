@@ -36,17 +36,15 @@ export default function ImageToImagePage() {
   const [referenceImages, setReferenceImages] = useState<string[]>(() => {
     const ref = searchParams.get("ref");
     if (ref) return [ref];
-    // 从本地存储加载
-    const storedImage = localStorage.getItem("image-to-image-reference");
-    return storedImage ? [storedImage] : [];
+    return [];
   });
   const [referenceWeight, setReferenceWeight] = useState(0.7);
   const [transformType, setTransformType] = useState<TransformType>("style-transfer");
 
   // Local state for params
-  const [prompt, setPrompt] = useState(store.currentParams.prompt || localStorage.getItem("image-to-image-prompt") || "");
+  const [prompt, setPrompt] = useState(store.currentParams.prompt || "");
   const [negativePrompt, setNegativePrompt] = useState(
-    store.currentParams.negativePrompt || localStorage.getItem("image-to-image-negative-prompt") || ""
+    store.currentParams.negativePrompt || ""
   );
   const [model, setModel] = useState<ModelType>(
     store.currentParams.model === "pro" ? "pro" : "flash"
@@ -67,6 +65,23 @@ export default function ImageToImagePage() {
         clearInterval(progressIntervalRef.current);
       }
     };
+  }, []);
+
+  // Load from localStorage on component mount
+  useEffect(() => {
+    const savedPrompt = localStorage.getItem("image-to-image-prompt");
+    const savedNegativePrompt = localStorage.getItem("image-to-image-negative-prompt");
+    const savedReference = localStorage.getItem("image-to-image-reference");
+    
+    if (savedPrompt) {
+      setPrompt(savedPrompt);
+    }
+    if (savedNegativePrompt) {
+      setNegativePrompt(savedNegativePrompt);
+    }
+    if (savedReference && referenceImages.length === 0) {
+      setReferenceImages([savedReference]);
+    }
   }, []);
 
   // Load history
