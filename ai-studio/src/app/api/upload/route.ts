@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error("文件大小不能超过10MB"), { status: 400 });
     }
 
-    const result = await uploadFile(file);
+    const result = await uploadFile(file, session.user.id);
 
     return NextResponse.json(success(result, "上传成功"));
   } catch (err) {
