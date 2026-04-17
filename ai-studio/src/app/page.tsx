@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { AuthProvider } from "@/providers/AuthProvider";
 import {
   Sparkles,
   ImagePlus,
@@ -26,8 +28,20 @@ import {
   GraduationCap,
   Film,
   MousePointerClick,
+  User,
+  Settings,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import AnimatedSection from "@/components/shared/AnimatedSection";
 import Footer from "@/components/layout/Footer";
 
@@ -35,6 +49,7 @@ import Footer from "@/components/layout/Footer";
    Navigation Bar (Simplified for landing)
    ======================================== */
 function Navbar() {
+  const { data: session } = useSession();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -83,16 +98,65 @@ function Navbar() {
 
         {/* Right Actions */}
         <div className="hidden md:flex items-center gap-3">
-          <Button variant="outline" size="sm" asChild className="border-white/20 text-white hover:bg-white/10 hover:text-white">
-            <Link href="/login">登录</Link>
-          </Button>
-          <Button
-            size="sm"
-            className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-500/20"
-            asChild
-          >
-            <Link href="/register">免费注册</Link>
-          </Button>
+          {session?.user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={session.user.image || undefined} alt={session.user.name || "User"} />
+                    <AvatarFallback className="bg-indigo-500 text-white">
+                      {session.user.name?.charAt(0) || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-[#1a1a1a] border-white/[0.08] text-white">
+                <DropdownMenuLabel>我的账号</DropdownMenuLabel>
+                <DropdownMenuSeparator className="border-white/[0.08]" />
+                <DropdownMenuItem asChild>
+                  <Link href="/generate" className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    开始创作
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/gallery" className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4" />
+                    我的作品
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="flex items-center gap-2">
+                    <Settings className="w-4 h-4" />
+                    设置
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="border-white/[0.08]" />
+                <DropdownMenuItem asChild>
+                  <a
+                    href="/api/auth/signout"
+                    className="flex items-center gap-2 text-red-400 hover:text-red-300"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    退出登录
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" asChild className="border-white/20 text-white hover:bg-white/10 hover:text-white">
+                <Link href="/login">登录</Link>
+              </Button>
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-500/20"
+                asChild
+              >
+                <Link href="/register">免费注册</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Mobile Menu Toggle */}
@@ -105,41 +169,79 @@ function Navbar() {
       </div>
 
       {/* Mobile Menu */}
-      <div
-        className={`md:hidden overflow-hidden transition-all duration-300 ${
-          mobileOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-        } bg-black/90 backdrop-blur-xl border-b border-white/[0.06]`}
-      >
-        <div className="px-4 py-4 space-y-1">
-          {[
-            { href: "#features", label: "功能" },
-            { href: "#agents", label: "智能体" },
-            { href: "#showcase", label: "作品" },
-            { href: "#tutorials", label: "教程" },
-          ].map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileOpen(false)}
-              className="block px-4 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
-            >
-              {link.label}
-            </a>
-          ))}
-          <div className="pt-3 border-t border-white/[0.06] flex flex-col gap-2">
-            <Button variant="outline" size="sm" asChild className="w-full justify-center border-white/20 text-white hover:bg-white/10 hover:text-white">
-              <Link href="/login">登录</Link>
-            </Button>
-            <Button
-              size="sm"
-              className="w-full justify-center bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0"
-              asChild
-            >
-              <Link href="/register">免费注册</Link>
-            </Button>
+        <div
+          className={`md:hidden overflow-hidden transition-all duration-300 ${
+            mobileOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          } bg-black/90 backdrop-blur-xl border-b border-white/[0.06]`}
+        >
+          <div className="px-4 py-4 space-y-1">
+            {[
+              { href: "#features", label: "功能" },
+              { href: "#agents", label: "智能体" },
+              { href: "#showcase", label: "作品" },
+              { href: "#tutorials", label: "教程" },
+            ].map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileOpen(false)}
+                className="block px-4 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+              >
+                {link.label}
+              </a>
+            ))}
+            <div className="pt-3 border-t border-white/[0.06]">
+              {session?.user ? (
+                <div className="space-y-2">
+                  <Link
+                    href="/generate"
+                    onClick={() => setMobileOpen(false)}
+                    className="block px-4 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors flex items-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    开始创作
+                  </Link>
+                  <Link
+                    href="/gallery"
+                    onClick={() => setMobileOpen(false)}
+                    className="block px-4 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors flex items-center gap-2"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    我的作品
+                  </Link>
+                  <Link
+                    href="/settings"
+                    onClick={() => setMobileOpen(false)}
+                    className="block px-4 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors flex items-center gap-2"
+                  >
+                    <Settings className="w-4 h-4" />
+                    设置
+                  </Link>
+                  <a
+                    href="/api/auth/signout"
+                    className="block px-4 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-white/[0.06] transition-colors flex items-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    退出登录
+                  </a>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Button variant="outline" size="sm" asChild className="w-full justify-center border-white/20 text-white hover:bg-white/10 hover:text-white">
+                    <Link href="/login">登录</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="w-full justify-center bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0"
+                    asChild
+                  >
+                    <Link href="/register">免费注册</Link>
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
     </header>
   );
 }
@@ -772,18 +874,20 @@ function CTASection() {
    ======================================== */
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <Navbar />
-      <main>
-        <HeroSection />
-        <ShowcaseSection />
-        <FeaturesSection />
-        <AgentsSection />
-        <StatsSection />
-        <TutorialsSection />
-        <CTASection />
-      </main>
-      <Footer />
-    </div>
+    <AuthProvider>
+      <div className="min-h-screen bg-[#0a0a0a]">
+        <Navbar />
+        <main>
+          <HeroSection />
+          <ShowcaseSection />
+          <FeaturesSection />
+          <AgentsSection />
+          <StatsSection />
+          <TutorialsSection />
+          <CTASection />
+        </main>
+        <Footer />
+      </div>
+    </AuthProvider>
   );
 }
