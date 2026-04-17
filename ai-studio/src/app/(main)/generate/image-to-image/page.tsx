@@ -220,7 +220,7 @@ export default function ImageToImagePage() {
   ]);
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-4">
+    <div className="min-h-[calc(100vh-8rem)] flex gap-4">
       {/* Left: Canvas area (60%) */}
       <div className="w-[60%] flex flex-col min-w-0 gap-4">
         {/* Reference image upload area */}
@@ -328,7 +328,7 @@ export default function ImageToImagePage() {
         </div>
 
         {/* Canvas */}
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-[300px]">
           <Canvas
             images={images}
             isGenerating={store.isGenerating}
@@ -339,8 +339,8 @@ export default function ImageToImagePage() {
         {/* History thumbnails */}
         {history.length > 0 && (
           <div className="mt-4">
-            <h3 className="text-xs font-medium text-zinc-500 mb-1.5">历史记录</h3>
-            <div className="grid grid-cols-8 gap-1.5">
+            <h3 className="text-xs font-medium text-zinc-500 mb-2">历史记录</h3>
+            <div className="grid grid-cols-8 gap-2">
               {history.map((item) => (
                 <div
                   key={item.id}
