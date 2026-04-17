@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react";
-import { X, Sparkles, Lightbulb } from "lucide-react";
+import { X, Sparkles, Lightbulb, Image, Clipboard, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +35,10 @@ export default function PromptInput({
   storageKey = "prompt-input",
 }: PromptInputProps) {
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractedPrompt, setExtractedPrompt] = useState("");
+  const [showCopyButton, setShowCopyButton] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // 从本地存储加载数据
   useEffect(() => {
@@ -71,6 +75,83 @@ export default function PromptInput({
     },
     [value, onChange, storageKey]
   );
+
+  // 提取提示词功能
+  const handleExtractPrompt = useCallback(async () => {
+    setIsExtracting(true);
+    setExtractedPrompt("");
+    setShowCopyButton(false);
+    
+    try {
+      // 创建文件输入
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      
+      input.onchange = async (e) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        
+        if (file) {
+          // 读取文件为 base64
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            const base64Data = event.target?.result as string;
+            const imageBase64 = base64Data.split(',')[1]; // 移除 data:image/jpeg;base64, 前缀
+            
+            // 调用 API
+            const response = await fetch('/api/extract-prompt', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                imageBase64,
+                mimeType: file.type,
+              }),
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success) {
+                const prompt = result.data.prompt;
+                setExtractedPrompt(prompt);
+                setShowCopyButton(true);
+              }
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+        
+        setIsExtracting(false);
+      };
+      
+      input.click();
+    } catch (error) {
+      console.error('提取提示词失败:', error);
+      setIsExtracting(false);
+    }
+  }, []);
+
+  // 复制提示词
+  const handleCopyPrompt = useCallback(() => {
+    if (extractedPrompt) {
+      navigator.clipboard.writeText(extractedPrompt).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  }, [extractedPrompt]);
+
+  // 插入提取的提示词
+  const handleInsertExtractedPrompt = useCallback(() => {
+    if (extractedPrompt) {
+      onChange(extractedPrompt);
+      if (storageKey) {
+        localStorage.setItem(storageKey, extractedPrompt);
+      }
+    }
+  }, [extractedPrompt, onChange, storageKey]);
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -110,6 +191,16 @@ export default function PromptInput({
               灵感提示
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+            onClick={handleExtractPrompt}
+            disabled={isExtracting}
+          >
+            <Image className="w-3.5 h-3.5 mr-1" />
+            {isExtracting ? "提取中..." : "提取提示词"}
+          </Button>
         </div>
         <span
           className={cn(
@@ -122,6 +213,46 @@ export default function PromptInput({
           {value.length}/{maxLength}
         </span>
       </div>
+
+      {/* 提取的提示词 */}
+      {extractedPrompt && (
+        <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+          <div className="flex items-start justify-between mb-2">
+            <h4 className="text-xs font-medium text-indigo-300">提取的提示词</h4>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                onClick={handleInsertExtractedPrompt}
+              >
+                插入
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                onClick={handleCopyPrompt}
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3 h-3 mr-1" />
+                    已复制
+                  </>
+                ) : (
+                  <>
+                    <Clipboard className="w-3 h-3 mr-1" />
+                    复制
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words">
+            {extractedPrompt}
+          </p>
+        </div>
+      )}
 
       {showSuggestions && (
         <div className="space-y-1.5 animate-in fade-in-0 slide-in-from-top-2 duration-200">
