@@ -37,7 +37,7 @@ export default function PromptInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedPrompt, setExtractedPrompt] = useState("");
-  const [showCopyButton, setShowCopyButton] = useState(false);
+  const [extractionError, setExtractionError] = useState("");
   const [copied, setCopied] = useState(false);
 
   // 从本地存储加载数据
@@ -80,7 +80,7 @@ export default function PromptInput({
   const handleExtractPrompt = useCallback(async () => {
     setIsExtracting(true);
     setExtractedPrompt("");
-    setShowCopyButton(false);
+    setExtractionError("");
     
     try {
       // 创建文件输入
@@ -126,9 +126,11 @@ export default function PromptInput({
                 }
               } else {
                 console.error('提取提示词失败:', result.error);
+                setExtractionError(`提取提示词失败: ${result.error}`);
               }
             } else {
               console.error('API 调用失败:', response.status, response.statusText);
+              setExtractionError(`API 调用失败: ${response.status} ${response.statusText}`);
             }
           };
           reader.readAsDataURL(file);
@@ -140,6 +142,8 @@ export default function PromptInput({
       input.click();
     } catch (error) {
       console.error('提取提示词失败:', error);
+      const errorMessage = error instanceof Error ? error.message : '提取提示词失败';
+      setExtractionError(errorMessage);
       setIsExtracting(false);
     }
   }, [onChange, storageKey]);
@@ -225,42 +229,54 @@ export default function PromptInput({
         </span>
       </div>
 
-      {/* 提取的提示词 */}
-      {extractedPrompt && (
-        <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+      {/* 提取提示词结果显示区域 */}
+      {(extractedPrompt || extractionError) && (
+        <div className={`p-3 rounded-lg animate-in fade-in-0 slide-in-from-top-2 duration-200 ${
+          extractionError 
+            ? 'bg-red-500/10 border border-red-500/20' 
+            : 'bg-indigo-500/10 border border-indigo-500/20'
+        }`}>
           <div className="flex items-start justify-between mb-2">
-            <h4 className="text-xs font-medium text-indigo-300">提取的提示词</h4>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-                onClick={handleInsertExtractedPrompt}
-              >
-                插入
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-                onClick={handleCopyPrompt}
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-3 h-3 mr-1" />
-                    已复制
-                  </>
-                ) : (
-                  <>
-                    <Clipboard className="w-3 h-3 mr-1" />
-                    复制
-                  </>
-                )}
-              </Button>
-            </div>
+            <h4 className={`text-xs font-medium ${
+              extractionError ? 'text-red-300' : 'text-indigo-300'
+            }`}>
+              {extractionError ? '提取失败' : '提取的提示词'}
+            </h4>
+            {extractedPrompt && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                  onClick={handleInsertExtractedPrompt}
+                >
+                  插入
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                  onClick={handleCopyPrompt}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3 h-3 mr-1" />
+                      已复制
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard className="w-3 h-3 mr-1" />
+                      复制
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
-          <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words">
-            {extractedPrompt}
+          <p className={`text-xs whitespace-pre-wrap break-words ${
+            extractionError ? 'text-red-300' : 'text-zinc-300'
+          }`}>
+            {extractionError || extractedPrompt}
           </p>
         </div>
       )}
