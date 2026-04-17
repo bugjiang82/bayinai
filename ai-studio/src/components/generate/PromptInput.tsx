@@ -114,19 +114,18 @@ export default function PromptInput({
             if (response.ok) {
               const result = await response.json();
               console.log('提取提示词结果:', result);
-              if (result.success) {
+              if (result.code === 0) {
                 const prompt = result.data.prompt;
                 console.log('提取的提示词:', prompt);
                 setExtractedPrompt(prompt);
-                setShowCopyButton(true);
                 // 自动将提取的提示词插入到文本框中
                 onChange(prompt);
                 if (storageKey) {
                   localStorage.setItem(storageKey, prompt);
                 }
               } else {
-                console.error('提取提示词失败:', result.error);
-                setExtractionError(`提取提示词失败: ${result.error}`);
+                console.error('提取提示词失败:', result.message);
+                setExtractionError(`提取提示词失败: ${result.message}`);
               }
             } else {
               console.error('API 调用失败:', response.status, response.statusText);
