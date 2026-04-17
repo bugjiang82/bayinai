@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { success, error } from "@/types/api";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "");
 
 // 定义提取提示词的模型配置
 const model = genAI.getGenerativeModel({
