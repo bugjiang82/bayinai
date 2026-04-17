@@ -16,6 +16,7 @@ interface ImageUploaderProps {
   className?: string;
   preview?: string | null;
   compact?: boolean;
+  storageKey?: string;
 }
 
 export default function ImageUploader({
@@ -25,6 +26,7 @@ export default function ImageUploader({
   className,
   preview: externalPreview,
   compact = false,
+  storageKey = "image-upload",
 }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -33,6 +35,16 @@ export default function ImageUploader({
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 从本地存储加载数据
+  useEffect(() => {
+    if (storageKey && !externalPreview) {
+      const storedPreview = localStorage.getItem(storageKey);
+      if (storedPreview) {
+        setPreview(storedPreview);
+      }
+    }
+  }, [storageKey, externalPreview]);
 
   // Handle paste from clipboard
   useEffect(() => {
@@ -78,7 +90,12 @@ export default function ImageUploader({
       setFile(f);
       const reader = new FileReader();
       reader.onload = (e) => {
-        setPreview(e.target?.result as string);
+        const previewUrl = e.target?.result as string;
+        setPreview(previewUrl);
+        // 保存到本地存储
+        if (storageKey) {
+          localStorage.setItem(storageKey, previewUrl);
+        }
       };
       reader.readAsDataURL(f);
 
@@ -98,7 +115,7 @@ export default function ImageUploader({
 
       onUpload?.(f);
     },
-    [maxSize, onUpload]
+    [maxSize, onUpload, storageKey, validateFile]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -146,6 +163,10 @@ export default function ImageUploader({
     setUploadProgress(0);
     setIsUploading(false);
     setError(null);
+    // 从本地存储移除
+    if (storageKey) {
+      localStorage.removeItem(storageKey);
+    }
     onRemove?.();
   };
 

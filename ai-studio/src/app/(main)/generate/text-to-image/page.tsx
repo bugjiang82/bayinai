@@ -19,9 +19,9 @@ export default function TextToImagePage() {
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Local state for params
-  const [prompt, setPrompt] = useState(store.currentParams.prompt);
+  const [prompt, setPrompt] = useState(store.currentParams.prompt || localStorage.getItem("text-to-image-prompt") || "");
   const [negativePrompt, setNegativePrompt] = useState(
-    store.currentParams.negativePrompt || ""
+    store.currentParams.negativePrompt || localStorage.getItem("text-to-image-negative-prompt") || ""
   );
   const [model, setModel] = useState<ModelType>(
     store.currentParams.model === "pro" ? "pro" : "flash"
@@ -63,7 +63,7 @@ export default function TextToImagePage() {
         if (res.ok) {
           const json = await res.json();
           if (json.code === 0 && json.data?.list) {
-            setHistory(json.data.list.map((item: any) => ({
+            setHistory(json.data.list.map((item: { id: string; outputUrl: string; thumbnailUrl: string; prompt: string }) => ({
               id: item.id,
               url: item.outputUrl,
               thumb: item.thumbnailUrl || item.outputUrl,

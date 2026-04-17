@@ -54,7 +54,7 @@ export async function createTemplate(data: CreateTemplateData) {
       tags: data.tags || [],
       prompt: data.prompt,
       negativePrompt: data.negativePrompt,
-      params: (data.params || {}) as any,
+      params: JSON.stringify(data.params || {}),
       isPublic: data.isPublic ?? true,
       userId: data.userId,
     },
