@@ -1,0 +1,223 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户认证 ====================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ==================== 核心模型 ====================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  phone     String?  @unique
+  password  String?
+  name      String
+  avatar    String?
+  role      String   @default("USER")
+  credits   Int      @default(20)
+  industry  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  generations  Generation[]
+  agents       Agent[]
+  templates    Template[]
+  teamMembers  TeamMember[]
+  creditLogs   CreditLog[]
+  ownedTeams   Team[]          @relation("TeamOwner")
+  accounts     Account[]
+  sessions     Session[]
+  transfersFrom CreditTransfer[] @relation("TransferFrom")
+  transfersTo   CreditTransfer[] @relation("TransferTo")
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  avatar      String?
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members  TeamMember[]
+
+  @@index([ownerId])
+}
+
+model TeamMember {
+  id      String   @id @default(cuid())
+  userId  String
+  teamId  String
+  role    String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@index([userId])
+  @@index([teamId])
+}
+
+// ==================== AI 生成 ====================
+
+model Generation {
+  id          String    @id @default(cuid())
+  userId      String
+  agentId     String?
+  type        String    @default("TEXT_TO_IMAGE")
+  status      String    @default("PENDING")
+  prompt      String
+  negativePrompt String?
+  params      String   @default("{}")
+  inputUrl    String?
+  outputUrl   String?
+  thumbnailUrl String?
+  width       Int?
+  height      Int?
+  seed        Int?
+  cost        Int       @default(0)
+  errorMsg    String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent Agent? @relation(fields: [agentId], references: [id])
+
+  @@index([userId])
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Agent {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  avatar      String?
+  systemPrompt String
+  config      String   @default("{}")
+  isPublic    Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  userId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  generations Generation[]
+
+  @@index([userId])
+  @@index([isPublic])
+  @@index([sortOrder])
+}
+
+// ==================== 积分系统 ====================
+
+model CreditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   @default("RECHARGE")
+  amount    Int
+  balance   Int
+  remark    String?
+  refId     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model CreditTransfer {
+  id          String   @id @default(cuid())
+  fromUserId  String
+  toUserId    String
+  amount      Int
+  status      String   @default("PENDING")
+  remark      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  fromUser User @relation("TransferFrom", fields: [fromUserId], references: [id])
+  toUser   User @relation("TransferTo", fields: [toUserId], references: [id])
+
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([status])
+}
+
+// ==================== 模板 ====================
+
+model Template {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  coverImage  String?
+  category    String
+  tags        String   @default("[]")
+  prompt      String
+  negativePrompt String?
+  params      String   @default("{}")
+  isPublic    Boolean  @default(true)
+  useCount    Int      @default(0)
+  sortOrder   Int      @default(0)
+  userId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([category])
+  @@index([isPublic])
+  @@index([sortOrder])
+}

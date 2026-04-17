@@ -1,0 +1,36 @@
+import React from "react";
+import { cn } from "@/lib/utils";
+
+interface LoadingSpinnerProps {
+  size?: "sm" | "md" | "lg";
+  className?: string;
+  label?: string;
+}
+
+const sizeMap = {
+  sm: "h-4 w-4 border-2",
+  md: "h-8 w-8 border-2",
+  lg: "h-12 w-12 border-3",
+};
+
+export default function LoadingSpinner({
+  size = "md",
+  className,
+  label,
+}: LoadingSpinnerProps) {
+  return (
+    <div className={cn("flex flex-col items-center justify-center gap-3", className)}>
+      <div
+        className={cn(
+          "animate-spin rounded-full border-zinc-700 border-t-indigo-500",
+          sizeMap[size]
+        )}
+        role="status"
+        aria-label={label || "加载中"}
+      />
+      {label && (
+        <p className="text-sm text-zinc-500 animate-pulse-soft">{label}</p>
+      )}
+    </div>
+  );
+}
