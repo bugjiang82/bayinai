@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -52,6 +53,7 @@ export default function LoginPage() {
         email,
         password,
         redirect: false,
+        remember: rememberMe,
       });
 
       if (result?.error) {
@@ -171,6 +173,25 @@ export default function LoginPage() {
           {errors.password && (
             <p className="text-xs text-destructive mt-1">{errors.password}</p>
           )}
+        </div>
+
+        {/* Remember Me */}
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="rounded border-white/[0.12] bg-white/[0.03] text-indigo-500 focus:ring-indigo-500/50"
+            />
+            记住我
+          </label>
+          <Link
+            href="/forgot-password"
+            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            忘记密码？
+          </Link>
         </div>
 
         {/* Submit Button */}
