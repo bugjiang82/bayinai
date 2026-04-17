@@ -206,19 +206,21 @@ export default function TextToImagePage() {
   );
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-4">
+    <div className="min-h-[calc(100vh-8rem)] flex gap-4">
       {/* Left: Canvas area (60%) */}
       <div className="w-[60%] flex flex-col min-w-0">
-        <Canvas
-          images={images}
-          isGenerating={store.isGenerating}
-          progress={store.progress}
-          onImageAction={handleImageAction}
-        />
+        <div className="flex-1 min-h-[400px]">
+          <Canvas
+            images={images}
+            isGenerating={store.isGenerating}
+            progress={store.progress}
+            onImageAction={handleImageAction}
+          />
+        </div>
         {history.length > 0 && (
-          <div className="mt-3">
-            <h3 className="text-xs font-medium text-zinc-500 mb-1.5">历史记录</h3>
-            <div className="grid grid-cols-8 gap-1.5">
+          <div className="mt-4">
+            <h3 className="text-xs font-medium text-zinc-500 mb-2">历史记录</h3>
+            <div className="grid grid-cols-8 gap-2">
               {history.map((item) => (
                 <div
                   key={item.id}
