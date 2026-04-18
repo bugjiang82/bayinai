@@ -143,7 +143,8 @@ export async function POST(request: NextRequest) {
       ],
       generationConfig: {
         aspectRatio: "16:9",
-        negativePrompt: "flat, 2d, low quality, distorted lines, signature"
+        negativePrompt: negativePrompt || "flat, 2d, low quality, distorted lines, signature",
+        guidanceScale: aiCreativity || 7.5
       }
     });
 

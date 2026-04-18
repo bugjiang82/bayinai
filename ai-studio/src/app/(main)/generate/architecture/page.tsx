@@ -132,7 +132,7 @@ export default function ArchitecturePage() {
       const payload: any = {
         mode,
         prompt: prompt.trim(),
-        mainImage: mainImage.split(',')[1], // Remove data URL prefix
+        mainImage: mainImage.includes(',') ? mainImage.split(',')[1] : mainImage, // Remove data URL prefix
         negativePrompt: negativePromptText,
         fidelity: fidelity / 100, // 转换为 0-1
         styleImpact: styleImpact / 100, // 转换为 0-1
@@ -140,12 +140,12 @@ export default function ArchitecturePage() {
       };
 
       if (styleRefImage) {
-        payload.styleRefImage = styleRefImage.split(',')[1];
+        payload.styleRefImage = styleRefImage.includes(',') ? styleRefImage.split(',')[1] : styleRefImage;
       }
 
       if (mode === 'INPAINT' && maskImage && baseRendered) {
-        payload.maskImage = maskImage.split(',')[1];
-        payload.baseRendered = baseRendered.split(',')[1];
+        payload.maskImage = maskImage.includes(',') ? maskImage.split(',')[1] : maskImage;
+        payload.baseRendered = baseRendered.includes(',') ? baseRendered.split(',')[1] : baseRendered;
       }
 
       // Call API
