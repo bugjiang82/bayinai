@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from 'next/navigation';
 import { AuthProvider } from "@/providers/AuthProvider";
+import { auth } from "@/lib/auth";
 import {
   Sparkles,
   ImagePlus,
@@ -929,9 +930,16 @@ function HomePageContent() {
   );
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  let session;
+  try {
+    session = await auth();
+  } catch {
+    session = null;
+  }
+  
   return (
-    <AuthProvider>
+    <AuthProvider session={session}>
       <HomePageContent />
     </AuthProvider>
   );
