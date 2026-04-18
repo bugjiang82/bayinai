@@ -254,7 +254,7 @@ export default function ArchitecturePage() {
   };
 
   const handleGenerate = useCallback(async () => {
-    if (!params.prompt) return;
+    if (!params.prompt || !params.structureRef) return;
 
     const creditsPerImage = 3;
     const totalCost = creditsPerImage;
@@ -265,34 +265,21 @@ export default function ArchitecturePage() {
 
     try {
       // 构建负面提示词
-      let finalPrompt = params.prompt;
       const negParts = [...params.negativePrompt];
       if (params.customNegativePrompt) negParts.push(params.customNegativePrompt);
-      
-      if (negParts.length > 0) {
-        finalPrompt += ` . Negative prompt: ${negParts.join(', ')}`;
-      }
+      const negativePromptText = negParts.join(', ');
 
-      // Prepare payload
+      // Prepare payload in API expected format
       const payload: any = {
-        mode: params.mode,
-        prompt: finalPrompt,
-        aspectRatio: params.aspectRatio,
-        imageSize: params.imageSize,
-        guidanceScale: params.guidanceScale,
-        structureStrength: params.structureStrength,
-        styleStrength: params.styleStrength,
-        useGoogleSearch: params.useGoogleSearch,
-        useImageSearch: params.useImageSearch,
+        mode: params.mode === 'cad_to_3d' ? 'CAD_TO_3D' : params.mode === 'su_render' ? 'SU_RENDER' : 'INPAINT',
+        prompt: params.prompt,
+        mainImage: params.structureRef.includes(',') ? params.structureRef.split(',')[1] : params.structureRef,
+        styleRefImage: params.styleRef ? (params.styleRef.includes(',') ? params.styleRef.split(',')[1] : params.styleRef) : undefined,
+        negativePrompt: negativePromptText,
+        fidelity: params.structureStrength,
+        styleImpact: params.styleStrength,
+        aiCreativity: params.guidanceScale,
       };
-
-      if (params.structureRef) {
-        payload.structureRef = params.structureRef.includes(',') ? params.structureRef.split(',')[1] : params.structureRef;
-      }
-
-      if (params.styleRef) {
-        payload.styleRef = params.styleRef.includes(',') ? params.styleRef.split(',')[1] : params.styleRef;
-      }
 
       // Call API
       const response = await fetch("/api/generate/architecture", {
@@ -781,10 +768,10 @@ export default function ArchitecturePage() {
                   重置
                 </button>
                 <button
-                  disabled={!params.prompt || isGenerating}
+                  disabled={!params.prompt || !params.structureRef || isGenerating}
                   onClick={handleGenerate}
                   className={`flex-1 py-3 text-sm font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-2
-                    ${(!params.prompt || isGenerating) ? 'opacity-50 cursor-not-allowed' : ''}
+                    ${(!params.prompt || !params.structureRef || isGenerating) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                   style={{
                     background: 'linear-gradient(to right, #eab308, #f59e0b)',
@@ -808,6 +795,11 @@ export default function ArchitecturePage() {
               {!params.prompt && (
                 <p className="text-xs text-zinc-600 text-center mt-2">
                   请输入提示词后开始生成
+                </p>
+              )}
+              {!params.structureRef && (
+                <p className="text-xs text-zinc-600 text-center mt-2">
+                  请上传结构/线稿后开始生成
                 </p>
               )}
             </div>
