@@ -17,6 +17,11 @@ const QUICK_PROMPTS = [
   "写实人物肖像，柔和光线，电影质感",
   "水彩风格风景画，山间溪流，春日氛围",
   "极简主义产品设计，白色背景，柔和阴影",
+  {
+    text: "进阶设计",
+    action: "navigate",
+    path: "/generate/architecture"
+  },
 ];
 
 interface PromptInputProps {
