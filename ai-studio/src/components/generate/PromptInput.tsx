@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 const QUICK_PROMPTS = [
-  "一座现代风格的建筑，玻璃幕墙，蓝天白云",
+  {
+    text: "一座现代风格的建筑，玻璃幕墙，蓝天白云",
+    action: "navigate",
+    path: "/generate/architecture"
+  },
   "温馨的日式室内设计，木质家具，自然光线",
   "未来科技感城市夜景，霓虹灯光，赛博朋克风格",
   "写实人物肖像，柔和光线，电影质感",
@@ -65,11 +69,16 @@ export default function PromptInput({
   }, [onChange, storageKey]);
 
   const handleInsertPrompt = useCallback(
-    (prompt: string) => {
-      const newValue = value ? value + "，" + prompt : prompt;
-      onChange(newValue);
-      if (storageKey) {
-        localStorage.setItem(storageKey, newValue);
+    (prompt: any) => {
+      if (typeof prompt === 'object' && prompt.action === 'navigate') {
+        // Navigate to architecture page
+        window.location.href = prompt.path;
+      } else {
+        const newValue = value ? value + "，" + prompt : prompt;
+        onChange(newValue);
+        if (storageKey) {
+          localStorage.setItem(storageKey, newValue);
+        }
       }
       setShowSuggestions(false);
     },
@@ -279,16 +288,26 @@ export default function PromptInput({
 
       {showSuggestions && (
         <div className="space-y-1.5 animate-in fade-in-0 slide-in-from-top-2 duration-200">
-          {QUICK_PROMPTS.map((prompt, index) => (
-            <button
-              key={index}
-              className="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors truncate cursor-pointer"
-              onClick={() => handleInsertPrompt(prompt)}
-            >
-              <Sparkles className="w-3 h-3 inline-block mr-1.5 text-zinc-600" />
-              {prompt}
-            </button>
-          ))}
+          {QUICK_PROMPTS.map((item, index) => {
+            const prompt = typeof item === 'string' ? item : item.text;
+            const isNavigate = typeof item === 'object' && item.action === 'navigate';
+            return (
+              <button
+                key={index}
+                className={cn(
+                  "w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors truncate cursor-pointer",
+                  isNavigate && "border border-indigo-500/20 bg-indigo-500/5"
+                )}
+                onClick={() => handleInsertPrompt(item)}
+              >
+                <Sparkles className="w-3 h-3 inline-block mr-1.5 text-zinc-600" />
+                {prompt}
+                {isNavigate && (
+                  <span className="ml-2 text-[10px] text-indigo-400">→</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
