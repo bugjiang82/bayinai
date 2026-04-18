@@ -233,6 +233,4 @@ export default function AgentsPage() {
   );
 }
 
-function cn(...inputs: (string | undefined | false)[]) {
-  return inputs.filter(Boolean).join(" ");
-}
+
