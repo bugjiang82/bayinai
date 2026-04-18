@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { prompt, agentId } = body;
+    const { prompt } = body;
 
     if (!prompt) {
       return NextResponse.json(error("请提供提示词"), { status: 400 });
@@ -37,7 +37,6 @@ export async function POST(request: NextRequest) {
     const generation = await prisma.generation.create({
       data: {
         userId: session.user.id,
-        agentId: agentId || "image-generator",
         type: "TEXT_TO_IMAGE",
         status: "PROCESSING",
         prompt,
