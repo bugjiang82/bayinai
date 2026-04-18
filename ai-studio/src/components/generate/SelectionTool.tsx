@@ -45,6 +45,8 @@ export default function SelectionTool({
   const [currentPoint, setCurrentPoint] = useState<Point | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isBreathing, setIsBreathing] = useState(false);
+  const animationFrameRef = useRef<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -141,10 +143,43 @@ export default function SelectionTool({
     ctx.fillRect(0, 0, displayCanvasRef.current.width, displayCanvasRef.current.height);
     
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.drawImage(maskCanvasRef.current, 0, 0);
+    
+    if (isBreathing) {
+      const baseAlpha = 0.6;
+      const breathRange = 0.2;
+      const breathPhase = Math.sin(Date.now() / 300);
+      
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = maskCanvasRef.current.width;
+      tempCanvas.height = maskCanvasRef.current.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      
+      if (tempCtx) {
+        tempCtx.drawImage(maskCanvasRef.current, 0, 0);
+        
+        tempCtx.globalCompositeOperation = 'source-in';
+        
+        const gradient = tempCtx.createRadialGradient(
+          tempCanvas.width / 2, tempCanvas.height / 2, 0,
+          tempCanvas.width / 2, tempCanvas.height / 2, Math.max(tempCanvas.width, tempCanvas.height)
+        );
+        
+        const alpha = baseAlpha + breathPhase * breathRange;
+        gradient.addColorStop(0, `rgba(0, 255, 255, ${alpha * 0.3})`);
+        gradient.addColorStop(0.5, `rgba(0, 255, 0, ${alpha * 0.2})`);
+        gradient.addColorStop(1, `rgba(0, 255, 255, ${alpha * 0.1})`);
+        
+        tempCtx.fillStyle = gradient;
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        ctx.drawImage(tempCanvas, 0, 0);
+      }
+    } else {
+      ctx.drawImage(maskCanvasRef.current, 0, 0);
+    }
     
     ctx.globalCompositeOperation = 'source-over';
-  }, []);
+  }, [isBreathing]);
 
   const updateSelection = useCallback(() => {
     if (!maskCanvasRef.current) return;
@@ -180,15 +215,23 @@ export default function SelectionTool({
       if (currentPoint) {
         ctx.lineTo(currentPoint.x, currentPoint.y);
       }
-      ctx.strokeStyle = '#6366f1';
-      ctx.lineWidth = 2;
+      
+      ctx.shadowColor = 'rgba(0, 255, 255, 0.6)';
+      ctx.shadowBlur = 10;
+      
+      ctx.strokeStyle = '#00FFFF';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 5]);
       ctx.stroke();
+      
+      ctx.shadowBlur = 0;
+      ctx.setLineDash([]);
     }
 
     points.forEach((point, i) => {
       ctx.beginPath();
-      ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
-      ctx.fillStyle = i === 0 ? '#22c55e' : '#6366f1';
+      ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? '#00FF00' : '#00FFFF';
       ctx.fill();
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 2;
@@ -222,6 +265,10 @@ export default function SelectionTool({
 
     setPoints([]);
     setCurrentPoint(null);
+    setIsBreathing(true);
+    
+    setTimeout(() => setIsBreathing(false), 1000);
+    
     renderDisplay();
     updateSelection();
   }, [points, saveHistory, renderDisplay, updateSelection]);
@@ -316,6 +363,25 @@ export default function SelectionTool({
       initCanvas();
     }
   }, [initCanvas]);
+
+  useEffect(() => {
+    const animate = () => {
+      if (isBreathing) {
+        renderDisplay();
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
+    };
+    
+    if (isBreathing) {
+      animate();
+    }
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isBreathing, renderDisplay]);
 
   const handleImageLoad = () => {
     initCanvas();
