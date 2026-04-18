@@ -8,7 +8,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 // 定义提取提示词的模型配置
 const model = genAI.getGenerativeModel({
   model: "gemini-3-flash", // 使用最新 Gemini 3 Flash
-  systemInstruction: "你是一个专业的视觉艺术提示词专家。请分析用户提供的图片，提取其核心视觉元素、风格、构图、光影及材质，并将其转化为适用于 AI 生图模型的高质量英文提示词。",
+  systemInstruction: "你是一个专业的视觉艺术提示词专家。请分析用户提供的图片，提取其核心视觉元素、风格、构图、光影及材质，并将其转化为适用于Gemini Nano banana生图模型的高质量英文提示词。",
 });
 
 export async function POST(request: NextRequest) {
