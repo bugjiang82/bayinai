@@ -911,8 +911,9 @@ function HomePageContent() {
 }
 
 export default function HomePage() {
+  const { data: session } = useSession();
   return (
-    <AuthProvider>
+    <AuthProvider session={session}>
       <HomePageContent />
     </AuthProvider>
   );
