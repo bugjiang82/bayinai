@@ -3,7 +3,11 @@ import { Stage, Layer, Image as KonvaImage, Line, Rect, Circle, Group } from 're
 import { useEditStore } from '@/store/editStore';
 import useImage from 'use-image';
 
-export const KonvaCanvas: React.FC = () => {
+interface KonvaCanvasProps {
+  className?: string;
+}
+
+export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({ className = "" }) => {
   const {
     currentImage,
     tool,
@@ -17,14 +21,14 @@ export const KonvaCanvas: React.FC = () => {
   } = useEditStore();
 
   const [image] = useImage(currentImage || '');
-  const stageRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<any>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentLine, setCurrentLine] = useState<number[] | null>(null);
   const [newShape, setNewShape] = useState<{ id: string; type: 'rect' | 'circle'; x: number; y: number; width?: number; height?: number; radius?: number; stroke: string; strokeWidth: number } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    const pos = e.currentTarget.getStage().getPointerPosition();
+  const handleMouseDown = (e: any) => {
+    const pos = e.target.getStage().getPointerPosition();
     
     if (tool === 'brush' || tool === 'eraser') {
       setIsDrawing(true);
@@ -71,8 +75,8 @@ export const KonvaCanvas: React.FC = () => {
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const stage = e.currentTarget.getStage();
+  const handleMouseMove = (e: any) => {
+    const stage = e.target.getStage();
     const pos = stage.getPointerPosition();
     setMousePos(pos);
 
@@ -129,7 +133,7 @@ export const KonvaCanvas: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center p-8 bg-[#050505] overflow-hidden">
+    <div className={`flex-1 flex items-center justify-center p-8 bg-[#050505] overflow-hidden ${className}`}>
       <div className="canvas-container relative rounded-lg border border-white/10 overflow-hidden">
         <Stage
           width={800}

@@ -18,7 +18,7 @@ import {
   ShieldAlert,
   Zap
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   ImageGenerationParams, 
   AspectRatio, 
@@ -447,6 +447,8 @@ export default function App() {
               mode: "generic",
               structureStrength: 0.9,
               styleStrength: 0.6,
+              useGoogleSearch: false,
+              useImageSearch: false,
             })}
             className="banana-btn btn-secondary text-sm"
           >
