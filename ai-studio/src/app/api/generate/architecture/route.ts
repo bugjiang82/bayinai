@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
+import fs from "fs";
+import path from "path";
+import prisma from "@/lib/prisma";
 import { success, error } from "@/types/api";
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "");
+const ai = new GoogleGenAI({
+  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
+});
 
 // 图像生成大冒险：全能渲染引擎
 export async function POST(request: NextRequest) {
@@ -36,78 +41,157 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error("重绘模式需要遮罩和底图"), { status: 400 });
     }
 
-    // 1. 初始化基础配置
-    let structureStrength = 0.92; // 默认高强度锁定
-    let denoisingStrength = 0.75;
-    let referenceType = "STRUCTURE";
-
-    // 2. 根据模式动态调整"冒险参数"
-    switch (mode) {
-      case 'CAD_TO_3D':
-        // CAD转3D需要留出空间让墙体"生长"，强度略降
-        structureStrength = 0.82;
-        break;
-      case 'SU_RENDER':
-        // SU渲染需要严格对齐建模线条
-        structureStrength = 0.95;
-        break;
-      case 'INPAINT':
-        // 重绘模式的核心是去噪强度和遮罩
-        denoisingStrength = 0.8;
-        break;
+    // 检查积分
+    const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+    const cost = 3;
+    if (user.credits < cost) {
+      throw new Error("积分不足");
     }
 
-    // 3. 使用前端传递的参数覆盖默认值
-    if (fidelity !== undefined) {
-      structureStrength = fidelity;
-    }
-    if (styleImpact !== undefined) {
-      // 风格强度在前端已处理，这里不需要额外处理
-    }
-
-
-
-    // 调用模型
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3-flash-preview"
+    // 创建生成记录
+    const generation = await prisma.generation.create({
+      data: {
+        userId: session.user.id,
+        type: "IMAGE_TO_IMAGE",
+        status: "PROCESSING",
+        prompt,
+        negativePrompt,
+        params: JSON.stringify({
+          mode,
+          fidelity,
+          styleImpact,
+          aiCreativity,
+        }),
+        cost,
+      },
     });
 
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            { 
-              inlineData: {
-                data: mainImage,
-                mimeType: "image/jpeg"
-              }
-            },
-            ...(styleRefImage ? [{
-              inlineData: {
-                data: styleRefImage,
-                mimeType: "image/jpeg"
-              }
-            }] : []),
-            ...(mode === 'INPAINT' ? [{
-              inlineData: {
-                data: baseRendered!,
-                mimeType: "image/jpeg"
-              }
-            }, {
-              inlineData: {
-                data: maskImage!,
-                mimeType: "image/jpeg"
-              }
-            }] : [])
-          ]
+    try {
+      // 构建完整提示词
+      let fullPrompt = prompt;
+      if (negativePrompt) {
+        fullPrompt += `\n\n避免以下内容: ${negativePrompt}`;
+      }
+      
+      // 添加模式特定的提示词
+      if (mode === 'CAD_TO_3D') {
+        fullPrompt = `将这个CAD平面图转换为3D建筑效果图，保持原有的几何结构，还原度${fidelity * 100}%。\n\n${fullPrompt}`;
+      } else if (mode === 'SU_RENDER') {
+        fullPrompt = `对这个SketchUp白模进行高清渲染，保持原有的建筑结构，还原度${fidelity * 100}%。\n\n${fullPrompt}`;
+      }
+
+      const contents: Array<
+        | { text: string }
+        | { inlineData: { mimeType: string; data: string }; text?: string }
+      > = [];
+
+      // 添加主图片
+      contents.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: mainImage,
+        },
+      });
+
+      // 添加风格参考图片（如果有）
+      if (styleRefImage) {
+        contents.push({
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: styleRefImage,
+          },
+        });
+        fullPrompt += `\n\n请参考这张图片的风格进行渲染，风格强度${styleImpact * 100}%。`;
+      }
+
+      // 添加提示词
+      contents.push({ text: fullPrompt });
+
+      // 调用 Gemini API
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-image-preview",
+        contents: contents,
+        config: {
+          responseModalities: ["IMAGE"],
+          imageConfig: {
+            aspectRatio: "1:1",
+            imageSize: "1K",
+          },
+        },
+      });
+
+      // 解析响应
+      const outputDir = path.join(process.cwd(), "public", "outputs", session.user.id);
+      fs.mkdirSync(outputDir, { recursive: true });
+
+      const filename = `${generation.id}.png`;
+      const filepath = path.join(outputDir, filename);
+
+      let outputBase64: string | undefined;
+      let hasImage = false;
+
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData?.data) {
+          const buffer = Buffer.from(part.inlineData.data, "base64");
+          fs.writeFileSync(filepath, buffer);
+          outputBase64 = part.inlineData.data;
+          hasImage = true;
         }
-      ]
-    });
+      }
 
-    // 模拟生成结果
-    return NextResponse.json(success({ outputUrl: "https://picsum.photos/seed/architecture/1920/1080" }, "生成成功"));
+      if (!hasImage) {
+        if (fs.existsSync(filepath)) {
+          fs.unlinkSync(filepath);
+        }
+        throw new Error("未能生成图片");
+      }
+
+      const outputUrl = `/outputs/${session.user.id}/${filename}`;
+
+      // 扣除积分
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { credits: { decrement: cost } },
+      });
+
+      // 创建积分日志
+      await prisma.creditLog.create({
+        data: {
+          userId: session.user.id,
+          type: "GENERATE",
+          amount: -cost,
+          balance: user.credits - cost,
+          remark: "进阶设计生成",
+          refId: generation.id,
+        },
+      });
+
+      // 更新生成记录
+      const now = new Date();
+      await prisma.generation.update({
+        where: { id: generation.id },
+        data: {
+          status: "COMPLETED",
+          outputUrl,
+          completedAt: now,
+        },
+      });
+
+      return NextResponse.json(success({ outputUrl }, "生成成功"));
+    } catch (err) {
+      // 更新失败状态
+      await prisma.generation.update({
+        where: { id: generation.id },
+        data: {
+          status: "FAILED",
+          errorMsg: err instanceof Error ? err.message : "生成失败",
+        },
+      });
+      throw err;
+    }
   } catch (err) {
     console.error("生成失败:", err);
     const message = err instanceof Error ? err.message : "生成失败";
