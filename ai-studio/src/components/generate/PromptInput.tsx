@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 const QUICK_PROMPTS = [
-  "一座现代风格的建筑，玻璃幕墙，蓝天白云",
+  {
+    text: "一座现代风格的建筑，玻璃幕墙，蓝天白云",
+    action: "navigate",
+    path: "/generate/architecture"
+  },
   "温馨的日式室内设计，木质家具，自然光线",
   "未来科技感城市夜景，霓虹灯光，赛博朋克风格",
   "写实人物肖像，柔和光线，电影质感",
@@ -37,7 +41,7 @@ export default function PromptInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedPrompt, setExtractedPrompt] = useState("");
-  const [extractionError, setExtractionError] = useState("");
+  const [showCopyButton, setShowCopyButton] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // 从本地存储加载数据
@@ -65,11 +69,16 @@ export default function PromptInput({
   }, [onChange, storageKey]);
 
   const handleInsertPrompt = useCallback(
-    (prompt: string) => {
-      const newValue = value ? value + "，" + prompt : prompt;
-      onChange(newValue);
-      if (storageKey) {
-        localStorage.setItem(storageKey, newValue);
+    (prompt: any) => {
+      if (typeof prompt === 'object' && prompt.action === 'navigate') {
+        // Navigate to architecture page
+        window.location.href = prompt.path;
+      } else {
+        const newValue = value ? value + "，" + prompt : prompt;
+        onChange(newValue);
+        if (storageKey) {
+          localStorage.setItem(storageKey, newValue);
+        }
       }
       setShowSuggestions(false);
     },
@@ -80,7 +89,7 @@ export default function PromptInput({
   const handleExtractPrompt = useCallback(async () => {
     setIsExtracting(true);
     setExtractedPrompt("");
-    setExtractionError("");
+    setShowCopyButton(false);
     
     try {
       // 创建文件输入
@@ -96,56 +105,53 @@ export default function PromptInput({
           // 读取文件为 base64
           const reader = new FileReader();
           reader.onload = async (event) => {
-            const base64Data = event.target?.result as string;
-            const imageBase64 = base64Data.split(',')[1]; // 移除 data:image/jpeg;base64, 前缀
-            
-            // 调用 API
-            const response = await fetch('/api/extract-prompt', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                imageBase64,
-                mimeType: file.type,
-              }),
-            });
-            
-            if (response.ok) {
+            try {
+              const base64Data = event.target?.result as string;
+              const imageBase64 = base64Data.split(',')[1]; // 移除 data:image/jpeg;base64, 前缀
+              
+              // 调用 API
+              const response = await fetch('/api/extract-prompt', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  imageBase64,
+                  mimeType: file.type,
+                }),
+              });
+              
               const result = await response.json();
-              console.log('提取提示词结果:', result);
+              
               if (result.code === 0) {
                 const prompt = result.data.prompt;
-                console.log('提取的提示词:', prompt);
                 setExtractedPrompt(prompt);
-                // 自动将提取的提示词插入到文本框中
-                onChange(prompt);
-                if (storageKey) {
-                  localStorage.setItem(storageKey, prompt);
-                }
+                setShowCopyButton(true);
               } else {
                 console.error('提取提示词失败:', result.message);
-                setExtractionError(`提取提示词失败: ${result.message}`);
+                setExtractedPrompt(`提取失败: ${result.message}`);
+                setShowCopyButton(false);
               }
-            } else {
-              console.error('API 调用失败:', response.status, response.statusText);
-              setExtractionError(`API 调用失败: ${response.status} ${response.statusText}`);
+            } catch (error) {
+              console.error('提取提示词失败:', error);
+              setExtractedPrompt(`提取失败: ${error instanceof Error ? error.message : '未知错误'}`);
+              setShowCopyButton(false);
+            } finally {
+              setIsExtracting(false);
             }
           };
           reader.readAsDataURL(file);
+        } else {
+          setIsExtracting(false);
         }
-        
-        setIsExtracting(false);
       };
       
       input.click();
     } catch (error) {
       console.error('提取提示词失败:', error);
-      const errorMessage = error instanceof Error ? error.message : '提取提示词失败';
-      setExtractionError(errorMessage);
       setIsExtracting(false);
     }
-  }, [onChange, storageKey]);
+  }, []);
 
   // 复制提示词
   const handleCopyPrompt = useCallback(() => {
@@ -228,20 +234,22 @@ export default function PromptInput({
         </span>
       </div>
 
-      {/* 提取提示词结果显示区域 */}
-      {(extractedPrompt || extractionError) && (
-        <div className={`p-3 rounded-lg animate-in fade-in-0 slide-in-from-top-2 duration-200 ${
-          extractionError 
-            ? 'bg-red-500/10 border border-red-500/20' 
-            : 'bg-indigo-500/10 border border-indigo-500/20'
-        }`}>
+      {/* 提取的提示词或错误信息 */}
+      {extractedPrompt && (
+        <div className={cn(
+          "p-3 rounded-lg animate-in fade-in-0 slide-in-from-top-2 duration-200",
+          showCopyButton 
+            ? "bg-indigo-500/10 border border-indigo-500/20" 
+            : "bg-red-500/10 border border-red-500/20"
+        )}>
           <div className="flex items-start justify-between mb-2">
-            <h4 className={`text-xs font-medium ${
-              extractionError ? 'text-red-300' : 'text-indigo-300'
-            }`}>
-              {extractionError ? '提取失败' : '提取的提示词'}
+            <h4 className={cn(
+              "text-xs font-medium",
+              showCopyButton ? "text-indigo-300" : "text-red-300"
+            )}>
+              {showCopyButton ? "提取的提示词" : "错误信息"}
             </h4>
-            {extractedPrompt && (
+            {showCopyButton && (
               <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
@@ -272,26 +280,34 @@ export default function PromptInput({
               </div>
             )}
           </div>
-          <p className={`text-xs whitespace-pre-wrap break-words ${
-            extractionError ? 'text-red-300' : 'text-zinc-300'
-          }`}>
-            {extractionError || extractedPrompt}
+          <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words">
+            {extractedPrompt}
           </p>
         </div>
       )}
 
       {showSuggestions && (
         <div className="space-y-1.5 animate-in fade-in-0 slide-in-from-top-2 duration-200">
-          {QUICK_PROMPTS.map((prompt, index) => (
-            <button
-              key={index}
-              className="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors truncate cursor-pointer"
-              onClick={() => handleInsertPrompt(prompt)}
-            >
-              <Sparkles className="w-3 h-3 inline-block mr-1.5 text-zinc-600" />
-              {prompt}
-            </button>
-          ))}
+          {QUICK_PROMPTS.map((item, index) => {
+            const prompt = typeof item === 'string' ? item : item.text;
+            const isNavigate = typeof item === 'object' && item.action === 'navigate';
+            return (
+              <button
+                key={index}
+                className={cn(
+                  "w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors truncate cursor-pointer",
+                  isNavigate && "border border-indigo-500/20 bg-indigo-500/5"
+                )}
+                onClick={() => handleInsertPrompt(item)}
+              >
+                <Sparkles className="w-3 h-3 inline-block mr-1.5 text-zinc-600" />
+                {prompt}
+                {isNavigate && (
+                  <span className="ml-2 text-[10px] text-indigo-400">→</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

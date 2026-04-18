@@ -100,59 +100,50 @@ function Navbar() {
         {/* Right Actions */}
         <div className="hidden md:flex items-center gap-3">
           {session?.user ? (
-            <>
-              <Button
-                size="sm"
-                className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-500/20"
-                asChild
-              >
-                <Link href="/generate">进入工作区</Link>
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={session.user.image || undefined} alt={session.user.name || "User"} />
-                      <AvatarFallback className="bg-indigo-500 text-white">
-                        {session.user.name?.charAt(0) || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-[#1a1a1a] border-white/[0.08] text-white">
-                  <DropdownMenuLabel>我的账号</DropdownMenuLabel>
-                  <DropdownMenuSeparator className="border-white/[0.08]" />
-                  <DropdownMenuItem asChild>
-                    <Link href="/generate" className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" />
-                      开始创作
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/gallery" className="flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4" />
-                      我的作品
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/settings" className="flex items-center gap-2">
-                      <Settings className="w-4 h-4" />
-                      设置
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="border-white/[0.08]" />
-                  <DropdownMenuItem asChild>
-                    <a
-                      href="/api/auth/signout"
-                      className="flex items-center gap-2 text-red-400 hover:text-red-300"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      退出登录
-                    </a>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={session.user.image || undefined} alt={session.user.name || "User"} />
+                    <AvatarFallback className="bg-indigo-500 text-white">
+                      {session.user.name?.charAt(0) || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-[#1a1a1a] border-white/[0.08] text-white">
+                <DropdownMenuLabel>我的账号</DropdownMenuLabel>
+                <DropdownMenuSeparator className="border-white/[0.08]" />
+                <DropdownMenuItem asChild>
+                  <Link href="/generate" className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    开始创作
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/gallery" className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4" />
+                    我的作品
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="flex items-center gap-2">
+                    <Settings className="w-4 h-4" />
+                    设置
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="border-white/[0.08]" />
+                <DropdownMenuItem asChild>
+                  <a
+                    href="/api/auth/signout"
+                    className="flex items-center gap-2 text-red-400 hover:text-red-300"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    退出登录
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <>
               <Button variant="outline" size="sm" asChild className="border-white/20 text-white hover:bg-white/10 hover:text-white">
@@ -884,9 +875,17 @@ function CTASection() {
    ======================================== */
 function HomePageContent() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   
-  // 如果正在加载，显示加载状态
-  if (status === 'loading') {
+  // 如果用户已登录，重定向到创作页面
+  React.useEffect(() => {
+    if (status === 'authenticated') {
+      router.push('/generate');
+    }
+  }, [status, router]);
+  
+  // 如果正在加载或已认证，不显示内容
+  if (status === 'loading' || status === 'authenticated') {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="animate-pulse text-zinc-500">加载中...</div>

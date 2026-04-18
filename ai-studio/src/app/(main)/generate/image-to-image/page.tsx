@@ -56,7 +56,7 @@ export default function ImageToImagePage() {
   const [thinkingLevel, setThinkingLevel] = useState("minimal");
   const [images, setImages] = useState<CanvasImage[]>([]);
   const [credits, setCredits] = useState(100);
-  const [history, setHistory] = useState<Array<{id: string, url: string, thumb: string, prompt: string}>>([]);
+  const [history, setHistory] = useState<Array<{id: string, url: string, thumb: string, prompt: string, model?: string, imageSize?: string, createdAt?: string, type?: string, inputUrl?: string}>>([]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -92,12 +92,30 @@ export default function ImageToImagePage() {
         if (res.ok) {
           const json = await res.json();
           if (json.code === 0 && json.data?.list) {
-            setHistory(json.data.list.map((item: { id: string; outputUrl: string; thumbnailUrl: string; prompt: string }) => ({
-              id: item.id,
-              url: item.outputUrl,
-              thumb: item.thumbnailUrl || item.outputUrl,
-              prompt: item.prompt,
-            })));
+            setHistory(json.data.list.map((item: any) => {
+              let model = "flash";
+              let imageSize = "1K";
+              
+              if (item.params) {
+                try {
+                  const params = JSON.parse(item.params);
+                  model = params.model || "flash";
+                  imageSize = params.imageSize || "1K";
+                } catch {}
+              }
+              
+              return {
+                id: item.id,
+                url: item.outputUrl,
+                thumb: item.thumbnailUrl || item.outputUrl,
+                prompt: item.prompt,
+                model,
+                imageSize,
+                createdAt: item.createdAt,
+                type: item.type,
+                inputUrl: item.inputUrl,
+              };
+            }));
           }
         }
       } catch {}
@@ -356,16 +374,51 @@ export default function ImageToImagePage() {
           <div className="mt-4">
             <h3 className="text-xs font-medium text-zinc-500 mb-2">历史记录</h3>
             <div className="grid grid-cols-8 gap-2">
-              {history.map((item) => (
-                <div
-                  key={item.id}
-                  className="aspect-square rounded-md overflow-hidden border border-white/[0.06] cursor-pointer hover:border-indigo-500/40 transition-colors"
-                  onClick={() => setImages([{ id: item.id, url: item.url, prompt: item.prompt }])}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.thumb} alt={item.prompt} className="w-full h-full object-cover" loading="lazy" />
-                </div>
-              ))}
+              {history.map((item) => {
+                // 格式化时间
+                const formatTime = (timeString: string) => {
+                  try {
+                    const date = new Date(timeString);
+                    return date.toLocaleString('zh-CN', {
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
+                  } catch {
+                    return '';
+                  }
+                };
+                
+                return (
+                  <div
+                    key={item.id}
+                    className="group relative aspect-square rounded-md overflow-hidden border border-white/[0.06] cursor-pointer hover:border-indigo-500/40 transition-colors"
+                    onClick={() => {
+                      // 设置图片
+                      setImages([{ id: item.id, url: item.url, prompt: item.prompt }]);
+                      // 填充提示词
+                      setPrompt(item.prompt);
+                      // 恢复参考图片
+                      if (item.inputUrl) {
+                        setReferenceImages([item.inputUrl]);
+                        localStorage.setItem("image-to-image-reference", item.inputUrl);
+                      }
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.thumb} alt={item.prompt} className="w-full h-full object-cover" loading="lazy" />
+                    {/* 悬停时显示信息 */}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all flex flex-col justify-end p-2 opacity-0 group-hover:opacity-100">
+                      <div className="text-xs text-white space-y-1">
+                        <div className="truncate">{item.model === 'pro' ? 'Pro 模型' : 'Flash 模型'}</div>
+                        <div>{item.imageSize} 质量</div>
+                        <div>{formatTime(item.createdAt || '')}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
