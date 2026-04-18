@@ -282,7 +282,7 @@ export default function ArchitecturePage() {
                           alt="结构/线稿" 
                           className="w-full h-full object-contain"
                         />
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 flex items-center justify-center py-1">
                           <span className="text-xs text-white">已上传</span>
                         </div>
                       </div>
@@ -311,7 +311,7 @@ export default function ArchitecturePage() {
                           alt="风格参考" 
                           className="w-full h-full object-contain"
                         />
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 flex items-center justify-center py-1">
                           <span className="text-xs text-white">已上传</span>
                         </div>
                       </div>
@@ -336,17 +336,17 @@ export default function ArchitecturePage() {
                         onClick={() => handleFileUpload(setMaskImage)}
                       >
                         {maskImage ? (
-                          <div className="relative w-full h-full rounded-lg overflow-hidden">
-                            <img 
-                              src={maskImage} 
-                              alt="遮罩图像" 
-                              className="w-full h-full object-contain"
-                            />
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                              <span className="text-xs text-white">已上传</span>
-                            </div>
-                          </div>
-                        ) : (
+                      <div className="relative w-full h-full rounded-lg overflow-hidden">
+                        <img 
+                          src={maskImage} 
+                          alt="遮罩图像" 
+                          className="w-full h-full object-contain"
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 flex items-center justify-center py-1">
+                          <span className="text-xs text-white">已上传</span>
+                        </div>
+                      </div>
+                    ) : (
                           <div className="flex flex-col items-center">
                             <Upload className="w-5 h-5 text-zinc-500 mb-1" />
                             <span className="text-xs text-zinc-500">点击上传</span>
@@ -364,17 +364,17 @@ export default function ArchitecturePage() {
                         onClick={() => handleFileUpload(setBaseRendered)}
                       >
                         {baseRendered ? (
-                          <div className="relative w-full h-full rounded-lg overflow-hidden">
-                            <img 
-                              src={baseRendered} 
-                              alt="渲染底图" 
-                              className="w-full h-full object-contain"
-                            />
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                              <span className="text-xs text-white">已上传</span>
-                            </div>
-                          </div>
-                        ) : (
+                      <div className="relative w-full h-full rounded-lg overflow-hidden">
+                        <img 
+                          src={baseRendered} 
+                          alt="渲染底图" 
+                          className="w-full h-full object-contain"
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 flex items-center justify-center py-1">
+                          <span className="text-xs text-white">已上传</span>
+                        </div>
+                      </div>
+                    ) : (
                           <div className="flex flex-col items-center">
                             <Upload className="w-5 h-5 text-zinc-500 mb-1" />
                             <span className="text-xs text-zinc-500">点击上传</span>
