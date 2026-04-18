@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { success, error } from "@/types/api";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "");
 
 // 图像生成大冒险：全能渲染引擎
 export async function POST(request: NextRequest) {
