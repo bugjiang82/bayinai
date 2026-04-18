@@ -36,6 +36,14 @@ const MOCK_AGENTS = [
     category: "image",
     usageCount: 21760,
   },
+  {
+    id: "all-round-agent",
+    name: "全能智能体",
+    description: "集多种功能于一体的智能助手，支持聊天、创意生成、问题解决等多种任务",
+    avatar: "🤖",
+    category: "all",
+    usageCount: 15670,
+  },
 ];
 
 export async function GET() {
