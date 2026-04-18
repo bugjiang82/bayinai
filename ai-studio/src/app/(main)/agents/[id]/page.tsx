@@ -206,6 +206,17 @@ export default function AgentChatPage() {
           action: idx === 0 ? "generate" : idx === 1 ? "style" : "adjust",
         }));
       }
+
+      // 如果同时有设计简报和选项卡片，只显示摘要信息
+      if (result.designBrief && result.options.length > 0) {
+        result.content = `## 设计方案
+
+**核心概念：** ${result.designBrief.summary}
+
+**风格：** ${result.designBrief.style?.join('、') || '现代风格'}
+
+**色彩：** ${result.designBrief.colors?.join('、') || '专业配色'}`;
+      }
     } catch (e) {
       console.error("Failed to parse AI content:", e);
     }
