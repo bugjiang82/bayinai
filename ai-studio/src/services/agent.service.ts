@@ -110,31 +110,204 @@ export async function getAgents() {
 }
 
 export async function getAgentById(id: string) {
-  const agent = await prisma.agent.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      avatar: true,
-      systemPrompt: true,
-      config: true,
-      isPublic: true,
-      sortOrder: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  try {
+    const agent = await prisma.agent.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        avatar: true,
+        systemPrompt: true,
+        config: true,
+        isPublic: true,
+        sortOrder: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
-  if (!agent) {
+    if (agent) {
+      // 如果是image-generator且系统提示词为空，使用默认提示词
+      if (id === "image-generator" && !agent.systemPrompt) {
+        const defaultSystemPrompt = `## Role: AI Visionary Master & Prompt Architect
+
+### Capability Profile
+1. **Intelligent Dialogue**: 提供基于逻辑的日常咨询与创意构思。
+2. **Visual Requirement Analysis**: 当检测到创作意图时，执行"需求逆向工程"，将模糊描述拆解为专业的视觉参数。
+
+### Interaction Protocol
+当用户表达设计或图像生成需求时，请按以下流程操作：
+- **第一步：视觉解构**。简要分析用户的设计需求。
+- **第二步：输出设计简报**。使用 JSON 格式总结核心参数。
+- **第三步：提供交互选项**。生成卡片式按钮供用户快速决策。
+
+### Output Schema
+
+【设计简报】
+\`\`\`json
+{
+  "summary": "一句话精准描述设计核心",
+  "style": ["风格关键词1", "风格关键词2"],
+  "colors": ["#十六进制色值或描述", "辅助色"],
+  "elements": ["核心视觉元素1", "场景/环境元素"],
+  "generatePrompt": "Expert-level English prompt optimized for Gemini: [Focus on lighting, textures, composition, and specific art styles like 'Minimalist' or 'Cyber-Geek']"
+}
+\`\`\`
+【选项卡片】
+
+\`\`\`json
+[
+  {
+    "label": "确认生成图片",
+    "icon": "🚀",
+    "desc": "基于当前简报启动 Gemini 渲染引擎"
+  },
+  {
+    "label": "风格迭代",
+    "icon": "🎨",
+    "desc": "切换至不同流派（如：赛博朋克、极简主义、手绘等）"
+  },
+  {
+    "label": "参数精修",
+    "icon": "⚙️",
+    "desc": "微调颜色、构图或添加特定元素"
+  }
+]
+\`\`\``;
+        return {
+          ...agent,
+          systemPrompt: defaultSystemPrompt,
+          createdAt: agent.createdAt.toISOString(),
+          updatedAt: agent.updatedAt.toISOString(),
+        };
+      }
+      return {
+        ...agent,
+        createdAt: agent.createdAt.toISOString(),
+        updatedAt: agent.updatedAt.toISOString(),
+      };
+    } else {
+      // 如果数据库中没有找到agent，返回mock数据
+      const mockAgents: Record<string, any> = {
+        "image-generator": {
+          id: "image-generator",
+          name: "AI 绘画大师",
+          description: "根据文字描述生成高质量图片，支持多种艺术风格。描述你想要的画面，我来为你创作！",
+          avatar: "🎨",
+          systemPrompt: `## Role: AI Visionary Master & Prompt Architect
+
+### Capability Profile
+1. **Intelligent Dialogue**: 提供基于逻辑的日常咨询与创意构思。
+2. **Visual Requirement Analysis**: 当检测到创作意图时，执行"需求逆向工程"，将模糊描述拆解为专业的视觉参数。
+
+### Interaction Protocol
+当用户表达设计或图像生成需求时，请按以下流程操作：
+- **第一步：视觉解构**。简要分析用户的设计需求。
+- **第二步：输出设计简报**。使用 JSON 格式总结核心参数。
+- **第三步：提供交互选项**。生成卡片式按钮供用户快速决策。
+
+### Output Schema
+
+【设计简报】
+\`\`\`json
+{
+  "summary": "一句话精准描述设计核心",
+  "style": ["风格关键词1", "风格关键词2"],
+  "colors": ["#十六进制色值或描述", "辅助色"],
+  "elements": ["核心视觉元素1", "场景/环境元素"],
+  "generatePrompt": "Expert-level English prompt optimized for Gemini: [Focus on lighting, textures, composition, and specific art styles like 'Minimalist' or 'Cyber-Geek']"
+}
+\`\`\`
+【选项卡片】
+
+\`\`\`json
+[
+  {
+    "label": "确认生成图片",
+    "icon": "🚀",
+    "desc": "基于当前简报启动 Gemini 渲染引擎"
+  },
+  {
+    "label": "风格迭代",
+    "icon": "🎨",
+    "desc": "切换至不同流派（如：赛博朋克、极简主义、手绘等）"
+  },
+  {
+    "label": "参数精修",
+    "icon": "⚙️",
+    "desc": "微调颜色、构图或添加特定元素"
+  }
+]
+\`\`\``,
+        },
+      };
+      if (mockAgents[id]) {
+        return mockAgents[id];
+      }
+      throw new Error("智能体不存在");
+    }
+  } catch (err) {
+    console.error("Error getting agent:", err);
+    // 如果数据库查询失败，返回mock数据
+    const mockAgents: Record<string, any> = {
+      "image-generator": {
+        id: "image-generator",
+        name: "AI 绘画大师",
+        description: "根据文字描述生成高质量图片，支持多种艺术风格。描述你想要的画面，我来为你创作！",
+        avatar: "🎨",
+        systemPrompt: `## Role: AI Visionary Master & Prompt Architect
+
+### Capability Profile
+1. **Intelligent Dialogue**: 提供基于逻辑的日常咨询与创意构思。
+2. **Visual Requirement Analysis**: 当检测到创作意图时，执行"需求逆向工程"，将模糊描述拆解为专业的视觉参数。
+
+### Interaction Protocol
+当用户表达设计或图像生成需求时，请按以下流程操作：
+- **第一步：视觉解构**。简要分析用户的设计需求。
+- **第二步：输出设计简报**。使用 JSON 格式总结核心参数。
+- **第三步：提供交互选项**。生成卡片式按钮供用户快速决策。
+
+### Output Schema
+
+【设计简报】
+\`\`\`json
+{
+  "summary": "一句话精准描述设计核心",
+  "style": ["风格关键词1", "风格关键词2"],
+  "colors": ["#十六进制色值或描述", "辅助色"],
+  "elements": ["核心视觉元素1", "场景/环境元素"],
+  "generatePrompt": "Expert-level English prompt optimized for Gemini: [Focus on lighting, textures, composition, and specific art styles like 'Minimalist' or 'Cyber-Geek']"
+}
+\`\`\`
+【选项卡片】
+
+\`\`\`json
+[
+  {
+    "label": "确认生成图片",
+    "icon": "🚀",
+    "desc": "基于当前简报启动 Gemini 渲染引擎"
+  },
+  {
+    "label": "风格迭代",
+    "icon": "🎨",
+    "desc": "切换至不同流派（如：赛博朋克、极简主义、手绘等）"
+  },
+  {
+    "label": "参数精修",
+    "icon": "⚙️",
+    "desc": "微调颜色、构图或添加特定元素"
+  }
+]
+\`\`\``,
+      },
+    };
+    if (mockAgents[id]) {
+      return mockAgents[id];
+    }
     throw new Error("智能体不存在");
   }
-
-  return {
-    ...agent,
-    createdAt: agent.createdAt.toISOString(),
-    updatedAt: agent.updatedAt.toISOString(),
-  };
 }
 
 export interface ChatWithAgentParams {
@@ -158,13 +331,79 @@ export async function chatWithAgent(
 ): Promise<ChatResponse> {
   const { agentId, message, history = [] } = params;
 
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-  });
+  let agent;
+  try {
+    agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+    });
+  } catch (err) {
+    console.error("Database error, using mock data:", err);
+  }
+
+  // 如果数据库中没有找到agent，使用mock数据
+  const mockAgents: Record<string, any> = {
+    "image-generator": {
+      id: "image-generator",
+      name: "AI 绘画大师",
+      systemPrompt: `## Role: AI Visionary Master & Prompt Architect
+
+### Capability Profile
+1. **Intelligent Dialogue**: 提供基于逻辑的日常咨询与创意构思。
+2. **Visual Requirement Analysis**: 当检测到创作意图时，执行"需求逆向工程"，将模糊描述拆解为专业的视觉参数。
+
+### Interaction Protocol
+当用户表达设计或图像生成需求时，请按以下流程操作：
+- **第一步：视觉解构**。简要分析用户的设计需求。
+- **第二步：输出设计简报**。使用 JSON 格式总结核心参数。
+- **第三步：提供交互选项**。生成卡片式按钮供用户快速决策。
+
+### Output Schema
+
+【设计简报】
+\`\`\`json
+{
+  "summary": "一句话精准描述设计核心",
+  "style": ["风格关键词1", "风格关键词2"],
+  "colors": ["#十六进制色值或描述", "辅助色"],
+  "elements": ["核心视觉元素1", "场景/环境元素"],
+  "generatePrompt": "Expert-level English prompt optimized for Gemini: [Focus on lighting, textures, composition, and specific art styles like 'Minimalist' or 'Cyber-Geek']"
+}
+\`\`\`
+【选项卡片】
+
+\`\`\`json
+[
+  {
+    "label": "确认生成图片",
+    "icon": "🚀",
+    "desc": "基于当前简报启动 Gemini 渲染引擎"
+  },
+  {
+    "label": "风格迭代",
+    "icon": "🎨",
+    "desc": "切换至不同流派（如：赛博朋克、极简主义、手绘等）"
+  },
+  {
+    "label": "参数精修",
+    "icon": "⚙️",
+    "desc": "微调颜色、构图或添加特定元素"
+  }
+]
+\`\`\``,
+    },
+  };
+
+  if (!agent && mockAgents[agentId]) {
+    agent = mockAgents[agentId];
+  }
 
   if (!agent) {
     throw new Error("智能体不存在");
   }
+
+  // 确定使用的模型
+  const isImageGenerator = agentId === "image-generator";
+  const chatModel = isImageGenerator ? "gemini-3-flash-preview" : "gemini-2.5-flash";
 
   // 构建对话内容
   const contents = [
@@ -179,7 +418,7 @@ export async function chatWithAgent(
   ];
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: chatModel,
     contents,
     config: {
       systemInstruction: agent.systemPrompt,

@@ -4,8 +4,10 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import ChatArea from "@/components/agent/ChatArea";
 import type { ChatMessage } from "@/components/agent/ChatArea";
+import type { MessageOption } from "@/components/agent/MessageBubble";
 import WorkflowSteps from "@/components/agent/WorkflowSteps";
 import GalleryPanel, { type GalleryItem } from "@/components/agent/GalleryPanel";
 import {
@@ -41,7 +43,51 @@ const MOCK_AGENTS: Record<string, AgentDetail> = {
     name: "AI 绘画大师",
     description: "根据文字描述生成高质量图片，支持多种艺术风格。描述你想要的画面，我来为你创作！",
     avatar: "🎨",
-    systemPrompt: "你是一个专业的AI绘画助手...",
+    systemPrompt: `## Role: AI Visionary Master & Prompt Architect
+
+### Capability Profile
+1. **Intelligent Dialogue**: 提供基于逻辑的日常咨询与创意构思。
+2. **Visual Requirement Analysis**: 当检测到创作意图时，执行"需求逆向工程"，将模糊描述拆解为专业的视觉参数。
+
+### Interaction Protocol
+当用户表达设计或图像生成需求时，请按以下流程操作：
+- **第一步：视觉解构**。简要分析用户的设计需求。
+- **第二步：输出设计简报**。使用 JSON 格式总结核心参数。
+- **第三步：提供交互选项**。生成卡片式按钮供用户快速决策。
+
+### Output Schema
+
+【设计简报】
+\`\`\`json
+{
+  "summary": "一句话精准描述设计核心",
+  "style": ["风格关键词1", "风格关键词2"],
+  "colors": ["#十六进制色值或描述", "辅助色"],
+  "elements": ["核心视觉元素1", "场景/环境元素"],
+  "generatePrompt": "Expert-level English prompt optimized for Gemini: [Focus on lighting, textures, composition, and specific art styles like 'Minimalist' or 'Cyber-Geek']"
+}
+\`\`\`
+【选项卡片】
+
+\`\`\`json
+[
+  {
+    "label": "确认生成图片",
+    "icon": "🚀",
+    "desc": "基于当前简报启动 Gemini 渲染引擎"
+  },
+  {
+    "label": "风格迭代",
+    "icon": "🎨",
+    "desc": "切换至不同流派（如：赛博朋克、极简主义、手绘等）"
+  },
+  {
+    "label": "参数精修",
+    "icon": "⚙️",
+    "desc": "微调颜色、构图或添加特定元素"
+  }
+]
+\`\`\``,
   },
   "design-assistant": {
     id: "design-assistant",
@@ -83,6 +129,7 @@ export default function AgentChatPage() {
   const params = useParams();
   const router = useRouter();
   const agentId = params.id as string;
+  const { toast } = useToast();
 
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -90,6 +137,7 @@ export default function AgentChatPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [currentStep, setCurrentStep] = useState("idle");
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [currentGeneratePrompt, setCurrentGeneratePrompt] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch agent detail
@@ -158,38 +206,34 @@ export default function AgentChatPage() {
         const data = await res.json();
         setCurrentStep("generating");
 
-        // Simulate workflow progression
         setTimeout(() => {
           setCurrentStep("confirming");
-        }, 1000);
+        }, 800);
 
         setTimeout(() => {
-          const responseData = data.data || {};
+          const responseText = data.data?.text || data.data?.content || "好的，我来帮你处理这个需求。让我分析一下...";
+          const parsed = parseAIContent(responseText);
+          
+          if (parsed.generatePrompt) {
+            setCurrentGeneratePrompt(parsed.generatePrompt);
+          }
+
           const aiMsg: ChatMessage = {
             id: `ai-${Date.now()}`,
             role: "assistant",
-            content: responseData.content || responseData.message || "好的，我来帮你处理这个需求。让我分析一下...",
-            images: responseData.images,
+            content: parsed.content,
+            options: parsed.options,
+            designBrief: parsed.designBrief,
           };
           setMessages((prev) => [...prev, aiMsg]);
           setIsTyping(false);
           setCurrentStep("idle");
-
-          // Add images to gallery
-          if (responseData.images && responseData.images.length > 0) {
-            const newGalleryItems: GalleryItem[] = responseData.images.map((url: string, idx: number) => ({
-              id: `gallery-${Date.now()}-${idx}`,
-              url,
-              prompt: text,
-            }));
-            setGalleryItems((prev) => [...prev, ...newGalleryItems]);
-          }
-        }, 2000);
+        }, 1500);
       } else {
         throw new Error("Failed to send message");
       }
-    } catch {
-      // Fallback response
+    } catch (err) {
+      console.error("Chat error:", err);
       setTimeout(() => {
         const aiMsg: ChatMessage = {
           id: `ai-${Date.now()}`,
@@ -199,9 +243,9 @@ export default function AgentChatPage() {
         setMessages((prev) => [...prev, aiMsg]);
         setIsTyping(false);
         setCurrentStep("idle");
-      }, 1500);
+      }, 1000);
     }
-  }, [inputValue, isTyping, messages, agentId]);
+  }, [inputValue, isTyping, messages, agentId, parseAIContent]);
 
   const handlePromptClick = useCallback((prompt: string) => {
     setInputValue(prompt);
@@ -216,6 +260,100 @@ export default function AgentChatPage() {
     },
     [handleSend]
   );
+
+  const parseAIContent = useCallback((text: string) => {
+    const result = {
+      content: text,
+      designBrief: null as any,
+      options: [] as MessageOption[],
+      generatePrompt: "",
+    };
+
+    try {
+      const designBriefMatch = text.match(/【设计简报】\s*```json\s*([\s\S]*?)\s*```/);
+      if (designBriefMatch) {
+        const briefJson = designBriefMatch[1].replace(/"辅助色"/g, '"辅助色"');
+        result.designBrief = JSON.parse(briefJson);
+        result.generatePrompt = result.designBrief.generatePrompt || "";
+      }
+
+      const optionsMatch = text.match(/【选项卡片】\s*```json\s*([\s\S]*?)\s*```/);
+      if (optionsMatch) {
+        const optionsJson = JSON.parse(optionsMatch[1]);
+        result.options = optionsJson.map((opt: any, idx: number) => ({
+          icon: opt.icon,
+          title: opt.label,
+          description: opt.desc,
+          action: idx === 0 ? "generate" : idx === 1 ? "style" : "adjust",
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to parse AI content:", e);
+    }
+
+    return result;
+  }, []);
+
+  const generateImage = useCallback(async (prompt: string) => {
+    try {
+      setIsTyping(true);
+      setCurrentStep("generating");
+
+      const res = await fetch("/api/generate/agent-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, agentId }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.code === 0 && data.data?.outputUrl) {
+          const imageUrl = data.data.outputUrl;
+          
+          const aiMsg: ChatMessage = {
+            id: `ai-image-${Date.now()}`,
+            role: "assistant",
+            content: "好的！这是为你生成的图片：",
+            images: [imageUrl],
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+
+          const newGalleryItem: GalleryItem = {
+            id: `gallery-${Date.now()}`,
+            url: imageUrl,
+            prompt,
+          };
+          setGalleryItems((prev) => [...prev, newGalleryItem]);
+
+          toast({
+            title: "生成成功",
+            description: "图片已生成并保存到图库",
+          });
+        }
+      } else {
+        throw new Error("生成失败");
+      }
+    } catch (err) {
+      toast({
+        title: "生成失败",
+        description: err instanceof Error ? err.message : "请稍后重试",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTyping(false);
+      setCurrentStep("idle");
+    }
+  }, [agentId, toast]);
+
+  const handleOptionClick = useCallback((action: string) => {
+    if (action === "generate" && currentGeneratePrompt) {
+      generateImage(currentGeneratePrompt);
+    } else if (action === "style") {
+      setInputValue("帮我尝试不同的艺术风格，比如赛博朋克、极简主义、手绘等");
+    } else if (action === "adjust") {
+      setInputValue("帮我微调一下设计参数，比如颜色、构图或添加特定元素");
+    }
+  }, [currentGeneratePrompt, generateImage]);
 
   const handleDownload = useCallback((item: GalleryItem) => {
     const link = document.createElement("a");
@@ -274,6 +412,7 @@ export default function AgentChatPage() {
                 : undefined
             }
             onPromptClick={handlePromptClick}
+            onOptionClick={handleOptionClick}
             isTyping={isTyping}
             className="flex-1"
           />
