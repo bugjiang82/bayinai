@@ -44,6 +44,7 @@ const navLinks = [
   { href: "/gallery", label: "作品", icon: Image },
   { href: "/credits", label: "积分", icon: Coins },
   { href: "/team", label: "团队", icon: Users },
+  { href: "/all-round-test", label: "全能测试", icon: Bot },
 ];
 
 interface HeaderProps {
