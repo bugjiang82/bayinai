@@ -749,22 +749,35 @@ export default function EditPage() {
 
           {/* Source image with processing */}
           {sourceImage && !isProcessing && !resultImage && (
-            <div className="w-full h-full flex">
-              {editMode === "inpaint" ? (
-                <>
-                  <Toolbox />
-                  <KonvaCanvas className="flex-1" />
-                </>
-              ) : (
-                <div className="flex-1 relative flex items-center justify-center p-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={sourceImage}
-                    alt="源图片"
-                    className="max-w-full max-h-full object-contain rounded-lg"
-                  />
-                </div>
-              )}
+            <div className="w-full h-full flex flex-col">
+              <div className="flex-1 flex">
+                {editMode === "inpaint" ? (
+                  <>
+                    <Toolbox />
+                    <KonvaCanvas className="flex-1" />
+                  </>
+                ) : (
+                  <div className="flex-1 relative flex items-center justify-center p-4">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={sourceImage}
+                      alt="源图片"
+                      className="max-w-full max-h-full object-contain rounded-lg"
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="p-3 flex items-center justify-center border-t border-white/[0.06] bg-[#0a0a0a]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-zinc-500 hover:text-zinc-300"
+                  onClick={handleReset}
+                >
+                  <Upload className="w-3.5 h-3.5 mr-1.5" />
+                  重新上传图片
+                </Button>
+              </div>
             </div>
           )}
 
@@ -802,15 +815,26 @@ export default function EditPage() {
                 </div>
               </div>
               <div className="p-3 flex items-center justify-between border-t border-white/[0.06] bg-[#0a0a0a]">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-zinc-500 hover:text-zinc-300"
-                  onClick={handleReset}
-                >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                  重新编辑
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-zinc-500 hover:text-zinc-300"
+                    onClick={handleReset}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                    重新编辑
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-zinc-500 hover:text-zinc-300"
+                    onClick={handleReset}
+                  >
+                    <Upload className="w-3.5 h-3.5 mr-1.5" />
+                    重新上传图片
+                  </Button>
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"
