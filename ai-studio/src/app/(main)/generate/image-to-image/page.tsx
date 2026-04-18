@@ -399,11 +399,10 @@ export default function ImageToImagePage() {
                       setImages([{ id: item.id, url: item.url, prompt: item.prompt }]);
                       // 填充提示词
                       setPrompt(item.prompt);
-                      // 恢复参考图片
-                      if (item.inputUrl) {
-                        setReferenceImages([item.inputUrl]);
-                        localStorage.setItem("image-to-image-reference", item.inputUrl);
-                      }
+                      // 设置参考图片（优先使用inputUrl，如果没有则使用outputUrl）
+                      const refUrl = item.inputUrl || item.url;
+                      setReferenceImages([refUrl]);
+                      localStorage.setItem("image-to-image-reference", refUrl);
                     }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -277,10 +277,6 @@ export default function TextToImagePage() {
                       setImages([{ id: item.id, url: item.url, prompt: item.prompt }]);
                       // 填充提示词
                       setPrompt(item.prompt);
-                      // 如果是图生图，跳转到图生图页面并带上参考图片
-                      if (item.type === 'IMAGE_TO_IMAGE' || item.type === 'EDIT' || item.inputUrl) {
-                        router.push(`/generate/image-to-image?ref=${encodeURIComponent(item.inputUrl || item.url)}`);
-                      }
                     }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
