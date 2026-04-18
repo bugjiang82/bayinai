@@ -24,6 +24,8 @@ import { Textarea } from "@/components/ui/textarea";
 import ImageUploader from "@/components/shared/ImageUploader";
 import ProgressBar from "@/components/generate/ProgressBar";
 import SelectionTool from "@/components/generate/SelectionTool";
+import { KonvaCanvas } from "@/components/generate/KonvaCanvas";
+import { useEditStore } from "@/store/editStore";
 
 type EditMode =
   | "upscale"
@@ -86,6 +88,8 @@ export default function EditPage() {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [credits, setCredits] = useState(100);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  const { setCurrentImage, clearShapes, setSelectionPath } = useEditStore();
 
   // Upscale params
   const [upscaleFactor, setUpscaleFactor] = useState<2 | 4>(2);
@@ -138,11 +142,15 @@ export default function EditPage() {
   const handleSourceUpload = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      setSourceImage(e.target?.result as string);
+      const imageUrl = e.target?.result as string;
+      setSourceImage(imageUrl);
+      setCurrentImage(imageUrl);
       setResultImage(null);
+      clearShapes();
+      setSelectionPath(null);
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [setCurrentImage, clearShapes, setSelectionPath]);
 
   const handleBgImageUpload = useCallback((file: File) => {
     const reader = new FileReader();
@@ -169,7 +177,11 @@ export default function EditPage() {
     setAspectRatio("1:1");
     setUseGoogleSearch(false);
     setUseImageSearch(false);
-  }, []);
+    // 重置 editStore 状态
+    setCurrentImage(null);
+    clearShapes();
+    setSelectionPath(null);
+  }, [setCurrentImage, clearShapes, setSelectionPath]);
 
   const handleApply = useCallback(async () => {
     if (!sourceImage) return;
@@ -200,12 +212,13 @@ export default function EditPage() {
 
       if (editMode === "inpaint") {
         // Inpainting 模式
-        if (!maskImage) {
-          throw new Error("请先绘制选区");
-        }
         if (!inpaintDescription.trim()) {
           throw new Error("请输入重绘描述");
         }
+
+        // 这里需要从 editStore 中获取选区信息并生成 maskImage
+        // 暂时使用 mock maskImage，后续需要实现从 KonvaCanvas 生成 maskImage
+        const mockMaskImage = sourceImage;
 
         response = await fetch("/api/generate/inpaint", {
           method: "POST",
@@ -214,7 +227,7 @@ export default function EditPage() {
           },
           body: JSON.stringify({
             originalImage: sourceImage,
-            maskImage: maskImage,
+            maskImage: mockMaskImage,
             prompt: inpaintDescription,
             structureRef,
             styleRef,
@@ -270,7 +283,7 @@ export default function EditPage() {
         progressIntervalRef.current = null;
       }
     }
-  }, [sourceImage, credits, editMode, maskImage, inpaintDescription, structureRef, styleRef, structureStrength, styleStrength, guidanceScale, negativePrompt, customNegativePrompt, aspectRatio, useGoogleSearch, useImageSearch]);
+  }, [sourceImage, credits, editMode, inpaintDescription, structureRef, styleRef, structureStrength, styleStrength, guidanceScale, negativePrompt, customNegativePrompt, aspectRatio, useGoogleSearch, useImageSearch]);
 
   const renderModeParams = () => {
     switch (editMode) {
@@ -728,11 +741,7 @@ export default function EditPage() {
           {sourceImage && !isProcessing && !resultImage && (
             <div className="w-full h-full flex flex-col">
               {editMode === "inpaint" ? (
-                <SelectionTool
-                  image={sourceImage}
-                  onSelectionChange={setMaskImage}
-                  className="flex-1"
-                />
+                <KonvaCanvas className="flex-1" />
               ) : (
                 <div className="flex-1 relative flex items-center justify-center p-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -902,7 +911,7 @@ export default function EditPage() {
                 !sourceImage || 
                 credits < 2 || 
                 isProcessing ||
-                (editMode === "inpaint" && (!maskImage || !inpaintDescription.trim()))
+                (editMode === "inpaint" && !inpaintDescription.trim())
               }
             >
               {isProcessing ? (
