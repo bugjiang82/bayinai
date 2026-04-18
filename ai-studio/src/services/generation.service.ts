@@ -466,3 +466,210 @@ export async function getHistory(
     totalPages: Math.ceil(total / pageSize),
   };
 }
+
+// ======================== 图片局部重绘 (Inpainting) ========================
+
+export interface InpaintParams {
+  userId: string;
+  originalImage: string;
+  maskImage: string;
+  prompt: string;
+  model?: "flash" | "pro";
+  imageSize?: string;
+  thinkingLevel?: ThinkingLevel;
+}
+
+export async function inpaintImage(
+  params: InpaintParams
+): Promise<GenerateImageResult> {
+  const {
+    userId,
+    originalImage,
+    maskImage,
+    prompt,
+    model = "flash",
+    imageSize = "1K",
+    thinkingLevel = ThinkingLevel.MINIMAL,
+  } = params;
+
+  const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
+  const cost = COST_MAP[model] || COST_MAP.flash;
+  const isProModel = modelName.includes("pro");
+
+  // 检查积分
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new Error("用户不存在");
+  }
+  if (user.credits < cost) {
+    throw new Error("积分不足");
+  }
+
+  // 创建生成记录
+  const generation = await prisma.generation.create({
+    data: {
+      userId,
+      type: "INPAINT" as GenType,
+      status: "PROCESSING",
+      prompt,
+      params: JSON.stringify({ model, imageSize }),
+      inputUrl: originalImage.substring(0, 255), // 截断过长的 base64
+      cost,
+    },
+  });
+
+  try {
+    // 构建专业的 Inpainting Prompt
+    const finalPrompt = `
+You are an expert image editor.
+
+Image 1: Original image
+Image 2: Binary mask where WHITE area indicates the specific region to modify.
+
+Instructions:
+- Keep everything in BLACK area of the mask EXACTLY the same as original image.
+- Only modify the WHITE mask area.
+- Inpaint the WHITE area with the following content: ${prompt}
+- Make the result seamless and photorealistic, matching the surrounding style, lighting, and perspective.
+`;
+
+    const contents: Array<
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string }; text?: string }
+    > = [];
+
+    // 添加原图
+    const originalBase64 = originalImage.includes(",")
+      ? originalImage.split(",")[1]
+      : originalImage;
+    contents.push({
+      inlineData: {
+        mimeType: "image/png",
+        data: originalBase64,
+      },
+    });
+
+    // 添加 Mask 图
+    const maskBase64 = maskImage.includes(",")
+      ? maskImage.split(",")[1]
+      : maskImage;
+    contents.push({
+      inlineData: {
+        mimeType: "image/png",
+        data: maskBase64,
+      },
+    });
+
+    // 添加 Prompt
+    contents.push({ text: finalPrompt });
+
+    // 调用 Gemini API
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: contents,
+      config: {
+        responseModalities: ["IMAGE"],
+        imageConfig: {
+          imageSize,
+        },
+        ...(!isProModel
+          ? { thinkingConfig: { thinkingLevel } }
+          : {}),
+      },
+    });
+
+    // 解析响应
+    const outputDir = path.join(process.cwd(), "public", "outputs", userId);
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const filename = `${generation.id}.png`;
+    const filepath = path.join(outputDir, filename);
+
+    let outputBase64: string | undefined;
+    let hasImage = false;
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData?.data) {
+        const buffer = Buffer.from(part.inlineData.data, "base64");
+        fs.writeFileSync(filepath, buffer);
+        outputBase64 = part.inlineData.data;
+        hasImage = true;
+      }
+    }
+
+    if (!hasImage) {
+      if (fs.existsSync(filepath)) {
+        fs.unlinkSync(filepath);
+      }
+      throw new Error("未能生成图片");
+    }
+
+    const outputUrl = `/outputs/${userId}/${filename}`;
+
+    // 生成缩略图
+    let thumbnailUrl = outputUrl;
+    try {
+      const thumbFilename = `${generation.id}_thumb.jpg`;
+      const thumbPath = path.join(outputDir, thumbFilename);
+      await sharp(filepath).resize(256, 256, { fit: "inside" }).jpeg({ quality: 70 }).toFile(thumbPath);
+      thumbnailUrl = `/outputs/${userId}/${thumbFilename}`;
+    } catch {
+      // 缩略图生成失败不影响主流程
+    }
+
+    // 扣除积分
+    await prisma.user.update({
+      where: { id: userId },
+      data: { credits: { decrement: cost } },
+    });
+
+    // 创建积分日志
+    await prisma.creditLog.create({
+      data: {
+        userId,
+        type: "GENERATE",
+        amount: -cost,
+        balance: user.credits - cost,
+        remark: `图片局部重绘 (${model})`,
+        refId: generation.id,
+      },
+    });
+
+    // 更新生成记录
+    const now = new Date();
+    const updatedGeneration = await prisma.generation.update({
+      where: { id: generation.id },
+      data: {
+        status: "COMPLETED",
+        outputUrl,
+        thumbnailUrl,
+        completedAt: now,
+      },
+    });
+
+    return {
+      id: updatedGeneration.id,
+      type: updatedGeneration.type as GenType,
+      status: updatedGeneration.status as GenStatus,
+      prompt: updatedGeneration.prompt,
+      outputUrl: updatedGeneration.outputUrl || undefined,
+      outputBase64,
+      thumbnailUrl: updatedGeneration.thumbnailUrl || undefined,
+      width: updatedGeneration.width || undefined,
+      height: updatedGeneration.height || undefined,
+      cost: updatedGeneration.cost,
+      createdAt: updatedGeneration.createdAt.toISOString(),
+      completedAt: updatedGeneration.completedAt?.toISOString(),
+    };
+  } catch (err) {
+    // 更新失败状态
+    await prisma.generation.update({
+      where: { id: generation.id },
+      data: {
+        status: "FAILED",
+        errorMsg: err instanceof Error ? err.message : "生成失败",
+      },
+    });
+    throw err;
+  }
+}

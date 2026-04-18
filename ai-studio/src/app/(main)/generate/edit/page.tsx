@@ -151,33 +151,81 @@ export default function EditPage() {
 
     let currentProgress = 0;
     progressIntervalRef.current = setInterval(() => {
-      currentProgress += Math.random() * 10 + 5;
-      if (currentProgress >= 100) {
-        currentProgress = 100;
+      currentProgress += Math.random() * 8 + 2;
+      if (currentProgress >= 90) {
+        // 90% 时停止自动增长，等待 API 返回
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
-        setProgress(100);
       } else {
         setProgress(currentProgress);
       }
-    }, 400);
+    }, 300);
 
     try {
-      // Mock API call
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      let response;
 
-      // Mock result - use the source image as result for demo
-      setResultImage(sourceImage);
+      if (editMode === "inpaint") {
+        // Inpainting 模式
+        if (!maskImage) {
+          throw new Error("请先绘制选区");
+        }
+        if (!inpaintDescription.trim()) {
+          throw new Error("请输入重绘描述");
+        }
+
+        response = await fetch("/api/generate/inpaint", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            originalImage: sourceImage,
+            maskImage: maskImage,
+            prompt: inpaintDescription,
+          }),
+        });
+      } else {
+        // 其他模式暂时使用 mock，后续可以扩展
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        setResultImage(sourceImage);
+        setCredits((prev) => Math.max(0, prev - cost));
+        setIsProcessing(false);
+        setProgress(100);
+        return;
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || "生成失败");
+      }
+
+      // 处理结果
+      if (result.data.outputBase64) {
+        setResultImage(`data:image/png;base64,${result.data.outputBase64}`);
+      } else if (result.data.outputUrl) {
+        setResultImage(result.data.outputUrl);
+      }
+
       setCredits((prev) => Math.max(0, prev - cost));
       setIsProcessing(false);
+      setProgress(100);
+
     } catch (error) {
       console.error("Edit failed:", error);
       setIsProcessing(false);
       setProgress(0);
+      // 显示错误信息
+      alert(error instanceof Error ? error.message : "生成失败，请重试");
+    } finally {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
     }
-  }, [sourceImage, credits, editMode]);
+  }, [sourceImage, credits, editMode, maskImage, inpaintDescription]);
 
   const renderModeParams = () => {
     switch (editMode) {
@@ -582,7 +630,12 @@ export default function EditPage() {
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               )}
               onClick={handleApply}
-              disabled={!sourceImage || credits < 2 || isProcessing}
+              disabled={
+                !sourceImage || 
+                credits < 2 || 
+                isProcessing ||
+                (editMode === "inpaint" && (!maskImage || !inpaintDescription.trim()))
+              }
             >
               {isProcessing ? (
                 <>

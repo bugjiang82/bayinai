@@ -100,7 +100,8 @@ export type GenType =
   | "TEXT_TO_IMAGE"
   | "IMAGE_TO_IMAGE"
   | "VIDEO"
-  | "EDIT";
+  | "EDIT"
+  | "INPAINT";
 
 export type GenStatus =
   | "PENDING"
