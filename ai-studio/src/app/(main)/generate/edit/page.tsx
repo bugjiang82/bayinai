@@ -256,16 +256,25 @@ export default function EditPage() {
       }
 
       const result = await response.json();
+      console.log("API Response:", result);
 
-      if (!result.success) {
-        throw new Error(result.error || "生成失败");
+      if (result.code !== 0) {
+        throw new Error(result.message || "生成失败");
       }
 
       // 处理结果
+      console.log("outputBase64:", result.data.outputBase64);
+      console.log("outputUrl:", result.data.outputUrl);
+      
       if (result.data.outputBase64) {
-        setResultImage(`data:image/png;base64,${result.data.outputBase64}`);
+        const imageUrl = `data:image/png;base64,${result.data.outputBase64}`;
+        console.log("Setting resultImage from outputBase64:", imageUrl);
+        setResultImage(imageUrl);
       } else if (result.data.outputUrl) {
+        console.log("Setting resultImage from outputUrl:", result.data.outputUrl);
         setResultImage(result.data.outputUrl);
+      } else {
+        console.error("No image data in response");
       }
 
       setCredits((prev) => Math.max(0, prev - cost));
