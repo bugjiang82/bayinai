@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-zinc-950: #0f0f0f;
+  --color-zinc-900: #161616;
+  --color-zinc-800: #2a2a2a;
+  --color-zinc-700: #333333;
+  --color-yellow-500: #ffe135;
+}
+
+@layer base {
+  body {
+    @apply bg-zinc-950 text-[#e0e0e0] antialiased;
+  }
+}
+
+@layer components {
+  .section-header {
+    @apply flex items-center gap-2 text-[12px] uppercase tracking-[1px] text-[#888] mb-3 mt-5;
+  }
+  
+  .section-header::after {
+    content: '';
+    @apply flex-grow h-[1px] bg-zinc-800;
+  }
+
+  .upload-box {
+    @apply border-2 border-dashed border-zinc-700 rounded-xl p-5 text-center bg-[#1e1e1e] cursor-pointer hover:border-yellow-500 transition-colors;
+  }
+
+  .input-field {
+    @apply w-full bg-[#0a0a0a] border border-zinc-700 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-yellow-500 transition-all;
+  }
+
+  .sleek-slider {
+    @apply w-full accent-yellow-500 bg-zinc-700 h-1 rounded-full appearance-none;
+  }
+  
+  .banana-btn {
+    @apply px-4 py-2 rounded-lg font-semibold transition-all active:scale-95;
+  }
+  
+  .btn-primary {
+    @apply bg-yellow-500 text-black hover:bg-yellow-400;
+  }
+  
+  .btn-secondary {
+    @apply bg-zinc-800 text-white hover:bg-zinc-700;
+  }
+
+  .glass-status {
+    @apply bg-black/80 backdrop-blur-md border border-zinc-700 px-5 py-2.5 rounded-full flex items-center gap-3 text-xs shadow-2xl;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-700 rounded-full hover:bg-zinc-600;
+}

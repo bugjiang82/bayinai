@@ -1,0 +1,6 @@
+{
+  "name": "Nano Banana 2 Image Gen",
+  "description": "A powerful image generation and editing tool powered by Gemini 3.1 Flash Image. Upload images, adjust professional parameters, and see results in real-time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
