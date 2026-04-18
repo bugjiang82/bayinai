@@ -96,34 +96,45 @@ export default function PromptInput({
           // 读取文件为 base64
           const reader = new FileReader();
           reader.onload = async (event) => {
-            const base64Data = event.target?.result as string;
-            const imageBase64 = base64Data.split(',')[1]; // 移除 data:image/jpeg;base64, 前缀
-            
-            // 调用 API
-            const response = await fetch('/api/extract-prompt', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                imageBase64,
-                mimeType: file.type,
-              }),
-            });
-            
-            if (response.ok) {
+            try {
+              const base64Data = event.target?.result as string;
+              const imageBase64 = base64Data.split(',')[1]; // 移除 data:image/jpeg;base64, 前缀
+              
+              // 调用 API
+              const response = await fetch('/api/extract-prompt', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  imageBase64,
+                  mimeType: file.type,
+                }),
+              });
+              
               const result = await response.json();
-              if (result.success) {
+              
+              if (result.code === 0) {
                 const prompt = result.data.prompt;
                 setExtractedPrompt(prompt);
                 setShowCopyButton(true);
+              } else {
+                console.error('提取提示词失败:', result.message);
+                setExtractedPrompt(`提取失败: ${result.message}`);
+                setShowCopyButton(false);
               }
+            } catch (error) {
+              console.error('提取提示词失败:', error);
+              setExtractedPrompt(`提取失败: ${error instanceof Error ? error.message : '未知错误'}`);
+              setShowCopyButton(false);
+            } finally {
+              setIsExtracting(false);
             }
           };
           reader.readAsDataURL(file);
+        } else {
+          setIsExtracting(false);
         }
-        
-        setIsExtracting(false);
       };
       
       input.click();
@@ -214,39 +225,51 @@ export default function PromptInput({
         </span>
       </div>
 
-      {/* 提取的提示词 */}
+      {/* 提取的提示词或错误信息 */}
       {extractedPrompt && (
-        <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+        <div className={cn(
+          "p-3 rounded-lg animate-in fade-in-0 slide-in-from-top-2 duration-200",
+          showCopyButton 
+            ? "bg-indigo-500/10 border border-indigo-500/20" 
+            : "bg-red-500/10 border border-red-500/20"
+        )}>
           <div className="flex items-start justify-between mb-2">
-            <h4 className="text-xs font-medium text-indigo-300">提取的提示词</h4>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-                onClick={handleInsertExtractedPrompt}
-              >
-                插入
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-                onClick={handleCopyPrompt}
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-3 h-3 mr-1" />
-                    已复制
-                  </>
-                ) : (
-                  <>
-                    <Clipboard className="w-3 h-3 mr-1" />
-                    复制
-                  </>
-                )}
-              </Button>
-            </div>
+            <h4 className={cn(
+              "text-xs font-medium",
+              showCopyButton ? "text-indigo-300" : "text-red-300"
+            )}>
+              {showCopyButton ? "提取的提示词" : "错误信息"}
+            </h4>
+            {showCopyButton && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                  onClick={handleInsertExtractedPrompt}
+                >
+                  插入
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                  onClick={handleCopyPrompt}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3 h-3 mr-1" />
+                      已复制
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard className="w-3 h-3 mr-1" />
+                      复制
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
           <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words">
             {extractedPrompt}
