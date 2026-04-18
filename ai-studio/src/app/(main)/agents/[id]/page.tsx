@@ -180,6 +180,39 @@ export default function AgentChatPage() {
     fetchAgent();
   }, [agentId]);
 
+  const parseAIContent = useCallback((text: string) => {
+    const result = {
+      content: text,
+      designBrief: null as any,
+      options: [] as MessageOption[],
+      generatePrompt: "",
+    };
+
+    try {
+      const designBriefMatch = text.match(/【设计简报】\s*```json\s*([\s\S]*?)\s*```/);
+      if (designBriefMatch) {
+        const briefJson = designBriefMatch[1].replace(/"辅助色"/g, '"辅助色"');
+        result.designBrief = JSON.parse(briefJson);
+        result.generatePrompt = result.designBrief.generatePrompt || "";
+      }
+
+      const optionsMatch = text.match(/【选项卡片】\s*```json\s*([\s\S]*?)\s*```/);
+      if (optionsMatch) {
+        const optionsJson = JSON.parse(optionsMatch[1]);
+        result.options = optionsJson.map((opt: any, idx: number) => ({
+          icon: opt.icon,
+          title: opt.label,
+          description: opt.desc,
+          action: idx === 0 ? "generate" : idx === 1 ? "style" : "adjust",
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to parse AI content:", e);
+    }
+
+    return result;
+  }, []);
+
   const handleSend = useCallback(async () => {
     const text = inputValue.trim();
     if (!text || isTyping) return;
@@ -260,39 +293,6 @@ export default function AgentChatPage() {
     },
     [handleSend]
   );
-
-  const parseAIContent = useCallback((text: string) => {
-    const result = {
-      content: text,
-      designBrief: null as any,
-      options: [] as MessageOption[],
-      generatePrompt: "",
-    };
-
-    try {
-      const designBriefMatch = text.match(/【设计简报】\s*```json\s*([\s\S]*?)\s*```/);
-      if (designBriefMatch) {
-        const briefJson = designBriefMatch[1].replace(/"辅助色"/g, '"辅助色"');
-        result.designBrief = JSON.parse(briefJson);
-        result.generatePrompt = result.designBrief.generatePrompt || "";
-      }
-
-      const optionsMatch = text.match(/【选项卡片】\s*```json\s*([\s\S]*?)\s*```/);
-      if (optionsMatch) {
-        const optionsJson = JSON.parse(optionsMatch[1]);
-        result.options = optionsJson.map((opt: any, idx: number) => ({
-          icon: opt.icon,
-          title: opt.label,
-          description: opt.desc,
-          action: idx === 0 ? "generate" : idx === 1 ? "style" : "adjust",
-        }));
-      }
-    } catch (e) {
-      console.error("Failed to parse AI content:", e);
-    }
-
-    return result;
-  }, []);
 
   const generateImage = useCallback(async (prompt: string) => {
     try {
