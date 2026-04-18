@@ -136,26 +136,23 @@ export default function SelectionTool({
 
     ctx.clearRect(0, 0, displayCanvasRef.current.width, displayCanvasRef.current.height);
     
+    // 绘制原图
     ctx.drawImage(imageRef.current, 0, 0);
     
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, displayCanvasRef.current.width, displayCanvasRef.current.height);
+    // 绘制选区图案（80% 透明度）
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = maskCanvasRef.current.width;
+    tempCanvas.height = maskCanvasRef.current.height;
+    const tempCtx = tempCanvas.getContext('2d');
     
-    ctx.globalCompositeOperation = 'destination-out';
-    
-    if (isBreathing) {
-      const baseAlpha = 0.6;
-      const breathRange = 0.2;
-      const breathPhase = Math.sin(Date.now() / 300);
+    if (tempCtx) {
+      tempCtx.drawImage(maskCanvasRef.current, 0, 0);
       
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = maskCanvasRef.current.width;
-      tempCanvas.height = maskCanvasRef.current.height;
-      const tempCtx = tempCanvas.getContext('2d');
-      
-      if (tempCtx) {
-        tempCtx.drawImage(maskCanvasRef.current, 0, 0);
+      if (isBreathing) {
+        // 呼吸效果
+        const baseAlpha = 0.6;
+        const breathRange = 0.2;
+        const breathPhase = Math.sin(Date.now() / 300);
         
         tempCtx.globalCompositeOperation = 'source-in';
         
@@ -165,17 +162,20 @@ export default function SelectionTool({
         );
         
         const alpha = baseAlpha + breathPhase * breathRange;
-        gradient.addColorStop(0, `rgba(0, 255, 255, ${alpha * 0.3})`);
-        gradient.addColorStop(0.5, `rgba(0, 255, 0, ${alpha * 0.2})`);
-        gradient.addColorStop(1, `rgba(0, 255, 255, ${alpha * 0.1})`);
+        gradient.addColorStop(0, `rgba(0, 255, 255, ${alpha * 0.8})`);
+        gradient.addColorStop(0.5, `rgba(0, 255, 0, ${alpha * 0.6})`);
+        gradient.addColorStop(1, `rgba(0, 255, 255, ${alpha * 0.4})`);
         
         tempCtx.fillStyle = gradient;
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-        
-        ctx.drawImage(tempCanvas, 0, 0);
+      } else {
+        // 静态选区图案（80% 透明度）
+        tempCtx.globalCompositeOperation = 'source-in';
+        tempCtx.fillStyle = 'rgba(0, 255, 255, 0.8)';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
       }
-    } else {
-      ctx.drawImage(maskCanvasRef.current, 0, 0);
+      
+      ctx.drawImage(tempCanvas, 0, 0);
     }
     
     ctx.globalCompositeOperation = 'source-over';
@@ -493,22 +493,22 @@ export default function SelectionTool({
       {/* Canvas area */}
       <div 
         ref={containerRef}
-        className="flex-1 relative overflow-auto bg-[#050505] cursor-crosshair"
+        className="flex-1 relative overflow-auto bg-[#050505] cursor-crosshair flex items-center justify-center p-4"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
         <div 
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-          style={{ transform: `translate(-50%, -50%) scale(${zoom})` }}
+          className="relative max-w-full max-h-full"
+          style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
         >
           <div className="relative">
             <img
               ref={imageRef}
               src={image}
               alt="Source"
-              className="max-w-full max-h-full"
+              className="max-w-full max-h-full object-contain"
               onLoad={handleImageLoad}
               draggable={false}
             />
