@@ -109,23 +109,50 @@ export default function ImageUploader({
         });
         
         if (!response.ok) {
-          throw new Error('上传失败');
-        }
-        
-        const result = await response.json();
-        if (result.success) {
-          // 上传成功，保存到本地存储
+          // API 调用失败，仍然使用本地预览
           if (storageKey) {
-            localStorage.setItem(storageKey, result.data.url);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const dataUrl = e.target?.result as string;
+              localStorage.setItem(storageKey, dataUrl);
+            };
+            reader.readAsDataURL(f);
           }
-          // 更新预览为服务器返回的URL
-          setPreview(result.data.url);
           onUpload?.(f);
         } else {
-          throw new Error(result.error || '上传失败');
+          const result = await response.json();
+          if (result.success) {
+            // 上传成功，保存到本地存储
+            if (storageKey) {
+              localStorage.setItem(storageKey, result.data.url);
+            }
+            // 更新预览为服务器返回的URL
+            setPreview(result.data.url);
+            onUpload?.(f);
+          } else {
+            // API 返回失败，仍然使用本地预览
+            if (storageKey) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const dataUrl = e.target?.result as string;
+                localStorage.setItem(storageKey, dataUrl);
+              };
+              reader.readAsDataURL(f);
+            }
+            onUpload?.(f);
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : '上传失败');
+        // 发生错误，仍然使用本地预览
+        if (storageKey) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const dataUrl = e.target?.result as string;
+            localStorage.setItem(storageKey, dataUrl);
+          };
+          reader.readAsDataURL(f);
+        }
+        onUpload?.(f);
       } finally {
         setIsUploading(false);
         setUploadProgress(100);
