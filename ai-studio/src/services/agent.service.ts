@@ -25,6 +25,7 @@ export async function getAgents() {
     name: agent.name,
     description: agent.description,
     avatar: agent.avatar,
+    category: "image" as const, // 默认分类为 image
     isPublic: agent.isPublic,
     sortOrder: agent.sortOrder,
     usageCount: agent._count.generations,

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Video, Image, Palette, Users } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface AgentCard {
   id: string;
