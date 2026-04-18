@@ -21,6 +21,7 @@ const generateModes = [
   { key: "image-to-image", label: "图生图", icon: ImagePlus, href: "/generate/image-to-image" },
   { key: "video", label: "视频生成", icon: Video, href: "/generate/video" },
   { key: "edit", label: "图片编辑", icon: Pencil, href: "/generate/edit" },
+  { key: "architecture", label: "进阶设计", icon: Building2, href: "/generate/architecture" },
 ];
 
 const quickTemplates = [
@@ -48,6 +49,7 @@ export default function Sidebar({ currentMode = "text-to-image" }: SidebarProps)
     if (pathname.includes("image-to-image")) return "image-to-image";
     if (pathname.includes("video")) return "video";
     if (pathname.includes("edit")) return "edit";
+    if (pathname.includes("architecture")) return "architecture";
     return "text-to-image";
   };
 
