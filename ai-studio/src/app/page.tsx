@@ -47,11 +47,12 @@ import {
 import AnimatedSection from "@/components/shared/AnimatedSection";
 import Footer from "@/components/layout/Footer";
 
-/* ========================================
-   Navigation Bar (Simplified for landing)
-   ======================================== */
-function Navbar() {
-  const { data: session } = useSession();
+/* ========================================   Navigation Bar (Simplified for landing)   ======================================== */
+interface NavbarProps {
+  session: any;
+}
+
+function Navbar({ session }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -915,7 +916,7 @@ function HomePageContent() {
   
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
-      <Navbar />
+      <Navbar session={session} />
       <main>
         <HeroSection isAuthenticated={status === 'authenticated'} />
         <ShowcaseSection />
