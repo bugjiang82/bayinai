@@ -257,7 +257,7 @@ const rotatingKeywords = [
   { text: "智能体引导", icon: Bot },
 ];
 
-function HeroSection() {
+function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
   const [keywordIndex, setKeywordIndex] = useState(0);
   const [keywordVisible, setKeywordVisible] = useState(true);
 
@@ -360,16 +360,29 @@ function HeroSection() {
         <div
           className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-[fadeInUp_0.6s_ease-out_0.6s_both]"
         >
-          <Button
-            size="lg"
-            className="h-12 px-8 text-base bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 hover:scale-[1.02]"
-            asChild
-          >
-            <Link href="/generate">
-              开始创作
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Link>
-          </Button>
+          {isAuthenticated ? (
+            <Button
+              size="lg"
+              className="h-12 px-8 text-base bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 hover:scale-[1.02]"
+              asChild
+            >
+              <Link href="/generate">
+                进入工作区
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              className="h-12 px-8 text-base bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 hover:scale-[1.02]"
+              asChild
+            >
+              <Link href="/login">
+                登录
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </Link>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="lg"
@@ -823,7 +836,7 @@ function TutorialsSection() {
 /* ========================================
    CTA Section
    ======================================== */
-function CTASection() {
+function CTASection({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
     <section className="relative py-24 md:py-32">
       <div className="max-w-[1400px] mx-auto px-4 md:px-8">
@@ -846,21 +859,34 @@ function CTASection() {
             <div className="relative z-10 px-6 py-16 md:px-16 md:py-20 text-center">
               <div>
                 <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-                  准备好开始创作了吗？
+                  {isAuthenticated ? "准备好继续创作了吗？" : "准备好开始创作了吗？"}
                 </h2>
                 <p className="text-zinc-300 text-lg mb-8 max-w-xl mx-auto">
-                  注册即送 20 积分，立即体验 AI 创作的魔力
+                  {isAuthenticated ? "进入工作区，继续你的创意之旅" : "注册即送 20 积分，立即体验 AI 创作的魔力"}
                 </p>
-                <Button
-                  size="lg"
-                  className="h-12 px-10 text-base bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 hover:scale-[1.02]"
-                  asChild
-                >
-                  <Link href="/register">
-                    免费注册
-                    <ArrowRight className="w-4 h-4 ml-1" />
-                  </Link>
-                </Button>
+                {isAuthenticated ? (
+                  <Button
+                    size="lg"
+                    className="h-12 px-10 text-base bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 hover:scale-[1.02]"
+                    asChild
+                  >
+                    <Link href="/generate">
+                      进入工作区
+                      <ArrowRight className="w-4 h-4 ml-1" />
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    size="lg"
+                    className="h-12 px-10 text-base bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 hover:scale-[1.02]"
+                    asChild
+                  >
+                    <Link href="/register">
+                      免费注册
+                      <ArrowRight className="w-4 h-4 ml-1" />
+                    </Link>
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -877,15 +903,8 @@ function HomePageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   
-  // 如果用户已登录，重定向到创作页面
-  React.useEffect(() => {
-    if (status === 'authenticated') {
-      router.push('/generate');
-    }
-  }, [status, router]);
-  
-  // 如果正在加载或已认证，不显示内容
-  if (status === 'loading' || status === 'authenticated') {
+  // 如果正在加载，显示加载状态
+  if (status === 'loading') {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="animate-pulse text-zinc-500">加载中...</div>
@@ -897,13 +916,13 @@ function HomePageContent() {
     <div className="min-h-screen bg-[#0a0a0a]">
       <Navbar />
       <main>
-        <HeroSection />
+        <HeroSection isAuthenticated={status === 'authenticated'} />
         <ShowcaseSection />
         <FeaturesSection />
         <AgentsSection />
         <StatsSection />
         <TutorialsSection />
-        <CTASection />
+        <CTASection isAuthenticated={status === 'authenticated'} />
       </main>
       <Footer />
     </div>
