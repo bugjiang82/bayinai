@@ -51,7 +51,7 @@ export async function createTemplate(data: CreateTemplateData) {
       description: data.description,
       coverImage: data.coverImage,
       category: data.category,
-      tags: data.tags || [],
+      tags: JSON.stringify(data.tags || []),
       prompt: data.prompt,
       negativePrompt: data.negativePrompt,
       params: JSON.stringify(data.params || {}),

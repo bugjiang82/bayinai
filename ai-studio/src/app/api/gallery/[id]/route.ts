@@ -57,11 +57,11 @@ export async function POST(
     }
 
     // 使用 params 字段来存储收藏状态
-    const currentParams = (generation.params as Record<string, unknown>) || {};
+    const currentParams = (JSON.parse(generation.params || '{}') as Record<string, unknown>) || {};
     await prisma.generation.update({
       where: { id },
       data: {
-        params: { ...currentParams, favorite: !!favorite },
+        params: JSON.stringify({ ...currentParams, favorite: !!favorite }),
       },
     });
 

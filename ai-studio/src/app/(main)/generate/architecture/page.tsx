@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGenerationStore } from "@/stores/generationStore";
 import Canvas from "@/components/generate/Canvas";
@@ -499,11 +499,11 @@ export default function ArchitecturePage() {
                             <Checkbox
                               id={`avoid-${item.value}`}
                               checked={avoidFeatures.includes(item.value)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
+                              onChange={(e) => {
+                                if (e.target.checked) {
                                   setAvoidFeatures([...avoidFeatures, item.value]);
                                 } else {
-                                  setAvoidFeatures(avoidFeatures.filter(f => f !== item.value));
+                                  setAvoidFeatures(avoidFeatures.filter((f) => f !== item.value));
                                 }
                               }}
                             />
