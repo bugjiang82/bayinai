@@ -22,6 +22,10 @@ export async function POST(request: NextRequest) {
       styleRefImage,  // 风格参考图 (可选)
       maskImage,      // 局部重绘遮罩 (仅重绘模式需要)
       baseRendered,   // 渲染不满意的底图 (仅重绘模式需要)
+      negativePrompt, // 负面提示词
+      fidelity,       // 还原度 (0-1)
+      styleImpact,    // 风格浸染 (0-1)
+      aiCreativity,   // AI 脑洞 (3-15)
     } = body;
 
     if (!mode || !prompt || !mainImage) {
@@ -53,6 +57,14 @@ export async function POST(request: NextRequest) {
         break;
     }
 
+    // 3. 使用前端传递的参数覆盖默认值
+    if (fidelity !== undefined) {
+      structureStrength = fidelity;
+    }
+    if (styleImpact !== undefined) {
+      // 风格强度在前端已处理，这里不需要额外处理
+    }
+
     // 3. 构建多重参考数组
     const imageInputs = [
       {
@@ -76,7 +88,8 @@ export async function POST(request: NextRequest) {
       prompt: prompt,
       generation_config: {
         aspect_ratio: "16:9",
-        negative_prompt: "flat, 2d, low quality, distorted lines, signature"
+        negative_prompt: negativePrompt || "flat, 2d, low quality, distorted lines, signature",
+        guidance_scale: aiCreativity || 7.5
       },
       image_input_config: imageInputs
     };

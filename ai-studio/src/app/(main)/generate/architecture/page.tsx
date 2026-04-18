@@ -264,104 +264,185 @@ export default function ArchitecturePage() {
                 />
               </div>
 
-              {/* Main image upload */}
-              <div>
-                <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                  {mode === 'CAD_TO_3D' ? 'CAD平面图' : mode === 'SU_RENDER' ? 'SU白模' : '底图'}
-                </label>
-                <Button
-                  variant="ghost"
-                  className="w-full h-20 border border-dashed border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04]"
-                  onClick={() => handleFileUpload(setMainImage)}
-                >
-                  {mainImage ? (
-                    <div className="flex flex-col items-center">
-                      <ImageIcon className="w-6 h-6 text-indigo-400 mb-1" />
-                      <span className="text-xs text-zinc-400">已上传</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center">
-                      <Upload className="w-6 h-6 text-zinc-500 mb-1" />
-                      <span className="text-xs text-zinc-500">点击上传</span>
-                    </div>
-                  )}
-                </Button>
-              </div>
-
-              {/* Style reference image (optional) */}
-              <div>
-                <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                  风格参考图（可选）
-                </label>
-                <Button
-                  variant="ghost"
-                  className="w-full h-16 border border-dashed border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04]"
-                  onClick={() => handleFileUpload(setStyleRefImage)}
-                >
-                  {styleRefImage ? (
-                    <div className="flex flex-col items-center">
-                      <ImageIcon className="w-5 h-5 text-indigo-400 mb-1" />
-                      <span className="text-xs text-zinc-400">已上传</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center">
-                      <Upload className="w-5 h-5 text-zinc-500 mb-1" />
-                      <span className="text-xs text-zinc-500">点击上传</span>
-                    </div>
-                  )}
-                </Button>
-              </div>
-
-              {/* Inpaint specific inputs */}
-              {mode === 'INPAINT' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                      遮罩图像
-                    </label>
-                    <Button
-                      variant="ghost"
-                      className="w-full h-16 border border-dashed border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04]"
-                      onClick={() => handleFileUpload(setMaskImage)}
-                    >
-                      {maskImage ? (
-                        <div className="flex flex-col items-center">
-                          <ImageIcon className="w-5 h-5 text-indigo-400 mb-1" />
-                          <span className="text-xs text-zinc-400">已上传</span>
+              {/* 图像上传区域 */}
+              <div className="space-y-4">
+                {/* 结构/线稿 */}
+                <div>
+                  <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                    结构/线稿
+                  </label>
+                  <div
+                    className="w-full h-24 border border-dashed border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04] rounded-lg flex items-center justify-center cursor-pointer transition-colors"
+                    onClick={() => handleFileUpload(setMainImage)}
+                  >
+                    {mainImage ? (
+                      <div className="relative w-full h-full rounded-lg overflow-hidden">
+                        <img 
+                          src={mainImage} 
+                          alt="结构/线稿" 
+                          className="w-full h-full object-contain"
+                        />
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <span className="text-xs text-white">已上传</span>
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center">
-                          <Upload className="w-5 h-5 text-zinc-500 mb-1" />
-                          <span className="text-xs text-zinc-500">点击上传</span>
-                        </div>
-                      )}
-                    </Button>
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                      渲染底图
-                    </label>
-                    <Button
-                      variant="ghost"
-                      className="w-full h-16 border border-dashed border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04]"
-                      onClick={() => handleFileUpload(setBaseRendered)}
-                    >
-                      {baseRendered ? (
-                        <div className="flex flex-col items-center">
-                          <ImageIcon className="w-5 h-5 text-indigo-400 mb-1" />
-                          <span className="text-xs text-zinc-400">已上传</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center">
-                          <Upload className="w-5 h-5 text-zinc-500 mb-1" />
-                          <span className="text-xs text-zinc-500">点击上传</span>
-                        </div>
-                      )}
-                    </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <Upload className="w-6 h-6 text-zinc-500 mb-1" />
+                        <span className="text-xs text-zinc-500">点击上传</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+
+                {/* 风格参考 */}
+                <div>
+                  <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                    风格参考（可选）
+                  </label>
+                  <div
+                    className="w-full h-20 border border-dashed border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04] rounded-lg flex items-center justify-center cursor-pointer transition-colors"
+                    onClick={() => handleFileUpload(setStyleRefImage)}
+                  >
+                    {styleRefImage ? (
+                      <div className="relative w-full h-full rounded-lg overflow-hidden">
+                        <img 
+                          src={styleRefImage} 
+                          alt="风格参考" 
+                          className="w-full h-full object-contain"
+                        />
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <span className="text-xs text-white">已上传</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <Upload className="w-5 h-5 text-zinc-500 mb-1" />
+                        <span className="text-xs text-zinc-500">点击上传</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Inpaint specific inputs */}
+                {mode === 'INPAINT' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                        遮罩图像
+                      </label>
+                      <div
+                        className="w-full h-20 border border-dashed border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04] rounded-lg flex items-center justify-center cursor-pointer transition-colors"
+                        onClick={() => handleFileUpload(setMaskImage)}
+                      >
+                        {maskImage ? (
+                          <div className="relative w-full h-full rounded-lg overflow-hidden">
+                            <img 
+                              src={maskImage} 
+                              alt="遮罩图像" 
+                              className="w-full h-full object-contain"
+                            />
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                              <span className="text-xs text-white">已上传</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <Upload className="w-5 h-5 text-zinc-500 mb-1" />
+                            <span className="text-xs text-zinc-500">点击上传</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                        渲染底图
+                      </label>
+                      <div
+                        className="w-full h-20 border border-dashed border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04] rounded-lg flex items-center justify-center cursor-pointer transition-colors"
+                        onClick={() => handleFileUpload(setBaseRendered)}
+                      >
+                        {baseRendered ? (
+                          <div className="relative w-full h-full rounded-lg overflow-hidden">
+                            <img 
+                              src={baseRendered} 
+                              alt="渲染底图" 
+                              className="w-full h-full object-contain"
+                            />
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                              <span className="text-xs text-white">已上传</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <Upload className="w-5 h-5 text-zinc-500 mb-1" />
+                            <span className="text-xs text-zinc-500">点击上传</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 核心参数设置 */}
+              <div className="space-y-4">
+                {/* 还原度滑块 */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-zinc-300">
+                      还原度
+                    </label>
+                    <span className="text-xs text-zinc-400">{fidelity}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Slider
+                      value={[fidelity]}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onValueChange={(value) => setFidelity(value[0])}
+                      className="flex-1"
+                    />
+                    <div className="flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5 text-zinc-500" />
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-xs text-zinc-500 mt-1">
+                    <span>自由创作</span>
+                    <span>精准还原</span>
+                  </div>
+                </div>
+
+                {/* 风格浸染滑块 */}
+                {styleRefImage && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-medium text-zinc-300">
+                        风格浸染
+                      </label>
+                      <span className="text-xs text-zinc-400">{styleImpact}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Slider
+                        value={[styleImpact]}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onValueChange={(value) => setStyleImpact(value[0])}
+                        className="flex-1"
+                      />
+                      <div className="flex items-center gap-1">
+                        <Info className="w-3.5 h-3.5 text-zinc-500" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      决定你的方案在多大程度上长得像参考图
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* Advanced settings */}
               <div>
@@ -377,10 +458,70 @@ export default function ArchitecturePage() {
                   高级设置
                 </button>
                 {showAdvanced && (
-                  <div className="mt-3 space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+                  <div className="mt-3 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+                    {/* AI 脑洞拨杆 */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-zinc-300">
+                          AI 脑洞
+                        </label>
+                        <span className="text-xs text-zinc-400">{aiCreativity}</span>
+                      </div>
+                      <Slider
+                        value={[aiCreativity]}
+                        min={3}
+                        max={15}
+                        step={0.5}
+                        onValueChange={(value) => setAiCreativity(value[0])}
+                      />
+                      <div className="flex justify-between text-xs text-zinc-500 mt-1">
+                        <span>浪漫、有创意</span>
+                        <span>标准、平衡</span>
+                        <span>严格遵循文字</span>
+                      </div>
+                    </div>
+
+                    {/* 一键避雷 */}
+                    <div>
+                      <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                        一键避雷
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: 'watermark', label: '拒绝水印' },
+                          { value: 'text', label: '去除文字' },
+                          { value: 'flat', label: '拒绝 2D 感' },
+                          { value: '2d', label: '拒绝 2D 感' },
+                          { value: 'messy lines', label: '拒绝杂乱线条' },
+                          { value: 'blurry', label: '拒绝模糊' },
+                        ].map((item) => (
+                          <div key={item.value} className="flex items-center gap-1.5">
+                            <Checkbox
+                              id={`avoid-${item.value}`}
+                              checked={avoidFeatures.includes(item.value)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setAvoidFeatures([...avoidFeatures, item.value]);
+                                } else {
+                                  setAvoidFeatures(avoidFeatures.filter(f => f !== item.value));
+                                }
+                              }}
+                            />
+                            <label 
+                              htmlFor={`avoid-${item.value}`} 
+                              className="text-xs text-zinc-400 cursor-pointer"
+                            >
+                              {item.label}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 负面提示词 */}
                     <div>
                       <label className="text-xs text-zinc-400 mb-1 block">
-                        负面提示词
+                        自定义负面提示词
                       </label>
                       <Textarea
                         value={negativePrompt}
