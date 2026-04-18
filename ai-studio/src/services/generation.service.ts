@@ -477,6 +477,17 @@ export interface InpaintParams {
   model?: "flash" | "pro";
   imageSize?: string;
   thinkingLevel?: ThinkingLevel;
+  // 新增参数，整合 nano-banana 功能
+  structureRef?: string;
+  styleRef?: string;
+  structureStrength?: number;
+  styleStrength?: number;
+  guidanceScale?: number;
+  negativePrompt?: string[];
+  customNegativePrompt?: string;
+  aspectRatio?: string;
+  useGoogleSearch?: boolean;
+  useImageSearch?: boolean;
 }
 
 export async function inpaintImage(
@@ -490,6 +501,17 @@ export async function inpaintImage(
     model = "flash",
     imageSize = "1K",
     thinkingLevel = ThinkingLevel.MINIMAL,
+    // 新增参数
+    structureRef,
+    styleRef,
+    structureStrength = 0.9,
+    styleStrength = 0.6,
+    guidanceScale = 7.5,
+    negativePrompt = [],
+    customNegativePrompt,
+    aspectRatio = "1:1",
+    useGoogleSearch = false,
+    useImageSearch = false,
   } = params;
 
   const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
@@ -512,7 +534,14 @@ export async function inpaintImage(
       type: "INPAINT" as GenType,
       status: "PROCESSING",
       prompt,
-      params: JSON.stringify({ model, imageSize }),
+      params: JSON.stringify({
+        model,
+        imageSize,
+        structureStrength,
+        styleStrength,
+        guidanceScale,
+        aspectRatio,
+      }),
       inputUrl: originalImage.substring(0, 255), // 截断过长的 base64
       cost,
     },
@@ -520,7 +549,7 @@ export async function inpaintImage(
 
   try {
     // 构建专业的 Inpainting Prompt
-    const finalPrompt = `
+    let finalPrompt = `
 You are an expert image editor.
 
 Image 1: Original image
@@ -533,10 +562,43 @@ Instructions:
 - Make the result seamless and photorealistic, matching the surrounding style, lighting, and perspective.
 `;
 
-    const contents: Array<
-      | { text: string }
-      | { inlineData: { mimeType: string; data: string }; text?: string }
-    > = [];
+    // 处理 negative prompt
+    const negParts = [...negativePrompt];
+    if (customNegativePrompt) negParts.push(customNegativePrompt);
+    
+    if (negParts.length > 0) {
+      finalPrompt += ` . Negative prompt: ${negParts.join(', ')}`;
+    }
+
+    const contents: any[] = [];
+
+    // 结构参考
+    if (structureRef) {
+      contents.push({
+        inlineData: {
+          data: structureRef.includes(',') ? structureRef.split(',')[1] : structureRef,
+          mimeType: "image/png"
+        },
+        metadata: {
+          referenceType: "STRUCTURE",
+          structureStrength: structureStrength
+        }
+      });
+    }
+
+    // 风格参考
+    if (styleRef) {
+      contents.push({
+        inlineData: {
+          data: styleRef.includes(',') ? styleRef.split(',')[1] : styleRef,
+          mimeType: "image/png"
+        },
+        metadata: {
+          referenceType: "STYLE",
+          styleStrength: styleStrength
+        }
+      });
+    }
 
     // 添加原图
     const originalBase64 = originalImage.includes(",")
@@ -566,12 +628,23 @@ Instructions:
     // 调用 Gemini API
     const response = await ai.models.generateContent({
       model: modelName,
-      contents: contents,
+      contents: { parts: contents },
       config: {
         responseModalities: ["IMAGE"],
         imageConfig: {
           imageSize,
+          aspectRatio,
         },
+        tools: useGoogleSearch ? [
+          {
+            googleSearch: {
+              searchTypes: {
+                webSearch: {},
+                imageSearch: useImageSearch ? {} : undefined
+              }
+            }
+          }
+        ] : undefined,
         ...(!isProModel
           ? { thinkingConfig: { thinkingLevel } }
           : {}),
@@ -587,13 +660,17 @@ Instructions:
 
     let outputBase64: string | undefined;
     let hasImage = false;
+    let revisedPrompt: string | undefined;
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
+    const parts = response.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
       if (part.inlineData?.data) {
         const buffer = Buffer.from(part.inlineData.data, "base64");
         fs.writeFileSync(filepath, buffer);
         outputBase64 = part.inlineData.data;
         hasImage = true;
+      } else if (part.text) {
+        revisedPrompt = part.text;
       }
     }
 
@@ -601,7 +678,7 @@ Instructions:
       if (fs.existsSync(filepath)) {
         fs.unlinkSync(filepath);
       }
-      throw new Error("未能生成图片");
+      throw new Error("模型未返回图像数据。这可能是由于提示词触发了安全过滤，或参数设置超出了模型当前支持的范围。");
     }
 
     const outputUrl = `/outputs/${userId}/${filename}`;

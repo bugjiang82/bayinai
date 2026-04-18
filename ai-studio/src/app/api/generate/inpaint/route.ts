@@ -19,6 +19,17 @@ export async function POST(request: NextRequest) {
       imageSize = "1K",
       thinkingLevel = "MINIMAL",
       model = "flash",
+      // 新增参数
+      structureRef,
+      styleRef,
+      structureStrength,
+      styleStrength,
+      guidanceScale,
+      negativePrompt,
+      customNegativePrompt,
+      aspectRatio,
+      useGoogleSearch,
+      useImageSearch,
     } = body;
 
     if (!originalImage || !maskImage || !prompt) {
@@ -33,6 +44,16 @@ export async function POST(request: NextRequest) {
       imageSize,
       thinkingLevel,
       model,
+      structureRef,
+      styleRef,
+      structureStrength,
+      styleStrength,
+      guidanceScale,
+      negativePrompt,
+      customNegativePrompt,
+      aspectRatio,
+      useGoogleSearch,
+      useImageSearch,
     });
 
     return NextResponse.json(success(result, "生成成功"));

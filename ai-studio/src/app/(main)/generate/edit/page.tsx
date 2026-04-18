@@ -14,6 +14,7 @@ import {
   Upload,
   RotateCcw,
   CheckCircle2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -105,6 +106,26 @@ export default function EditPage() {
   // Inpaint params
   const [inpaintDescription, setInpaintDescription] = useState("");
   const [maskImage, setMaskImage] = useState<string | null>(null);
+  // 新增 nano-banana 控制参数
+  const [structureRef, setStructureRef] = useState<string | null>(null);
+  const [styleRef, setStyleRef] = useState<string | null>(null);
+  const [structureStrength, setStructureStrength] = useState(0.9);
+  const [styleStrength, setStyleStrength] = useState(0.6);
+  const [guidanceScale, setGuidanceScale] = useState(7.5);
+  const [negativePrompt, setNegativePrompt] = useState<string[]>([]);
+  const [customNegativePrompt, setCustomNegativePrompt] = useState("");
+  const [aspectRatio, setAspectRatio] = useState("1:1");
+  const [useGoogleSearch, setUseGoogleSearch] = useState(false);
+  const [useImageSearch, setUseImageSearch] = useState(false);
+  
+  // Negative tags
+  const NEGATIVE_TAGS = [
+    { id: 'messy', label: '拒绝杂乱线条', prompt: 'messy lines, extra lines' },
+    { id: 'watermark', label: '去除水印', prompt: 'watermark, text, signature' },
+    { id: '2d', label: '拒绝 2D 感', prompt: 'flat, 2d, illustration, cartoon' },
+    { id: 'blurry', label: '修复模糊', prompt: 'blurry, low quality, pixelated' },
+    { id: 'deform', label: '畸变矫正', prompt: 'deformed, distorted, warped' },
+  ];
 
   useEffect(() => {
     return () => {
@@ -137,6 +158,17 @@ export default function EditPage() {
     setIsProcessing(false);
     setProgress(0);
     setMaskImage(null);
+    // 重置 nano-banana 控制参数
+    setStructureRef(null);
+    setStyleRef(null);
+    setStructureStrength(0.9);
+    setStyleStrength(0.6);
+    setGuidanceScale(7.5);
+    setNegativePrompt([]);
+    setCustomNegativePrompt("");
+    setAspectRatio("1:1");
+    setUseGoogleSearch(false);
+    setUseImageSearch(false);
   }, []);
 
   const handleApply = useCallback(async () => {
@@ -184,6 +216,19 @@ export default function EditPage() {
             originalImage: sourceImage,
             maskImage: maskImage,
             prompt: inpaintDescription,
+            structureRef,
+            styleRef,
+            structureStrength,
+            styleStrength,
+            guidanceScale,
+            negativePrompt: negativePrompt.map(tagId => {
+              const tag = NEGATIVE_TAGS.find(t => t.id === tagId);
+              return tag ? tag.prompt : tagId;
+            }),
+            customNegativePrompt,
+            aspectRatio,
+            useGoogleSearch,
+            useImageSearch,
           }),
         });
       } else {
@@ -225,7 +270,7 @@ export default function EditPage() {
         progressIntervalRef.current = null;
       }
     }
-  }, [sourceImage, credits, editMode, maskImage, inpaintDescription]);
+  }, [sourceImage, credits, editMode, maskImage, inpaintDescription, structureRef, styleRef, structureStrength, styleStrength, guidanceScale, negativePrompt, customNegativePrompt, aspectRatio, useGoogleSearch, useImageSearch]);
 
   const renderModeParams = () => {
     switch (editMode) {
@@ -409,7 +454,7 @@ export default function EditPage() {
 
       case "inpaint":
         return (
-          <div className="space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+          <div className="space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
             <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3">
               <p className="text-xs text-indigo-400/80">
                 使用左侧画布中的选区工具绘制需要重绘的区域：<br/>
@@ -418,13 +463,236 @@ export default function EditPage() {
                 • 橡皮擦：擦除选区
               </p>
             </div>
-            <label className="text-xs text-zinc-400">重绘描述</label>
-            <Textarea
-              value={inpaintDescription}
-              onChange={(e) => setInpaintDescription(e.target.value)}
-              placeholder="描述你想要在选中区域生成的内容..."
-              className="min-h-[60px] resize-none bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600"
-            />
+            
+            <div>
+              <label className="text-xs text-zinc-400">重绘描述</label>
+              <Textarea
+                value={inpaintDescription}
+                onChange={(e) => setInpaintDescription(e.target.value)}
+                placeholder="描述你想要在选中区域生成的内容..."
+                className="min-h-[60px] resize-none bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600 mt-1"
+              />
+            </div>
+            
+            {/* 图像参考控制 */}
+            <div>
+              <label className="text-xs text-zinc-400 block mb-2">图像参考控制</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[11px] text-zinc-500 mb-1">结构/线稿</div>
+                  <div className="border border-white/[0.08] rounded-lg overflow-hidden">
+                    {structureRef ? (
+                      <div className="relative">
+                        <img 
+                          src={structureRef} 
+                          alt="结构参考" 
+                          className="w-full h-20 object-cover"
+                        />
+                        <button
+                          className="absolute top-1 right-1 bg-black/50 rounded-full p-1 hover:bg-black/70"
+                          onClick={() => setStructureRef(null)}
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center h-20 cursor-pointer hover:bg-white/[0.04]">
+                        <Upload className="w-4 h-4 text-zinc-500 mb-1" />
+                        <span className="text-[11px] text-zinc-500">上传参考图</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (e) => {
+                                setStructureRef(e.target?.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-zinc-500 mb-1">风格参考</div>
+                  <div className="border border-white/[0.08] rounded-lg overflow-hidden">
+                    {styleRef ? (
+                      <div className="relative">
+                        <img 
+                          src={styleRef} 
+                          alt="风格参考" 
+                          className="w-full h-20 object-cover"
+                        />
+                        <button
+                          className="absolute top-1 right-1 bg-black/50 rounded-full p-1 hover:bg-black/70"
+                          onClick={() => setStyleRef(null)}
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center h-20 cursor-pointer hover:bg-white/[0.04]">
+                        <Upload className="w-4 h-4 text-zinc-500 mb-1" />
+                        <span className="text-[11px] text-zinc-500">上传参考图</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (e) => {
+                                setStyleRef(e.target?.result as string);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* 滑块控制 */}
+            <div>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                    <span>还原度 (Structure)</span>
+                    <span>{structureStrength.toFixed(2)}</span>
+                  </div>
+                  <Slider
+                    value={[structureStrength * 100]}
+                    onValueChange={([v]) => setStructureStrength(v / 100)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    className="py-1"
+                  />
+                </div>
+                
+                <div>
+                  <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                    <span>风格浸染 (Style)</span>
+                    <span>{styleStrength.toFixed(2)}</span>
+                  </div>
+                  <Slider
+                    value={[styleStrength * 100]}
+                    onValueChange={([v]) => setStyleStrength(v / 100)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    className="py-1"
+                  />
+                </div>
+                
+                <div>
+                  <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                    <span>AI 脑洞 (Guidance)</span>
+                    <span>{guidanceScale.toFixed(1)}</span>
+                  </div>
+                  <Slider
+                    value={[guidanceScale]}
+                    onValueChange={([v]) => setGuidanceScale(v)}
+                    min={3}
+                    max={15}
+                    step={0.5}
+                    className="py-1"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* 负向提示词 */}
+            <div>
+              <label className="text-xs text-zinc-400 block mb-2">一键避雷</label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {NEGATIVE_TAGS.map(tag => (
+                  <button
+                    key={tag.id}
+                    onClick={() => setNegativePrompt(prev => 
+                      prev.includes(tag.id)
+                        ? prev.filter(id => id !== tag.id)
+                        : [...prev, tag.id]
+                    )}
+                    className={`px-2 py-0.5 rounded-md text-[10px] border transition-all ${
+                      negativePrompt.includes(tag.id)
+                        ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                        : 'bg-white/[0.04] border-white/[0.06] text-zinc-500 hover:border-white/[0.15] hover:text-zinc-300'
+                    }`}
+                  >
+                    {tag.label}
+                  </button>
+                ))}
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500 block mb-1">自定义排除项</label>
+                <Input
+                  value={customNegativePrompt}
+                  onChange={(e) => setCustomNegativePrompt(e.target.value)}
+                  placeholder="例如：ugly, blurry, lowres..."
+                  className="text-xs bg-[#0f0f0f] border-white/[0.08] text-zinc-200 placeholder:text-zinc-600"
+                />
+              </div>
+            </div>
+            
+            {/* 高级选项 */}
+            <div>
+              <label className="text-xs text-zinc-400 block mb-2">高级选项</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[11px] text-zinc-500 mb-1">宽高比</div>
+                  <div className="flex bg-white/[0.04] border border-white/[0.08] rounded-lg p-0.5">
+                    {["1:1", "16:9", "9:16"].map(ratio => (
+                      <button
+                        key={ratio}
+                        onClick={() => setAspectRatio(ratio)}
+                        className={`flex-1 px-2 py-1 text-[10px] rounded-md transition-all ${
+                          aspectRatio === ratio
+                            ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                            : 'text-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        {ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-zinc-500 mb-1">搜索增强</div>
+                  <div className="space-y-1">
+                    <label className="flex items-center gap-2 text-[10px] text-zinc-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useGoogleSearch}
+                        onChange={(e) => setUseGoogleSearch(e.target.checked)}
+                        className="w-3 h-3 rounded border-white/[0.15] bg-[#0f0f0f] text-indigo-500 focus:ring-indigo-500"
+                      />
+                      使用 Google 搜索
+                    </label>
+                    {useGoogleSearch && (
+                      <label className="flex items-center gap-2 text-[10px] text-zinc-400 cursor-pointer ml-5">
+                        <input
+                          type="checkbox"
+                          checked={useImageSearch}
+                          onChange={(e) => setUseImageSearch(e.target.checked)}
+                          className="w-3 h-3 rounded border-white/[0.15] bg-[#0f0f0f] text-indigo-500 focus:ring-indigo-500"
+                        />
+                        包含图片搜索
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         );
 
