@@ -445,6 +445,8 @@ export async function getHistory(
         width: true,
         height: true,
         cost: true,
+        params: true,
+        inputUrl: true,
         createdAt: true,
         completedAt: true,
       },
