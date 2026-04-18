@@ -22,6 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import ImageUploader from "@/components/shared/ImageUploader";
 import ProgressBar from "@/components/generate/ProgressBar";
+import SelectionTool from "@/components/generate/SelectionTool";
 
 type EditMode =
   | "upscale"
@@ -103,6 +104,7 @@ export default function EditPage() {
 
   // Inpaint params
   const [inpaintDescription, setInpaintDescription] = useState("");
+  const [maskImage, setMaskImage] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -134,6 +136,7 @@ export default function EditPage() {
     setResultImage(null);
     setIsProcessing(false);
     setProgress(0);
+    setMaskImage(null);
   }, []);
 
   const handleApply = useCallback(async () => {
@@ -359,9 +362,12 @@ export default function EditPage() {
       case "inpaint":
         return (
           <div className="space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-200">
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-              <p className="text-xs text-amber-400/80">
-                在左侧图片上使用画笔涂抹需要重绘的区域，然后输入描述
+            <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3">
+              <p className="text-xs text-indigo-400/80">
+                使用左侧画布中的选区工具绘制需要重绘的区域：<br/>
+                • 套索工具：点击添加锚点，闭合生成选区<br/>
+                • 笔刷工具：直接绘制选区<br/>
+                • 橡皮擦：擦除选区
               </p>
             </div>
             <label className="text-xs text-zinc-400">重绘描述</label>
@@ -405,14 +411,22 @@ export default function EditPage() {
           {/* Source image with processing */}
           {sourceImage && !isProcessing && !resultImage && (
             <div className="w-full h-full flex flex-col">
-              <div className="flex-1 relative flex items-center justify-center p-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={sourceImage}
-                  alt="源图片"
-                  className="max-w-full max-h-full object-contain rounded-lg"
+              {editMode === "inpaint" ? (
+                <SelectionTool
+                  image={sourceImage}
+                  onSelectionChange={setMaskImage}
+                  className="flex-1"
                 />
-              </div>
+              ) : (
+                <div className="flex-1 relative flex items-center justify-center p-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={sourceImage}
+                    alt="源图片"
+                    className="max-w-full max-h-full object-contain rounded-lg"
+                  />
+                </div>
+              )}
               <div className="p-3 flex items-center justify-center border-t border-white/[0.06] bg-[#0a0a0a]">
                 <Button
                   variant="ghost"
