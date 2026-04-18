@@ -435,8 +435,8 @@ export default function EditPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex gap-4">
-      {/* Left: Image edit area (60%) */}
-      <div className="w-[60%] flex flex-col min-w-0">
+      {/* Left: Image edit area (70%) */}
+      <div className="w-[70%] flex flex-col min-w-0">
         <div className="flex-1 rounded-2xl border border-white/[0.06] bg-[#0a0a0a]/50 flex items-center justify-center min-h-[500px] overflow-hidden">
           {/* Empty state - no source image */}
           {!sourceImage && !isProcessing && (
@@ -547,8 +547,8 @@ export default function EditPage() {
         </div>
       </div>
 
-      {/* Right: Edit tools panel (40%) */}
-      <div className="w-[40%] flex flex-col min-w-[340px] max-w-[480px]">
+      {/* Right: Edit tools panel (30%) */}
+      <div className="w-[30%] flex flex-col min-w-[300px] max-w-[400px]">
         <div className="flex flex-col h-full rounded-2xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-5">
