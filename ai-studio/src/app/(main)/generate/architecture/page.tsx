@@ -7,6 +7,8 @@ import Canvas from "@/components/generate/Canvas";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Building2, 
   Sparkles, 
@@ -15,7 +17,8 @@ import {
   Coins,
   ChevronDown,
   ChevronUp,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Info
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +46,27 @@ export default function ArchitecturePage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  
+  // UI 组件状态
+  const [fidelity, setFidelity] = useState(90); // 还原度 (对应 structure_strength)
+  const [styleImpact, setStyleImpact] = useState(60); // 风格浸染 (对应 style_strength)
+  const [aiCreativity, setAiCreativity] = useState(7.5); // AI 脑洞 (对应 guidance_scale)
+  const [avoidFeatures, setAvoidFeatures] = useState<string[]>(['watermark', 'text', 'flat', '2d', 'messy lines']); // 一键避雷
+  
+  // 预设模式配置
+  const modePresets = {
+    CAD_TO_3D: { fidelity: 75, styleImpact: 60, aiCreativity: 7.5 },
+    SU_RENDER: { fidelity: 95, styleImpact: 50, aiCreativity: 6.0 },
+    INPAINT: { fidelity: 85, styleImpact: 70, aiCreativity: 8.0 }
+  };
+  
+  // 当模式改变时，应用预设
+  useEffect(() => {
+    const preset = modePresets[mode];
+    setFidelity(preset.fidelity);
+    setStyleImpact(preset.styleImpact);
+    setAiCreativity(preset.aiCreativity);
+  }, [mode]);
 
   // File upload handlers
   const handleFileUpload = useCallback((setter: (value: string | null) => void) => {
@@ -101,11 +125,18 @@ export default function ArchitecturePage() {
     simulateProgress();
 
     try {
+      // 构建负面提示词
+      const negativePromptText = negativePrompt || avoidFeatures.join(', ');
+      
       // Prepare payload based on mode
       const payload: any = {
         mode,
         prompt: prompt.trim(),
         mainImage: mainImage.split(',')[1], // Remove data URL prefix
+        negativePrompt: negativePromptText,
+        fidelity: fidelity / 100, // 转换为 0-1
+        styleImpact: styleImpact / 100, // 转换为 0-1
+        aiCreativity: aiCreativity,
       };
 
       if (styleRefImage) {
@@ -153,7 +184,7 @@ export default function ArchitecturePage() {
       console.error("Generation failed:", error);
       setIsGenerating(false);
     }
-  }, [prompt, mainImage, styleRefImage, maskImage, baseRendered, mode, credits, simulateProgress]);
+  }, [prompt, mainImage, styleRefImage, maskImage, baseRendered, mode, credits, simulateProgress, negativePrompt, avoidFeatures, fidelity, styleImpact, aiCreativity]);
 
   return (
     <div className="min-h-[calc(100vh-8rem)] flex flex-col gap-4">
