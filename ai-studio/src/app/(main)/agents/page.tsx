@@ -107,15 +107,21 @@ export default function AgentsPage() {
         const res = await fetch("/api/agents");
         if (res.ok) {
           const data = await res.json();
+          console.log("API Response:", data);
           if (data.code === 0 && Array.isArray(data.data)) {
+            console.log("Using API data:", data.data);
             setAgents(data.data);
           } else {
+            console.log("Using mock agents 1");
             setAgents(MOCK_AGENTS);
           }
         } else {
+          console.log("Using mock agents 2");
           setAgents(MOCK_AGENTS);
         }
-      } catch {
+      } catch (e) {
+        console.log("Error fetching agents:", e);
+        console.log("Using mock agents 3");
         setAgents(MOCK_AGENTS);
       } finally {
         setLoading(false);

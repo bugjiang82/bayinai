@@ -4,32 +4,109 @@ import { GoogleGenAI } from "@google/genai";
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "" });
 
 export async function getAgents() {
-  const agents = await prisma.agent.findMany({
-    where: { isPublic: true },
-    orderBy: { sortOrder: "asc" },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      avatar: true,
-      isPublic: true,
-      sortOrder: true,
-      _count: {
-        select: { generations: true },
+  try {
+    const agents = await prisma.agent.findMany({
+      where: { isPublic: true },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        avatar: true,
+        isPublic: true,
+        sortOrder: true,
+        _count: {
+          select: { generations: true },
+        },
       },
-    },
-  });
+    });
 
-  return agents.map((agent) => ({
-    id: agent.id,
-    name: agent.name,
-    description: agent.description,
-    avatar: agent.avatar,
-    category: "image" as const, // 默认分类为 image
-    isPublic: agent.isPublic,
-    sortOrder: agent.sortOrder,
-    usageCount: agent._count.generations,
-  }));
+    if (agents.length === 0) {
+      // 如果数据库中没有智能体，返回mock数据
+      return [
+        {
+          id: "video-creator",
+          name: "视频创作助手",
+          description: "帮你快速生成创意短视频脚本，支持多种风格和场景",
+          avatar: "🎬",
+          category: "video" as const,
+          usageCount: 12580,
+        },
+        {
+          id: "image-generator",
+          name: "AI 绘画大师",
+          description: "根据文字描述生成高质量图片，支持多种艺术风格",
+          avatar: "🎨",
+          category: "image" as const,
+          usageCount: 34210,
+        },
+        {
+          id: "design-assistant",
+          name: "设计灵感助手",
+          description: "提供设计灵感和方案，涵盖 UI/UX、品牌、海报等",
+          avatar: "✨",
+          category: "design" as const,
+          usageCount: 8930,
+        },
+        {
+          id: "copy-writer",
+          name: "文案创作专家",
+          description: "帮你撰写营销文案、社媒内容、品牌故事等",
+          avatar: "📝",
+          category: "image" as const,
+          usageCount: 21760,
+        },
+      ];
+    }
+
+    return agents.map((agent) => ({
+      id: agent.id,
+      name: agent.name,
+      description: agent.description,
+      avatar: agent.avatar || "🤖",
+      category: "image" as const, // 默认分类为 image
+      isPublic: agent.isPublic,
+      sortOrder: agent.sortOrder,
+      usageCount: agent._count.generations,
+    }));
+  } catch (err) {
+    console.error("Error fetching agents from DB:", err);
+    // 如果数据库查询失败，返回mock数据
+    return [
+      {
+        id: "video-creator",
+        name: "视频创作助手",
+        description: "帮你快速生成创意短视频脚本，支持多种风格和场景",
+        avatar: "🎬",
+        category: "video" as const,
+        usageCount: 12580,
+      },
+      {
+        id: "image-generator",
+        name: "AI 绘画大师",
+        description: "根据文字描述生成高质量图片，支持多种艺术风格",
+        avatar: "🎨",
+        category: "image" as const,
+        usageCount: 34210,
+      },
+      {
+        id: "design-assistant",
+        name: "设计灵感助手",
+        description: "提供设计灵感和方案，涵盖 UI/UX、品牌、海报等",
+        avatar: "✨",
+        category: "design" as const,
+        usageCount: 8930,
+      },
+      {
+        id: "copy-writer",
+        name: "文案创作专家",
+        description: "帮你撰写营销文案、社媒内容、品牌故事等",
+        avatar: "📝",
+        category: "image" as const,
+        usageCount: 21760,
+      },
+    ];
+  }
 }
 
 export async function getAgentById(id: string) {
