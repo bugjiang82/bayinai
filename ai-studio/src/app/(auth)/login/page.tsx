@@ -49,11 +49,14 @@ export default function LoginPage() {
     setErrors({});
 
     try {
+      document.cookie.split(";").forEach((c) => {
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+      });
+
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
-        remember: rememberMe,
       });
 
       if (result?.error) {
@@ -61,7 +64,6 @@ export default function LoginPage() {
           general: "登录失败，请检查邮箱和密码",
         });
       } else {
-        // 登录成功，强制全页面跳转确保 session 生效
         window.location.href = "/generate";
       }
     } catch {

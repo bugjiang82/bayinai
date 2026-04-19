@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
-import { useRouter } from 'next/navigation';
 import { AuthProvider } from "@/providers/AuthProvider";
 import { auth } from "@/lib/auth";
 import {
@@ -62,6 +60,8 @@ function Navbar({ session }: NavbarProps) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const isLoggedIn = session?.user != null;
+
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 animate-[fadeInDown_0.5s_ease-out] ${
@@ -101,7 +101,7 @@ function Navbar({ session }: NavbarProps) {
 
         {/* Right Actions */}
         <div className="hidden md:flex items-center gap-3">
-          {session?.user ? (
+          {isLoggedIn ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -194,7 +194,7 @@ function Navbar({ session }: NavbarProps) {
               </a>
             ))}
             <div className="pt-3 border-t border-white/[0.06]">
-              {session?.user ? (
+              {isLoggedIn ? (
                 <div className="space-y-2">
                   <Link
                     href="/generate"
@@ -901,30 +901,20 @@ function CTASection({ isAuthenticated }: { isAuthenticated: boolean }) {
 /* ========================================
    Main Page Component
    ======================================== */
-function HomePageContent() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-  
-  // 如果正在加载，显示加载状态
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="animate-pulse text-zinc-500">加载中...</div>
-      </div>
-    );
-  }
-  
+function HomePageContent({ session }: { session: any }) {
+  const isAuthenticated = session?.user != null;
+
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <Navbar session={session} />
       <main>
-        <HeroSection isAuthenticated={status === 'authenticated'} />
+        <HeroSection isAuthenticated={isAuthenticated} />
         <ShowcaseSection />
         <FeaturesSection />
         <AgentsSection />
         <StatsSection />
         <TutorialsSection />
-        <CTASection isAuthenticated={status === 'authenticated'} />
+        <CTASection isAuthenticated={isAuthenticated} />
       </main>
       <Footer />
     </div>
@@ -938,10 +928,10 @@ export default async function HomePage() {
   } catch {
     session = null;
   }
-  
+
   return (
     <AuthProvider session={session}>
-      <HomePageContent />
+      <HomePageContent session={session} />
     </AuthProvider>
   );
 }

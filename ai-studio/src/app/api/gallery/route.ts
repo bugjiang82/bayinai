@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
       list: list.map((g) => ({
         ...g,
         createdAt: g.createdAt.toISOString(),
-        type: ['TEXT_TO_VIDEO'].includes(g.type) ? 'video' : 'image',
+        type: (['TEXT_TO_VIDEO'].includes(g.type) ? 'video' : 'image') as 'image' | 'video',
         thumbnail: g.thumbnailUrl || g.outputUrl || '',
         model: 'Gemini',
         isFavorite: false,
