@@ -23,12 +23,67 @@ interface GalleryItem {
   isFavorite: boolean;
 }
 
-interface GalleryResponse {
-  items: GalleryItem[];
-  total: number;
-  page: number;
-  pageSize: number;
+interface CacheEntry {
+  data: GalleryItem[];
+  timestamp: number;
   hasMore: boolean;
+  total: number;
+}
+
+// ─── Local storage cache utilities ──────────────────────────────────────────
+
+const CACHE_KEY = "gallery_cache";
+const CACHE_TTL = 5 * 60 * 1000; // 5分钟
+
+function getCacheKey(params: Record<string, string>): string {
+  const sortedParams = Object.entries(params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+  return sortedParams || 'default';
+}
+
+function getCachedData(params: Record<string, string>): CacheEntry | null {
+  try {
+    const cacheStr = localStorage.getItem(CACHE_KEY);
+    if (!cacheStr) return null;
+
+    const cache: Record<string, CacheEntry> = JSON.parse(cacheStr);
+    const key = getCacheKey(params);
+    const entry = cache[key];
+    
+    if (!entry) return null;
+
+    const now = Date.now();
+    if (now - entry.timestamp > CACHE_TTL) {
+      delete cache[key];
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      return null;
+    }
+
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedData(params: Record<string, string>, data: GalleryItem[], hasMore: boolean, total: number): void {
+  try {
+    const cacheStr = localStorage.getItem(CACHE_KEY);
+    const cache: Record<string, CacheEntry> = cacheStr ? JSON.parse(cacheStr) : {};
+    
+    const key = getCacheKey(params);
+    cache[key] = {
+      data,
+      timestamp: Date.now(),
+      hasMore,
+      total,
+    };
+
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 // ─── Gradient placeholders ───────────────────────────────────────────────────
@@ -84,6 +139,53 @@ function generateMockItems(page: number, pageSize: number): GalleryItem[] {
   });
 }
 
+// ─── Lazy image component ───────────────────────────────────────────────────
+
+interface LazyImageProps {
+  src: string;
+  alt: string;
+  className?: string;
+  placeholder: React.ReactNode;
+}
+
+function LazyImage({ src, alt, className = "", placeholder }: LazyImageProps) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && imgRef.current) {
+            imgRef.current.src = src;
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: "100px" }
+    );
+
+    if (imgRef.current) {
+      observer.observe(imgRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [src]);
+
+  return (
+    <div className="relative w-full h-full">
+      {!imageLoaded && <div className="absolute inset-0">{placeholder}</div>}
+      <img
+        ref={imgRef}
+        alt={alt}
+        className={`w-full h-full object-cover transition-all duration-300 ${className} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={() => setImageLoaded(true)}
+        onError={() => setImageLoaded(false)}
+      />
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function GalleryPage() {
@@ -96,8 +198,16 @@ export default function GalleryPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [usingCache, setUsingCache] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const getCurrentParams = useCallback(() => ({
+    type: typeFilter,
+    time: timeFilter,
+    q: searchQuery || '',
+  }), [typeFilter, timeFilter, searchQuery]);
 
   const fetchGallery = useCallback(
     async (pageNum: number, append = false) => {
@@ -107,40 +217,28 @@ export default function GalleryPage() {
         setLoading(true);
       }
 
-      try {
-        const params = new URLSearchParams({
-          page: String(pageNum),
-          pageSize: "12",
-          type: typeFilter,
-          time: timeFilter,
-          ...(searchQuery ? { q: searchQuery } : {}),
-        });
+      const params = {
+        type: typeFilter,
+        time: timeFilter,
+        q: searchQuery || '',
+      };
 
-        const res = await fetch(`/api/gallery?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.code === 0) {
-            const galleryData = Array.isArray(data.data) ? data.data : (data.data?.list || []);
-            setItems((prev) =>
-              append ? [...prev, ...galleryData] : galleryData
-            );
-            setHasMore(galleryData.length >= 12);
-          } else {
-            // Fallback to mock data
-            const mockItems = generateMockItems(pageNum, 12);
-            setItems((prev) =>
-              append ? [...prev, ...mockItems] : mockItems
-            );
-            setHasMore(pageNum < 5);
+      try {
+        // 只有在第一页且非追加模式时才检查本地缓存
+        if (pageNum === 1 && !append) {
+          const cachedData = getCachedData(params);
+          if (cachedData) {
+            setItems(cachedData.data);
+            setHasMore(cachedData.hasMore);
+            setLoading(false);
+            setUsingCache(true);
+            // 后台继续刷新数据
+            fetchFromServer(pageNum, params, false, true);
+            return;
           }
-        } else {
-          // Fallback to mock data
-          const mockItems = generateMockItems(pageNum, 12);
-          setItems((prev) =>
-            append ? [...prev, ...mockItems] : mockItems
-          );
-          setHasMore(pageNum < 5);
         }
+
+        await fetchFromServer(pageNum, params, append, false);
       } catch {
         // Fallback to mock data
         const mockItems = generateMockItems(pageNum, 12);
@@ -148,7 +246,6 @@ export default function GalleryPage() {
           append ? [...prev, ...mockItems] : mockItems
         );
         setHasMore(pageNum < 5);
-      } finally {
         setLoading(false);
         setLoadingMore(false);
       }
@@ -156,12 +253,92 @@ export default function GalleryPage() {
     [typeFilter, timeFilter, searchQuery]
   );
 
-  // Initial fetch
+  const fetchFromServer = async (
+    pageNum: number,
+    params: Record<string, string>,
+    append: boolean,
+    background: boolean
+  ) => {
+    const searchParams = new URLSearchParams({
+      page: String(pageNum),
+      pageSize: "12",
+      ...params,
+    });
+
+    const res = await fetch(`/api/gallery?${searchParams}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.code === 0) {
+        const galleryData = data.data?.list || [];
+        const newHasMore = data.data?.hasMore ?? galleryData.length >= 12;
+        const total = data.data?.total ?? 0;
+        
+        if (!background) {
+          setItems((prev) =>
+            append ? [...prev, ...galleryData] : galleryData
+          );
+          setHasMore(newHasMore);
+        } else {
+          // 后台刷新时检查数据是否变化
+          setItems((prev) => {
+            const currentIds = new Set(prev.map(i => i.id));
+            const newIds = new Set(galleryData.map((i: GalleryItem) => i.id));
+            if (currentIds.size !== newIds.size || [...currentIds].some(id => !newIds.has(id))) {
+              return galleryData;
+            }
+            return prev;
+          });
+          setHasMore(newHasMore);
+        }
+
+        // 只缓存第一页的数据
+        if (pageNum === 1) {
+          setCachedData(params, galleryData, newHasMore, total);
+        }
+        setUsingCache(false);
+      } else {
+        if (!background) {
+          const mockItems = generateMockItems(pageNum, 12);
+          setItems((prev) =>
+            append ? [...prev, ...mockItems] : mockItems
+          );
+          setHasMore(pageNum < 5);
+        }
+      }
+    } else {
+      if (!background) {
+        const mockItems = generateMockItems(pageNum, 12);
+        setItems((prev) =>
+          append ? [...prev, ...mockItems] : mockItems
+        );
+        setHasMore(pageNum < 5);
+      }
+    }
+
+    if (!background) {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  // 处理搜索防抖
   useEffect(() => {
-    setPage(1);
-    setItems([]);
-    fetchGallery(1);
-  }, [fetchGallery]);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setPage(1);
+      setItems([]);
+      fetchGallery(1);
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [typeFilter, timeFilter, searchQuery]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -235,7 +412,12 @@ export default function GalleryPage() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h1 className="text-2xl font-bold">我的作品</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">我的作品</h1>
+            {usingCache && (
+              <Badge variant="outline" className="text-[10px]">缓存中</Badge>
+            )}
+          </div>
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -270,7 +452,12 @@ export default function GalleryPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold">我的作品</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">我的作品</h1>
+          {usingCache && (
+            <Badge variant="outline" className="text-[10px]">缓存中</Badge>
+          )}
+        </div>
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -345,10 +532,21 @@ export default function GalleryPage() {
                 {/* Thumbnail */}
                 <div className="relative aspect-[4/3] overflow-hidden">
                   {item.thumbnail ? (
-                    <img
+                    <LazyImage
                       src={item.thumbnail}
                       alt={item.prompt}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="transition-transform duration-500 group-hover:scale-105"
+                      placeholder={
+                        <div
+                          className={`w-full h-full bg-gradient-to-br ${getGradient(item.id)} flex items-center justify-center`}
+                        >
+                          {item.type === "video" ? (
+                            <Video className="h-12 w-12 text-white/30" />
+                          ) : (
+                            <Image className="h-12 w-12 text-white/30" />
+                          )}
+                        </div>
+                      }
                     />
                   ) : (
                     <div
