@@ -56,9 +56,9 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         let fullText = "";
-        let imageUrl: string | undefined = "";
 
         try {
+          let imageUrl: string = "";
           for await (const chunk of response) {
             fullText += chunk.text;
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", content: chunk.text })}\n\n`));
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 
 async function generateImage(prompt: string): Promise<string> {
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview",
+    model: "gemini-2.5-flash-image",
     contents: prompt,
   });
 

@@ -70,7 +70,7 @@ export default function Header({ user, credits = 0 }: HeaderProps) {
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent hidden sm:inline">
-            AI创意工作室
+            六维AI工作平台
           </span>
         </Link>
 

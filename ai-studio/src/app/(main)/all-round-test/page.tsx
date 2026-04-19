@@ -16,12 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { TaskStatus, SubTask, Agent } from "@/types/ai-agent";
 import { useAIOrchestratorStore } from "@/stores/aiOrchestratorStore";
 import { StepIndicator } from "@/components/ai/StepIndicator";
 import { AgentCard } from "@/components/ai/AgentCard";
-import { InteractionView } from "@/components/ai/InteractionView";
 
 interface StreamMessage {
   type: "text" | "image" | "waiting" | "done" | "error";
@@ -32,14 +30,19 @@ export default function AllRoundTestPage() {
   const [input, setInput] = useState("");
   const store = useAIOrchestratorStore();
   const logsContainerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [displayedReasoning, setDisplayedReasoning] = useState("");
-  const [displayedImage, setDisplayedImage] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const [isWaitingForInteraction, setIsWaitingForInteraction] = useState(false);
+  const [interactionPrompt, setInteractionPrompt] = useState("");
+  const [interactionOptions, setInteractionOptions] = useState<{id: string; label: string}[]>([]);
+  const [currentText, setCurrentText] = useState("");
 
   const scrollToBottom = useCallback(() => {
-    if (contentRef.current) {
-      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    if (contentScrollRef.current) {
+      requestAnimationFrame(() => {
+        if (contentScrollRef.current) {
+          contentScrollRef.current.scrollTop = contentScrollRef.current.scrollHeight;
+        }
+      });
     }
   }, []);
 
@@ -51,7 +54,7 @@ export default function AllRoundTestPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [displayedReasoning, displayedImage, scrollToBottom]);
+  }, [scrollToBottom]);
 
   const handleStart = async () => {
     if (!input.trim()) return;
@@ -76,8 +79,8 @@ export default function AllRoundTestPage() {
     }
   };
 
-  const runOrchestrator = async (objective: string, tasks: SubTask[], agents: Agent[], startIndex: number) => {
-    const results: Record<string, string> = {};
+  const runOrchestrator = async (objective: string, tasks: SubTask[], agents: Agent[], startIndex: number, previousResults?: Record<string, string>) => {
+    const results: Record<string, string> = previousResults || {};
     for (let i = 0; i < startIndex; i++) results[tasks[i].id] = tasks[i].result || "";
 
     for (let i = startIndex; i < tasks.length; i++) {
@@ -85,17 +88,15 @@ export default function AllRoundTestPage() {
       const agent = agents.find(a => a.id === task.agentId) || agents[0];
       store.setCurrentStep(i);
       store.setFocusedTaskId(task.id);
-      store.updateTask(task.id, { status: TaskStatus.IN_PROGRESS, reasoning: "", progress: 0 });
+      store.updateTask(task.id, { status: TaskStatus.IN_PROGRESS, reasoning: "", imageUrl: undefined, progress: 0 });
       store.addLog(`部署节点：${agent.name}`);
 
-      setDisplayedReasoning("");
-      setDisplayedImage(null);
+      setCurrentText("");
+      setIsWaitingForInteraction(false);
+      setInteractionPrompt("");
+      setInteractionOptions([]);
 
       try {
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-        }
-
         const response = await fetch("/api/ai-orchestrator/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -103,52 +104,56 @@ export default function AllRoundTestPage() {
         });
 
         if (!response.ok) throw new Error("执行失败");
-
         if (!response.body) throw new Error("无响应体");
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
-        let currentImage: string | null = null;
-        let finalResult = "";
+        let buffer = "";
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
+          buffer += decoder.decode(value, { stream: true });
 
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const message: StreamMessage = JSON.parse(line.slice(6));
+          const events = buffer.split("\n\n");
+          buffer = events.pop() || "";
 
-                switch (message.type) {
-                  case "text":
-                    fullText += message.content;
-                    setDisplayedReasoning(fullText);
-                    store.updateTask(task.id, {
-                      reasoning: fullText,
-                      progress: Math.min(95, (fullText.length / 500) * 100)
-                    });
-                    break;
-                  case "image":
-                    currentImage = message.content;
-                    setDisplayedImage(message.content);
-                    store.updateTask(task.id, { imageUrl: message.content });
-                    break;
-                  case "waiting":
-                    finalResult = message.content;
-                    break;
-                  case "done":
-                    finalResult = message.content;
-                    break;
-                  case "error":
-                    throw new Error(message.content);
+          for (const event of events) {
+            const lines = event.split("\n");
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                try {
+                  const message: StreamMessage = JSON.parse(line.slice(6));
+
+                  switch (message.type) {
+                    case "text":
+                      fullText += message.content;
+                      setCurrentText(fullText);
+                      store.updateTask(task.id, {
+                        reasoning: fullText,
+                        progress: Math.min(95, (fullText.length / 500) * 100)
+                      });
+                      break;
+                    case "image":
+                      store.updateTask(task.id, { imageUrl: message.content });
+                      break;
+                    case "waiting":
+                    case "done":
+                      fullText = message.content;
+                      setCurrentText(message.content);
+                      store.updateTask(task.id, {
+                        reasoning: message.content,
+                        status: TaskStatus.COMPLETED
+                      });
+                      break;
+                    case "error":
+                      throw new Error(message.content);
+                  }
+                } catch (parseErr) {
+                  console.error("Parse error:", parseErr);
                 }
-              } catch (parseErr) {
-                console.error("Parse error:", parseErr);
               }
             }
           }
@@ -161,35 +166,41 @@ export default function AllRoundTestPage() {
           if (!useAIOrchestratorStore.getState().isExecuting) return;
         }
 
-        if (finalResult.includes("USER_DECISION:") && !finalResult.includes("USER_DECISION_CAPTURED")) {
+        if (fullText.includes("USER_DECISION:") && !fullText.includes("USER_DECISION_CAPTURED")) {
           store.addLog("检测到决策请求，正在生成交互选项... // GEN_INTERACTION");
           try {
             const intResponse = await fetch("/api/ai-orchestrator/interactions", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ task, reasoning: finalResult }),
+              body: JSON.stringify({ task, reasoning: fullText }),
             });
             const interaction = await intResponse.json();
-            store.updateTask(task.id, { status: TaskStatus.WAITING_FOR_USER, result: finalResult });
+            store.updateTask(task.id, { status: TaskStatus.WAITING_FOR_USER, result: fullText });
+
             store.addInteraction({
               id: `int-${Date.now()}`,
               type: "choice",
-              prompt: interaction.prompt,
+              prompt: interaction.prompt || "请选择一个选项继续：",
               options: interaction.options?.map((o: { id: string; label: string }) => ({ ...o, value: o.id })) || [],
               taskId: task.id
             });
-            store.addLog("交互协议已准备就绪，等待用户指令。 // AWAIT_USER");
+
+            setCurrentText(fullText);
+            setInteractionPrompt(interaction.prompt || "请选择一个选项继续：");
+            setInteractionOptions(interaction.options || []);
+            setIsWaitingForInteraction(true);
             store.setExecuting(false);
+            store.addLog("交互协议已准备就绪，等待用户指令。 // AWAIT_USER");
             return;
           } catch {
             store.addLog("生成交互选项失败，尝试直接继续... // ERR_INTERACTION");
           }
         }
 
-        results[task.id] = finalResult || fullText;
+        results[task.id] = fullText;
         store.updateTask(task.id, {
           status: TaskStatus.COMPLETED,
-          result: finalResult || fullText,
+          result: fullText,
           reasoning: fullText,
           progress: 100
         });
@@ -206,21 +217,42 @@ export default function AllRoundTestPage() {
 
   const handleInteractionSelect = (optionId: string) => {
     const interaction = store.interactions[0];
-    const selectedOption = interaction.options?.find(o => o.id === optionId);
-    store.addLog(`决策已捕获：${selectedOption?.label}`);
-    const taskToUpdate = store.tasks.find(t => t.id === interaction.taskId);
-    if (taskToUpdate) {
-      store.updateTask(taskToUpdate.id, {
-        status: TaskStatus.COMPLETED,
-        result: `${taskToUpdate.result}\n\nUSER_DECISION_CAPTURED: ${selectedOption?.label}`,
-        progress: 100
-      });
+    if (!interaction) {
+      store.addLog("错误：未找到交互信息");
+      return;
     }
+
+    const selectedOption = interaction.options?.find(o => o.id === optionId);
+    const optionLabel = selectedOption?.label || optionId;
+    const currentTaskId = interaction.taskId;
+    const currentStepIndex = store.currentStepIndex;
+
+    store.addLog(`决策已捕获：${optionLabel}`);
+
+    setCurrentText(prev => prev + `\n\n[用户选择: ${optionLabel}]`);
+    setIsWaitingForInteraction(false);
+    setInteractionPrompt("");
+    setInteractionOptions([]);
+
+    store.updateTask(currentTaskId, {
+      status: TaskStatus.COMPLETED,
+      result: `USER_DECISION_CAPTURED: ${optionLabel}`,
+      progress: 100
+    });
+
     store.clearInteractions();
+
+    const results: Record<string, string> = {};
+    for (let i = 0; i <= currentStepIndex; i++) {
+      const task = store.tasks[i];
+      if (task) results[task.id] = task.result || "";
+    }
+
     store.setExecuting(true);
-    const updatedTasks = useAIOrchestratorStore.getState().tasks;
-    runOrchestrator(store.objective, updatedTasks, store.agents, store.currentStepIndex + 1);
+    runOrchestrator(store.objective, store.tasks, store.agents, currentStepIndex + 1, results);
   };
+
+  const focusedTask = store.tasks.find(t => t.id === store.focusedTaskId);
 
   return (
     <div className="h-[calc(100vh-4rem)] w-full flex overflow-hidden">
@@ -228,7 +260,7 @@ export default function AllRoundTestPage() {
         <div className="p-8 border-b border-white/5 space-y-1">
           <div className="flex items-center gap-3 text-[var(--accent-blue)] mb-2">
             <Layers className="w-5 h-5" />
-            <h1 className="font-bold text-xl tracking-tight text-glow-blue uppercase">枢纽系统 // NEXUS OS</h1>
+            <h1 className="font-bold text-xl tracking-tight text-glow-blue uppercase">六维AI创意工作平台</h1>
           </div>
           <p className="text-[10px] text-white/30 uppercase tracking-[0.2em]">操作单元 v2.4.1 // OPERATIONAL UNIT</p>
         </div>
@@ -277,9 +309,6 @@ export default function AllRoundTestPage() {
                 }
                 store.setExecuting(false);
                 store.setPaused(false);
-                if (eventSourceRef.current) {
-                  eventSourceRef.current.close();
-                }
                 store.addLog("手动中止任务 // MISSION_ABORTED");
               }}
               disabled={!store.isExecuting && !store.isInitializing}
@@ -375,7 +404,7 @@ export default function AllRoundTestPage() {
               <div className="flex items-center gap-4">
                 <div className="w-2 h-2 rounded-full bg-[var(--accent-blue)] animate-pulse" />
                 <h2 className="text-xs tracking-[0.2em] text-white/50 uppercase truncate">
-                  任务流 // MISSION STREAM: {store.tasks.find(t => t.id === store.focusedTaskId)?.title || "空闲 // IDLE"}
+                  任务流 // MISSION STREAM: {focusedTask?.title || "空闲 // IDLE"}
                 </h2>
               </div>
               <div className="flex gap-1.5">
@@ -385,103 +414,103 @@ export default function AllRoundTestPage() {
               </div>
             </div>
 
-            <ScrollArea className="flex-1 p-8">
-              <div className="space-y-12">
-                {store.tasks.filter(t => t.id === store.focusedTaskId).map((task) => {
-                  const idx = store.tasks.findIndex(t => t.id === task.id);
-                  const currentReasoning = task.id === store.focusedTaskId ? displayedReasoning : task.reasoning;
-                  const currentImage = task.id === store.focusedTaskId ? displayedImage : task.imageUrl;
-
-                  return (
-                    <motion.div
-                      key={task.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="group relative h-full flex flex-col"
-                    >
-                      <div className="absolute -left-8 top-2 text-[10px] text-white/10 group-hover:text-[var(--accent-blue)]/40 transition-colors">0{idx + 1}</div>
-
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-8 h-px bg-white/10" />
-                          <h3 className="font-bold text-sm text-white uppercase tracking-wider">{task.title}</h3>
-                          <Badge variant="secondary" className="bg-[var(--accent-purple)]/5 border border-[var(--accent-purple)]/20 text-[var(--accent-purple)]">NODE_{task.id.toUpperCase()}</Badge>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {task.status === TaskStatus.COMPLETED && <Badge className="bg-green-500/10 text-green-500 border-green-500/20">成功 // SUCCESS</Badge>}
-                          {task.status === TaskStatus.IN_PROGRESS && <Badge className="bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] border-[var(--accent-blue)]/20 animate-pulse">执行中 // PROCESSING</Badge>}
-                          {task.status === TaskStatus.WAITING_FOR_USER && <Badge className="bg-orange-400/10 text-orange-400 border-orange-400/20 animate-bounce">需用户交互 // ACTION_REQ</Badge>}
-                        </div>
+            <Card className="flex-1 mx-8 my-6 rounded-2xl backdrop-blur-md bg-white/[0.02] border border-white/5 overflow-hidden">
+              <div className="h-full flex flex-col">
+                <div
+                  ref={contentScrollRef}
+                  className="flex-1 overflow-y-auto p-6"
+                >
+                  {store.tasks.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-10">
+                      <Terminal className="w-16 h-16" />
+                      <p className="text-[12px] uppercase tracking-[0.4em] max-w-xs leading-loose">Waiting for Command Deployment Control Hub Active...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="text-[14px] leading-relaxed text-white/70 whitespace-pre-wrap">
+                        {(store.focusedTaskId === store.tasks[store.currentStepIndex]?.id ? currentText : focusedTask?.reasoning) || (focusedTask?.status === TaskStatus.IN_PROGRESS ? "正在处理..." : "等待执行...")}
+                        {store.isExecuting && focusedTask?.status === TaskStatus.IN_PROGRESS && (
+                          <motion.span
+                            animate={{ opacity: [0, 1, 0] }}
+                            transition={{ duration: 0.6, repeat: Infinity }}
+                            className="inline-block w-2 h-4 bg-[var(--accent-blue)] ml-1 align-middle"
+                          />
+                        )}
                       </div>
 
-                      <Card className="rounded-2xl p-8 relative overflow-hidden flex-1 flex flex-col min-h-[400px] backdrop-blur-md bg-white/[0.02] border border-white/5">
-                        <div className="absolute top-0 right-0 p-8 text-white/5 select-none pointer-events-none group-hover:text-[var(--accent-blue)]/10 transition-colors">
-                          <Terminal className="w-32 h-32" />
-                        </div>
-
-                        <div
-                          ref={contentRef}
-                          className="relative z-10 text-[14px] leading-relaxed text-white/70 whitespace-pre-wrap overflow-y-auto flex-1 pr-4"
-                        >
-                          <div>
-                            {currentReasoning || "正在引导专家协议... 链路已建立... 扫描内存映射..."}
-                            {task.status === TaskStatus.IN_PROGRESS && (
-                              <motion.span
-                                animate={{ opacity: [0, 1, 0] }}
-                                transition={{ duration: 0.6, repeat: Infinity }}
-                                className="inline-block w-2.5 h-4 bg-[var(--accent-blue)] ml-2 align-middle"
-                              />
-                            )}
+                      {focusedTask?.imageUrl && (
+                        <div className="mt-4 rounded-xl overflow-hidden border border-white/10 shadow-2xl max-w-md bg-black/40">
+                          <img
+                            src={focusedTask.imageUrl}
+                            alt="Generated"
+                            className="w-full h-auto"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="p-3 bg-white/5 border-t border-white/5 flex items-center justify-between">
+                            <span className="text-[9px] text-white/30 uppercase tracking-widest">已生成资产 // GENERATED ASSET</span>
+                            <Activity className="w-3 h-3 text-[var(--accent-blue)] opacity-50" />
                           </div>
-
-                          {currentImage && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.9 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              className="mt-6 rounded-2xl overflow-hidden border border-white/10 shadow-2xl max-w-lg bg-black/40"
-                            >
-                              <img
-                                src={currentImage}
-                                alt={task.title}
-                                className="w-full h-auto"
-                                referrerPolicy="no-referrer"
-                              />
-                              <div className="p-3 bg-white/5 border-t border-white/5 flex items-center justify-between">
-                                <span className="text-[9px] text-white/30 uppercase tracking-widest">已生成资产 // GENERATED ASSET</span>
-                                <Activity className="w-3 h-3 text-[var(--accent-blue)] opacity-50" />
-                              </div>
-                            </motion.div>
-                          )}
-
-                          <AnimatePresence>
-                            {task.status === TaskStatus.WAITING_FOR_USER && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                className="mt-8 pt-8 border-t border-white/5 shrink-0"
-                              >
-                                <InteractionView
-                                  interaction={store.interactions.find(i => i.taskId === task.id) || store.interactions[0]}
-                                  onSelect={handleInteractionSelect}
-                                />
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
                         </div>
-                      </Card>
-                    </motion.div>
-                  )
-                })}
+                      )}
 
-                {store.tasks.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-10">
-                    <Terminal className="w-16 h-16" />
-                    <p className="text-[12px] uppercase tracking-[0.4em] max-w-xs leading-loose">Waiting for Command Deployment Control Hub Active...</p>
+                      {isWaitingForInteraction && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-6 pt-6 border-t border-white/10"
+                        >
+                          <p className="text-[13px] text-orange-400/80 italic mb-4">
+                            {interactionPrompt}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {interactionOptions.map((option) => (
+                              <Button
+                                key={option.id}
+                                onClick={() => handleInteractionSelect(option.id)}
+                                variant="outline"
+                                size="sm"
+                                className="px-4 py-2 rounded-xl bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all text-[12px]"
+                              >
+                                {option.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t border-white/5 bg-black/20 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {store.tasks[store.currentStepIndex] && (
+                      <>
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] ${
+                            store.tasks[store.currentStepIndex].status === TaskStatus.COMPLETED ? "bg-green-500/10 text-green-500 border-green-500/20" :
+                            store.tasks[store.currentStepIndex].status === TaskStatus.IN_PROGRESS ? "bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] border-[var(--accent-blue)]/20" :
+                            store.tasks[store.currentStepIndex].status === TaskStatus.WAITING_FOR_USER ? "bg-orange-400/10 text-orange-400 border-orange-400/20" :
+                            "bg-white/5 text-white/40 border-white/10"
+                          }`}
+                        >
+                          {store.tasks[store.currentStepIndex].status === TaskStatus.COMPLETED ? "已完成" :
+                           store.tasks[store.currentStepIndex].status === TaskStatus.IN_PROGRESS ? "执行中" :
+                           store.tasks[store.currentStepIndex].status === TaskStatus.WAITING_FOR_USER ? "等待输入" : "就绪"}
+                        </Badge>
+                        <span className="text-[10px] text-white/30">
+                          {store.currentStepIndex + 1} / {store.tasks.length}
+                        </span>
+                      </>
+                    )}
                   </div>
-                )}
+                  <div className="flex items-center gap-2 text-[10px] text-white/30">
+                    <Activity className="w-3 h-3" />
+                    <span>实时输出</span>
+                  </div>
+                </div>
               </div>
-            </ScrollArea>
+            </Card>
           </section>
         </div>
       </main>

@@ -77,7 +77,7 @@ function Navbar({ session }: NavbarProps) {
             <Sparkles className="w-4.5 h-4.5 text-white" />
           </div>
           <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-            AI创意工作室
+            六维AI工作平台
           </span>
         </Link>
 
