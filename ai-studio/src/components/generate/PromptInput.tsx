@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
-import { X, Sparkles, Lightbulb, Image, Clipboard, Check } from "lucide-react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { X, Sparkles, Lightbulb, Image, Clipboard, Check, GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,6 +43,41 @@ export default function PromptInput({
   const [extractedPrompt, setExtractedPrompt] = useState("");
   const [showCopyButton, setShowCopyButton] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [textareaHeight, setTextareaHeight] = useState(120);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isDraggingRef = useRef(false);
+  const startYRef = useRef(0);
+  const startHeightRef = useRef(0);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isDraggingRef.current = true;
+    startYRef.current = e.clientY;
+    startHeightRef.current = textareaHeight;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+  }, [textareaHeight]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = e.clientY - startYRef.current;
+      const newHeight = Math.max(80, Math.min(400, startHeightRef.current + delta));
+      setTextareaHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   // 从本地存储加载数据
   useEffect(() => {
@@ -177,15 +212,23 @@ export default function PromptInput({
     <div className={cn("space-y-2", className)}>
       <div className="relative">
         <Textarea
+          ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           maxLength={maxLength}
+          style={{ height: `${textareaHeight}px` }}
           className={cn(
-            "min-h-[120px] resize-none pr-10 bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600",
+            "resize-none pr-10 bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600",
             "focus-visible:ring-indigo-500/30 focus-visible:border-indigo-500/30"
           )}
         />
+        <div
+          className="absolute bottom-1 right-1 flex items-center justify-center cursor-ns-resize text-zinc-600 hover:text-zinc-400 transition-colors"
+          onMouseDown={handleMouseDown}
+        >
+          <GripHorizontal className="w-4 h-4" />
+        </div>
         {value && (
           <Button
             variant="ghost"

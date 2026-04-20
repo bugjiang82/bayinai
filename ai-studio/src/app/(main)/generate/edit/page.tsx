@@ -15,6 +15,7 @@ import {
   RotateCcw,
   CheckCircle2,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,8 @@ export default function EditPage() {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [credits, setCredits] = useState(100);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  
+  const replaceImageInputRef = useRef<HTMLInputElement>(null);
+
   const { setCurrentImage, clearShapes, setSelectionPath } = useEditStore();
 
   // Upscale params
@@ -160,6 +162,19 @@ export default function EditPage() {
     };
     reader.readAsDataURL(file);
   }, []);
+
+  const handleReplaceImage = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageUrl = e.target?.result as string;
+      setSourceImage(imageUrl);
+      setCurrentImage(imageUrl);
+      setResultImage(null);
+      clearShapes();
+      setSelectionPath(null);
+    };
+    reader.readAsDataURL(file);
+  }, [setCurrentImage, clearShapes, setSelectionPath]);
 
   const handleReset = useCallback(() => {
     setSourceImage(null);
@@ -726,6 +741,19 @@ export default function EditPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex gap-4">
+      <input
+        ref={replaceImageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            handleReplaceImage(file);
+            e.target.value = '';
+          }
+        }}
+      />
       {/* Left: Image edit area (70%) */}
       <div className="w-[70%] flex flex-col min-w-0">
         <div className="flex-1 rounded-2xl border border-white/[0.06] bg-[#0a0a0a]/50 flex items-center justify-center min-h-[500px] overflow-hidden">
@@ -743,27 +771,35 @@ export default function EditPage() {
                 <br />
                 AI 将帮你完成专业级图片处理
               </p>
-              <ImageUploader onUpload={handleSourceUpload} />
+              <ImageUploader onUpload={handleSourceUpload} storageKey="" />
             </div>
           )}
 
           {/* Source image with processing */}
           {sourceImage && !isProcessing && !resultImage && (
-            <div className="w-full h-full flex flex-col">
-              <div className="flex-1 flex">
+            <div className="w-full h-full flex flex-col overflow-hidden">
+              <div className="flex-1 flex overflow-hidden">
                 {editMode === "inpaint" ? (
                   <>
                     <Toolbox />
                     <KonvaCanvas className="flex-1" />
                   </>
                 ) : (
-                  <div className="flex-1 relative flex items-center justify-center p-4">
+                  <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={sourceImage}
                       alt="源图片"
                       className="max-w-full max-h-full object-contain rounded-lg"
                     />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-4 right-4 h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 border border-white/10"
+                      onClick={() => replaceImageInputRef.current?.click()}
+                    >
+                      <RefreshCw className="w-4 h-4 text-white" />
+                    </Button>
                   </div>
                 )}
               </div>
@@ -854,7 +890,7 @@ export default function EditPage() {
       <div className="w-[30%] flex flex-col min-w-[300px] max-w-[400px]">
         <div className="flex flex-col h-full rounded-2xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
             {/* Edit mode selection */}
             <div>
               <label className="text-sm font-medium text-zinc-300 mb-2 block">
@@ -903,7 +939,7 @@ export default function EditPage() {
           </div>
 
           {/* Bottom: Apply button + credits */}
-          <div className="p-4 border-t border-white/[0.06] bg-[#0a0a0a]">
+          <div className="p-4 border-t border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-1.5 text-xs text-zinc-500">
                 <Coins className="w-3.5 h-3.5" />

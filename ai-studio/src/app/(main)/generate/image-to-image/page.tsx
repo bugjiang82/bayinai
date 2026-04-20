@@ -253,7 +253,7 @@ export default function ImageToImagePage() {
   ]);
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] flex gap-4">
+    <div className="min-h-[calc(100vh-8rem)] flex gap-4 h-full">
       {/* Left: Canvas area (60%) */}
       <div className="w-[60%] flex flex-col min-w-0 gap-4">
         {/* Reference image upload area */}
