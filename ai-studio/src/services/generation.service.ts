@@ -10,7 +10,7 @@ const ai = new GoogleGenAI({
 });
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || "";
-const DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/api/v1";
+const DASHSCOPE_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1";
 
 const MODEL_MAP: Record<string, string> = {
   flash: "gemini-3.1-flash-image-preview",
@@ -257,12 +257,15 @@ export async function generateImage(
 
 export interface GenerateVideoParams {
   userId: string;
-  firstFrame: string;   // base64 data url
-  lastFrame?: string;   // base64 data url
   prompt: string;
-  resolution?: string;  // "480P" | "720P" | "1080P"
-  duration?: number;    // 5 | 10
-  model?: string;       // "wan2.7-flav-replicate"
+  mode: "text-to-video" | "image-to-video";
+  firstFrame?: string;
+  lastFrame?: string;
+  resolution?: string;
+  duration?: number;
+  model?: string;
+  promptExtend?: boolean;
+  ratio?: string;
 }
 
 export interface GenerateVideoResult {
@@ -276,19 +279,28 @@ export async function generateVideo(
 ): Promise<GenerateVideoResult> {
   const {
     userId,
+    prompt,
+    mode,
     firstFrame,
     lastFrame,
-    prompt,
     resolution = "720P",
     duration = 5,
-    model = "wan2.7-flav-replicate",
+    model = "wan2.2-kf2v-flash",
+    promptExtend = true,
+    ratio = "16:9",
   } = params;
 
   if (!DASHSCOPE_API_KEY) {
     throw new Error("DashScope API Key 未配置");
   }
 
-  // 提取 base64 数据（去掉 data url 前缀）
+  const isWan27 = model.includes("wan2.7") || model.includes("wan27");
+  const isTextToVideo = mode === "text-to-video";
+  const isTextToVideoWan27 = isTextToVideo && isWan27;
+  const apiEndpoint = isTextToVideoWan27
+    ? "/services/aigc/video-generation/video-synthesis"
+    : "/services/aigc/image2video/video-synthesis";
+
   const extractBase64 = (dataUrl: string): string => {
     if (dataUrl.includes(",")) {
       return dataUrl.split(",")[1];
@@ -296,27 +308,67 @@ export async function generateVideo(
     return dataUrl;
   };
 
-  const requestBody: Record<string, unknown> = {
-    model,
-    input: {
-      prompt,
-      first_frame: extractBase64(firstFrame),
-      resolution,
-      duration,
-    },
-    parameters: {
-      async_mode: true,
-    },
-  };
+  let requestBody: Record<string, unknown>;
 
-  if (lastFrame) {
-    (requestBody.input as Record<string, unknown>).last_frame =
-      extractBase64(lastFrame);
+  if (isWan27) {
+    if (isTextToVideo) {
+      requestBody = {
+        model,
+        input: {
+          prompt,
+        },
+        parameters: {
+          resolution,
+          ratio,
+          duration,
+          prompt_extend: promptExtend,
+          watermark: false,
+        },
+      };
+    } else {
+      const firstFrameData = firstFrame ? `data:image/jpeg;base64,${extractBase64(firstFrame)}` : undefined;
+      const lastFrameData = lastFrame ? `data:image/jpeg;base64,${extractBase64(lastFrame)}` : undefined;
+      requestBody = {
+        model,
+        input: {
+          prompt,
+          media: [
+            { type: "first_frame", url: firstFrameData },
+            ...(lastFrameData ? [{ type: "last_frame", url: lastFrameData }] : []),
+          ],
+        },
+        parameters: {
+          resolution,
+          duration,
+          prompt_extend: promptExtend,
+          watermark: false,
+        },
+      };
+    }
+  } else {
+    if (isTextToVideo) {
+      throw new Error("该模型不支持文生视频，请选择图生视频模式");
+    }
+    const firstFrameData = firstFrame ? `data:image/jpeg;base64,${extractBase64(firstFrame)}` : undefined;
+    const lastFrameData = lastFrame ? `data:image/jpeg;base64,${extractBase64(lastFrame)}` : undefined;
+    requestBody = {
+      model,
+      input: {
+        prompt,
+        first_frame_url: firstFrameData,
+        ...(lastFrameData && { last_frame_url: lastFrameData }),
+      },
+      parameters: {
+        async_mode: true,
+        resolution,
+        duration,
+        prompt_extend: promptExtend,
+        watermark: false,
+      },
+    };
   }
 
-  const response = await fetch(
-    `${DASHSCOPE_BASE_URL}/services/aigc/video2video/generation`,
-    {
+  const response = await fetch(`${DASHSCOPE_BASE_URL}${apiEndpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -408,6 +460,25 @@ export async function getVideoStatus(
     progress,
     videoUrl,
   };
+}
+
+export async function updateVideoResult(
+  taskId: string,
+  videoUrl: string,
+  userId: string
+): Promise<void> {
+  await prisma.generation.updateMany({
+    where: {
+      params: {
+        contains: taskId,
+      },
+      userId,
+    },
+    data: {
+      status: "COMPLETED",
+      resultUrl: videoUrl,
+    },
+  });
 }
 
 // ======================== 历史记录 ========================

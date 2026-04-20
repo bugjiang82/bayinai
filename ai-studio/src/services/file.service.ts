@@ -5,7 +5,6 @@ import crypto from "crypto";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 
-// 确保上传目录存在
 async function ensureUploadDir() {
   if (!existsSync(UPLOAD_DIR)) {
     await mkdir(UPLOAD_DIR, { recursive: true });
@@ -33,7 +32,6 @@ export async function uploadFile(
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
 
-  // 生成唯一文件名
   const ext = path.extname(file.name) || getExtensionFromMime(file.type);
   const filename = `${crypto.randomUUID()}${ext}`;
   const filepath = path.join(targetDir, filename);
@@ -47,6 +45,38 @@ export async function uploadFile(
     filename,
     size: file.size,
     mimeType: file.type,
+  };
+}
+
+export async function downloadAndSaveFile(url: string, subDir?: string): Promise<UploadResult> {
+  await ensureUploadDir();
+
+  const targetDir = subDir ? path.join(UPLOAD_DIR, subDir) : UPLOAD_DIR;
+  if (!existsSync(targetDir)) {
+    await mkdir(targetDir, { recursive: true });
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download file: ${response.statusText}`);
+  }
+
+  const blob = await response.blob();
+  const mimeType = blob.type || "image/jpeg";
+  const ext = getExtensionFromMime(mimeType);
+  const filename = `${crypto.randomUUID()}${ext}`;
+  const filepath = path.join(targetDir, filename);
+
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  await writeFile(filepath, buffer);
+
+  const relativePath = subDir ? `uploads/${subDir}/${filename}` : `uploads/${filename}`;
+
+  return {
+    url: `/${relativePath}`,
+    filename,
+    size: buffer.length,
+    mimeType,
   };
 }
 

@@ -29,10 +29,24 @@ interface VideoResult {
   resolution: string;
 }
 
+type VideoMode = "text-to-video" | "image-to-video";
+
 const DURATION_OPTIONS = [
+  { value: 3, label: "3 秒" },
   { value: 5, label: "5 秒" },
   { value: 10, label: "10 秒" },
+  { value: 15, label: "15 秒" },
 ];
+
+const MODEL_OPTIONS = {
+  "text-to-video": [
+    { value: "wan2.7-t2v", label: "万相 2.7", desc: "文生视频" },
+  ],
+  "image-to-video": [
+    { value: "wan2.2-kf2v-flash", label: "万相 2.2", desc: "快速生成" },
+    { value: "wan2.7-i2v", label: "万相 2.7", desc: "高质量" },
+  ],
+};
 
 const RESOLUTION_OPTIONS = [
   { value: "480P", label: "480P", desc: "854x480" },
@@ -40,12 +54,21 @@ const RESOLUTION_OPTIONS = [
   { value: "1080P", label: "1080P", desc: "1920x1080" },
 ];
 
+const RATIO_OPTIONS = [
+  { value: "16:9", label: "16:9", desc: "横屏" },
+  { value: "9:16", label: "9:16", desc: "竖屏" },
+];
+
 export default function VideoPage() {
+  const [videoMode, setVideoMode] = useState<VideoMode>("image-to-video");
   const [startImage, setStartImage] = useState<string | null>(null);
   const [endImage, setEndImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [duration, setDuration] = useState(5);
   const [resolution, setResolution] = useState("720P");
+  const [ratio, setRatio] = useState("16:9");
+  const [model, setModel] = useState("wan2.2-kf2v-flash");
+  const [promptExtend, setPromptExtend] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [videoResult, setVideoResult] = useState<VideoResult | null>(null);
@@ -65,32 +88,35 @@ export default function VideoPage() {
     };
   }, []);
 
+  useEffect(() => {
+    setModel(MODEL_OPTIONS[videoMode][0].value);
+  }, [videoMode]);
+
   const handleStartUpload = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setStartImage(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    setStartImage(URL.createObjectURL(file));
   }, []);
 
   const handleRemoveStartImage = useCallback(() => {
+    if (startImage?.startsWith("blob:")) {
+      URL.revokeObjectURL(startImage);
+    }
     setStartImage(null);
-  }, []);
+  }, [startImage]);
 
   const handleEndUpload = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setEndImage(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    setEndImage(URL.createObjectURL(file));
   }, []);
 
   const handleRemoveEndImage = useCallback(() => {
+    if (endImage?.startsWith("blob:")) {
+      URL.revokeObjectURL(endImage);
+    }
     setEndImage(null);
-  }, []);
+  }, [endImage]);
 
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() || !startImage) return;
+    if (!prompt.trim()) return;
+    if (videoMode === "image-to-video" && !startImage) return;
 
     const cost = 5;
     if (credits < cost) return;
@@ -115,18 +141,56 @@ export default function VideoPage() {
     }, 800);
 
     try {
+      // Upload images first if they are blob URLs
+      let firstFrameUrl = startImage;
+      let lastFrameUrl = endImage;
+
+      // Upload start image
+      if (startImage?.startsWith("blob:")) {
+        const blob = await fetch(startImage).then(r => r.blob());
+        const file = new File([blob], "start.jpg", { type: blob.type });
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!uploadRes.ok) throw new Error("图片上传失败");
+        const uploadData = await uploadRes.json();
+        firstFrameUrl = uploadData.data.url;
+      }
+
+      // Upload end image if exists and is blob URL
+      if (endImage?.startsWith("blob:")) {
+        const blob = await fetch(endImage).then(r => r.blob());
+        const file = new File([blob], "end.jpg", { type: blob.type });
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!uploadRes.ok) throw new Error("图片上传失败");
+        const uploadData = await uploadRes.json();
+        lastFrameUrl = uploadData.data.url;
+      }
+
       // Submit video generation task
+      const requestBody: Record<string, unknown> = {
+        prompt: prompt.trim(),
+        resolution: resolution.toUpperCase(),
+        duration,
+        model,
+        prompt_extend: promptExtend,
+        mode: videoMode,
+        ratio,
+      };
+
+      if (videoMode === "image-to-video") {
+        requestBody.first_frame = firstFrameUrl;
+        if (lastFrameUrl) {
+          requestBody.last_frame = lastFrameUrl;
+        }
+      }
+
       const response = await fetch("/api/generate/video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          first_frame: startImage,
-          last_frame: endImage || undefined,
-          prompt: prompt.trim(),
-          resolution: resolution.toUpperCase(),
-          duration,
-          model: "wan2.7-flav-replicate",
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -209,7 +273,7 @@ export default function VideoPage() {
       setIsGenerating(false);
       setProgress(0);
     }
-  }, [prompt, duration, resolution, credits, startImage, endImage]);
+  }, [prompt, duration, resolution, model, credits, startImage, endImage]);
 
   const getEstimatedTime = () => {
     const baseTime = duration * 4;
@@ -320,77 +384,112 @@ export default function VideoPage() {
         <div className="flex flex-col h-full rounded-2xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-5">
-            {/* Start image upload */}
+            {/* Mode toggle */}
             <div>
               <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                起始图片
+                生成模式
               </label>
-              {startImage ? (
-                <div className="relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]">
-                  <div className="relative aspect-video">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={startImage}
-                      alt="起始图片"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2 h-7 w-7 rounded-full opacity-80 hover:opacity-100"
-                    onClick={handleRemoveStartImage}
-                  >
-                    <span className="text-xs">X</span>
-                  </Button>
-                </div>
-              ) : (
-                <ImageUploader
-                  onUpload={handleStartUpload}
-                  compact
-                  className="!p-4"
-                />
-              )}
-              <p className="text-xs text-zinc-600 mt-1.5">
-                上传起始帧图片，AI 将以此为基础生成视频
-              </p>
+              <div className="flex gap-2">
+                <button
+                  className={cn(
+                    "flex-1 h-9 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
+                    videoMode === "text-to-video"
+                      ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                      : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                  )}
+                  onClick={() => setVideoMode("text-to-video")}
+                >
+                  文生视频
+                </button>
+                <button
+                  className={cn(
+                    "flex-1 h-9 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
+                    videoMode === "image-to-video"
+                      ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                      : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                  )}
+                  onClick={() => setVideoMode("image-to-video")}
+                >
+                  图生视频
+                </button>
+              </div>
             </div>
 
-            {/* End image upload */}
-            <div>
-              <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                结束图片（可选）
-              </label>
-              {endImage ? (
-                <div className="relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]">
-                  <div className="relative aspect-video">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={endImage}
-                      alt="结束图片"
-                      className="w-full h-full object-cover"
+            {videoMode === "image-to-video" && (
+              <>
+                {/* Start image upload */}
+                <div>
+                  <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                    起始图片
+                  </label>
+                  {startImage ? (
+                    <div className="relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]">
+                      <div className="relative aspect-video">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={startImage}
+                          alt="起始图片"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-7 w-7 rounded-full opacity-80 hover:opacity-100"
+                        onClick={handleRemoveStartImage}
+                      >
+                        <span className="text-xs">X</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    <ImageUploader
+                      onUpload={handleStartUpload}
+                      compact
+                      className="!p-4"
                     />
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2 h-7 w-7 rounded-full opacity-80 hover:opacity-100"
-                    onClick={handleRemoveEndImage}
-                  >
-                    <span className="text-xs">X</span>
-                  </Button>
+                  )}
+                  <p className="text-xs text-zinc-600 mt-1.5">
+                    上传起始帧图片，AI 将以此为基础生成视频
+                  </p>
                 </div>
-              ) : (
-                <ImageUploader
-                  onUpload={handleEndUpload}
-                  compact
-                  className="!p-4"
-                />
-              )}
-              <p className="text-xs text-zinc-600 mt-1.5">
-                上传结束帧图片，AI 将生成从起始到结束的过渡视频
-              </p>
-            </div>
+
+                {/* End image upload */}
+                <div>
+                  <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                    结束图片（可选）
+                  </label>
+                  {endImage ? (
+                    <div className="relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]">
+                      <div className="relative aspect-video">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={endImage}
+                          alt="结束图片"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-7 w-7 rounded-full opacity-80 hover:opacity-100"
+                        onClick={handleRemoveEndImage}
+                      >
+                        <span className="text-xs">X</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    <ImageUploader
+                      onUpload={handleEndUpload}
+                      compact
+                      className="!p-4"
+                    />
+                  )}
+                  <p className="text-xs text-zinc-600 mt-1.5">
+                    上传结束帧图片，AI 将生成从起始到结束的过渡视频
+                  </p>
+                </div>
+              </>
+            )}
 
             {/* Text description */}
             <div>
@@ -408,6 +507,32 @@ export default function VideoPage() {
                 <span className="text-xs text-zinc-600 tabular-nums">
                   {prompt.length}/1000
                 </span>
+              </div>
+            </div>
+
+            {/* Model */}
+            <div>
+              <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                模型
+              </label>
+              <div className="flex gap-2">
+                {MODEL_OPTIONS[videoMode].map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={cn(
+                      "flex-1 h-9 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
+                      model === opt.value
+                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                    )}
+                    onClick={() => setModel(opt.value)}
+                  >
+                    {opt.label}
+                    <span className="text-[10px] text-zinc-600 ml-1">
+                      {opt.desc}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -459,6 +584,48 @@ export default function VideoPage() {
                 ))}
               </div>
             </div>
+
+            {/* Aspect Ratio */}
+            <div className="mt-4">
+              <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                画面比例
+              </label>
+              <div className="flex gap-2">
+                {RATIO_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={cn(
+                      "flex-1 h-9 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
+                      ratio === opt.value
+                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                    )}
+                    onClick={() => setRatio(opt.value)}
+                  >
+                    {opt.label}
+                    <span className="text-[10px] text-zinc-600 ml-1">
+                      {opt.desc}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Prompt Extend */}
+            <div className="mt-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="prompt-extend"
+                  checked={promptExtend}
+                  onChange={(e) => setPromptExtend(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-0"
+                />
+                <label htmlFor="prompt-extend" className="text-sm text-zinc-400 cursor-pointer">
+                  启用 Prompt 智能改写
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Bottom: Generate button + credits */}
@@ -492,7 +659,7 @@ export default function VideoPage() {
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               )}
               onClick={handleGenerate}
-              disabled={!prompt.trim() || !startImage || credits < 5 || isGenerating}
+              disabled={!prompt.trim() || (videoMode === "image-to-video" && !startImage) || credits < 5 || isGenerating}
             >
               {isGenerating ? (
                 <>
@@ -511,12 +678,12 @@ export default function VideoPage() {
                 请输入文字描述后开始生成
               </p>
             )}
-            {prompt.trim() && !startImage && (
+            {videoMode === "image-to-video" && prompt.trim() && !startImage && (
               <p className="text-xs text-zinc-600 text-center mt-2">
                 请上传起始图片
               </p>
             )}
-            {prompt.trim() && startImage && credits < 5 && (
+            {prompt.trim() && credits < 5 && (
               <p className="text-xs text-red-400/80 text-center mt-2">
                 积分不足，请充值后重试
               </p>
