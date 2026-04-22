@@ -476,7 +476,7 @@ export async function updateVideoResult(
     },
     data: {
       status: "COMPLETED",
-      resultUrl: videoUrl,
+      outputUrl: videoUrl,
     },
   });
 }

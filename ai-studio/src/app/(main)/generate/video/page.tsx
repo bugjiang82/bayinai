@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import Image from "next/image";
 import {
   Play,
   Download,
@@ -428,11 +429,12 @@ export default function VideoPage() {
                   {startImage ? (
                     <div className="relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]">
                       <div className="relative aspect-video">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <Image
                           src={startImage}
                           alt="起始图片"
-                          className="w-full h-full object-cover"
+                          fill
+                          className="object-cover"
+                          sizes="50vw"
                         />
                       </div>
                       <Button
@@ -464,11 +466,12 @@ export default function VideoPage() {
                   {endImage ? (
                     <div className="relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]">
                       <div className="relative aspect-video">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <Image
                           src={endImage}
                           alt="结束图片"
-                          className="w-full h-full object-cover"
+                          fill
+                          className="object-cover"
+                          sizes="50vw"
                         />
                       </div>
                       <Button

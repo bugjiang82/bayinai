@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { success, error } from "@/types/api";
+import fs from "fs";
+import path from "path";
 
 export async function DELETE(
   _request: NextRequest,
@@ -24,7 +26,46 @@ export async function DELETE(
       return NextResponse.json(error("作品不存在"), { status: 404 });
     }
 
+    // Delete files from storage
+    const errors: string[] = [];
+
+    // Delete main output file
+    if (generation.outputUrl) {
+      const outputPath = path.join(process.cwd(), "public", generation.outputUrl);
+      try {
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+      } catch (err) {
+        console.error(`[Gallery Delete] Failed to delete output file: ${outputPath}`, err);
+        errors.push(`Failed to delete main image: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+    }
+
+    // Delete thumbnail file (if different from output)
+    if (generation.thumbnailUrl && generation.thumbnailUrl !== generation.outputUrl) {
+      const thumbPath = path.join(process.cwd(), "public", generation.thumbnailUrl);
+      try {
+        if (fs.existsSync(thumbPath)) {
+          fs.unlinkSync(thumbPath);
+        }
+      } catch (err) {
+        console.error(`[Gallery Delete] Failed to delete thumbnail file: ${thumbPath}`, err);
+        errors.push(`Failed to delete thumbnail: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+    }
+
+    // Delete database record
     await prisma.generation.delete({ where: { id } });
+
+    // If there were file deletion errors but database record was deleted, still return success with warning
+    if (errors.length > 0) {
+      console.warn(`[Gallery Delete] Deletion completed with errors for ${id}:`, errors);
+      return NextResponse.json(success({
+        deleted: true,
+        warnings: errors
+      }, "删除成功，但部分文件可能未能完全删除"));
+    }
 
     return NextResponse.json(success(null, "删除成功"));
   } catch (err) {

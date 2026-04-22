@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import Image from "next/image";
 import {
   Sparkles,
   Download,
@@ -97,7 +98,7 @@ export default function Canvas({
     return (
       <div
         className={cn(
-          "flex items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-[#0a0a0a]/50 min-h-[500px]",
+          "flex items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-[#0a0a0a]/50 h-full min-h-[200px] overflow-hidden",
           className
         )}
       >
@@ -133,7 +134,7 @@ export default function Canvas({
     return (
       <div
         className={cn(
-          "flex items-center justify-center rounded-2xl border border-white/[0.06] bg-[#0a0a0a]/50 min-h-[500px]",
+          "flex items-center justify-center rounded-2xl border border-white/[0.06] bg-[#0a0a0a]/50 h-full min-h-[200px] overflow-hidden",
           className
         )}
       >
@@ -161,23 +162,24 @@ export default function Canvas({
     <>
       <div
         className={cn(
-          "rounded-2xl border border-white/[0.06] bg-[#0a0a0a]/50 p-4 min-h-[500px]",
+          "rounded-2xl border border-white/[0.06] bg-[#0a0a0a]/50 p-4 min-h-[200px] h-full overflow-hidden flex flex-col",
           className
         )}
       >
-        <div className="grid grid-cols-2 gap-3 h-full">
+        <div className="grid grid-cols-2 gap-3 overflow-y-auto flex-1 min-h-0 relative z-0">
           {images.map((image) => (
             <div
               key={image.id}
               className="relative group rounded-xl overflow-hidden border border-white/[0.06] bg-[#0f0f0f] cursor-pointer hover:border-indigo-500/30 transition-all duration-300"
               onClick={() => handleImageClick(image)}
             >
-              <div className="aspect-square" ref={imageRef}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+              <div className="aspect-square relative" ref={imageRef}>
+                <Image
                   src={image.url}
                   alt={image.prompt || "生成结果"}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 50vw"
                 />
               </div>
 
@@ -250,7 +252,7 @@ export default function Canvas({
         open={!!selectedImage}
         onOpenChange={(open) => !open && setSelectedImage(null)}
       >
-        <DialogContent className="max-w-5xl w-[95vw] p-0 overflow-hidden bg-[#0a0a0a] border-white/[0.08] rounded-2xl">
+        <DialogContent className="max-w-5xl w-[95vw] p-0 overflow-hidden bg-[#0a0a0a] border-white/[0.08] rounded-2xl z-50 relative">
           <DialogTitle className="sr-only">图片预览</DialogTitle>
           <DialogDescription className="sr-only">
             查看生成的图片详情
@@ -266,12 +268,14 @@ export default function Canvas({
               </button>
 
               {/* Image area */}
-              <div className="flex items-center justify-center bg-black/40 min-h-[300px] max-h-[75vh] p-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+              <div className="flex items-center justify-center bg-black/40 min-h-[300px] max-h-[75vh] p-4 relative">
+                <Image
                   src={selectedImage.url}
                   alt={selectedImage.prompt || "生成结果"}
+                  width={1024}
+                  height={1024}
                   className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                  unoptimized
                 />
               </div>
 

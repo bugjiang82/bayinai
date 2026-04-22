@@ -13,11 +13,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 
+import { Shapes } from 'lucide-react';
+
 const tools: { type: ToolType; icon: React.ElementType; label: string }[] = [
   { type: 'select', icon: MousePointer2, label: '选择' },
   { type: 'brush', icon: Paintbrush, label: '笔刷' },
   { type: 'eraser', icon: Eraser, label: '橡皮擦' },
   { type: 'lasso', icon: Lasso, label: '套索' },
+  { type: 'polygon', icon: Shapes, label: '多边形' },
   { type: 'rect', icon: Square, label: '矩形' },
   { type: 'circle', icon: Circle, label: '圆形' },
 ];
@@ -26,6 +29,8 @@ export const Toolbox: React.FC = () => {
   const {
     tool,
     setTool,
+    brushColor,
+    setBrushColor,
     brushSize,
     setBrushSize,
     clearShapes,
@@ -78,10 +83,31 @@ export const Toolbox: React.FC = () => {
               value={[brushSize]}
               onValueChange={([v]) => setBrushSize(v)}
               min={1}
-              max={50}
+              max={100}
               step={1}
               className="py-2"
             />
+            <div className="flex justify-between text-[10px] text-white/40 mt-1">
+              <span>1px</span>
+              <span>50px</span>
+              <span>100px</span>
+            </div>
+          </div>
+          
+          <div>
+            <div className="flex justify-between items-center mb-2 hidden lg:flex">
+              <label className="text-xs text-white/60">颜色</label>
+            </div>
+            <div className="flex gap-2">
+              {['#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#000000'].map(color => (
+                <button
+                  key={color}
+                  onClick={() => setBrushColor(color)}
+                  className={`w-6 h-6 rounded-full transition-all ${brushColor === color ? 'ring-2 ring-white' : 'hover:scale-110'}`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -109,6 +135,14 @@ export const Toolbox: React.FC = () => {
           <RotateCcw className="w-4 h-4" />
           <span className="hidden lg:inline">重置选区</span>
         </Button>
+
+        <div className="flex items-center justify-between px-3 py-2 text-xs text-white/60">
+          <span className="hidden lg:inline">实时预览</span>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" value="" className="sr-only peer" defaultChecked />
+            <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+          </label>
+        </div>
       </div>
     </aside>
   );

@@ -1,12 +1,21 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Search, Download, Trash2, Heart, Image, Video, Filter, Loader2, ImageIcon } from "lucide-react";
+import NextImage from "next/image";
+import { Search, Download, Trash2, Heart, Image, Video, Filter, Loader2, ImageIcon, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -150,37 +159,18 @@ interface LazyImageProps {
 
 function LazyImage({ src, alt, className = "", placeholder }: LazyImageProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
-  const imgRef = useRef<HTMLImageElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && imgRef.current) {
-            imgRef.current.src = src;
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { rootMargin: "100px" }
-    );
-
-    if (imgRef.current) {
-      observer.observe(imgRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [src]);
 
   return (
     <div className="relative w-full h-full">
       {!imageLoaded && <div className="absolute inset-0">{placeholder}</div>}
-      <img
-        ref={imgRef}
+      <NextImage
+        src={src}
         alt={alt}
+        fill
         className={`w-full h-full object-cover transition-all duration-300 ${className} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={() => setImageLoaded(true)}
         onError={() => setImageLoaded(false)}
+        sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
       />
     </div>
   );
@@ -199,6 +189,9 @@ export default function GalleryPage() {
   const [hasMore, setHasMore] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [usingCache, setUsingCache] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item: GalleryItem | null }>({ open: false, item: null });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -380,7 +373,41 @@ export default function GalleryPage() {
     });
   };
 
+  const handleDeleteClick = (item: GalleryItem) => {
+    setDeleteDialog({ open: true, item });
+    setDeleteError(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.item) return;
+
+    const itemToDelete = deleteDialog.item;
+    setDeletingId(itemToDelete.id);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch(`/api/gallery/${itemToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "删除失败");
+      }
+
+      // Remove from items list
+      setItems((prev) => prev.filter((item) => item.id !== itemToDelete.id));
+      // Close dialog
+      setDeleteDialog({ open: false, item: null });
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "删除失败，请重试");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleDelete = (id: string) => {
+    // Legacy function - now handled by confirmDelete
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
@@ -405,12 +432,80 @@ export default function GalleryPage() {
     return `${Math.floor(days / 30)} 月前`;
   };
 
+  // ─── Delete Confirmation Dialog ───────────────────────────────────────────
+
+  const DeleteConfirmDialog = () => (
+    <Dialog open={deleteDialog.open} onOpenChange={(open) => !open && setDeleteDialog({ ...deleteDialog, open })}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>确认删除作品</DialogTitle>
+          <DialogDescription>
+            此操作不可撤销。删除后将无法恢复该作品及其相关文件。
+          </DialogDescription>
+        </DialogHeader>
+        {deleteDialog.item && (
+          <div className="py-4">
+            <div className="flex items-center gap-4">
+              {deleteDialog.item.thumbnail ? (
+                <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted">
+                  <img src={deleteDialog.item.thumbnail} alt="" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-violet-600/40 to-indigo-600/40 flex items-center justify-center">
+                  <ImageIcon className="h-8 w-8 text-white/30" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-foreground line-clamp-2">{deleteDialog.item.prompt}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {deleteDialog.item.type === "video" ? "视频" : "图片"} · {formatDate(deleteDialog.item.createdAt)}
+                </p>
+              </div>
+            </div>
+            {deleteError && (
+              <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                <p className="text-sm text-destructive">{deleteError}</p>
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setDeleteDialog({ open: false, item: null })}
+            disabled={deletingId !== null}
+          >
+            取消
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={confirmDelete}
+            disabled={deletingId !== null}
+          >
+            {deletingId === deleteDialog.item?.id ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                删除中...
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-4 w-4 mr-2" />
+                确认删除
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // ─── Empty state ─────────────────────────────────────────────────────────
 
   if (!loading && items.length === 0) {
     return (
       <div className="space-y-6">
-        {/* Header */}
+        <DeleteConfirmDialog />
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">我的作品</h1>
@@ -438,7 +533,7 @@ export default function GalleryPage() {
           <p className="text-muted-foreground mb-6 max-w-md">
             开始你的第一次 AI 创作，生成令人惊叹的建筑效果图和设计作品
           </p>
-          <Button onClick={() => (window.location.href = "/generate/text-to-image")}>
+          <Button onClick={() => (window.location.href = "/generate/image")}>
             开始创作
           </Button>
         </div>
@@ -449,25 +544,26 @@ export default function GalleryPage() {
   // ─── Main content ────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold">我的作品</h1>
-          {usingCache && (
-            <Badge variant="outline" className="text-[10px]">缓存中</Badge>
-          )}
+    <>
+      <DeleteConfirmDialog />
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">我的作品</h1>
+            {usingCache && (
+              <Badge variant="outline" className="text-[10px]">缓存中</Badge>
+            )}
+          </div>
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜索作品..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </div>
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="搜索作品..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -599,7 +695,7 @@ export default function GalleryPage() {
                       size="icon"
                       variant="secondary"
                       className="h-9 w-9 rounded-full bg-white/20 backdrop-blur-sm border-0 hover:bg-red-500/60"
-                      onClick={() => handleDelete(item.id)}
+                      onClick={() => handleDeleteClick(item)}
                       title="删除"
                     >
                       <Trash2 className="h-4 w-4 text-white" />
@@ -645,6 +741,7 @@ export default function GalleryPage() {
           已加载全部作品
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -25,6 +25,7 @@ import {
   ShieldAlert
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SIZE_OPTIONS, type SizeOption } from "@/components/generate/ParamPanel";
 
 interface CanvasImage {
   id: string;
@@ -36,29 +37,46 @@ interface CanvasImage {
     guidanceScale: number;
   };
   revisedPrompt?: string;
+  width?: number;
+  height?: number;
 }
 
 type GenerationMode = "generic" | "cad_to_3d" | "su_render" | "furniture_swap";
 
-type AspectRatio = "1:1" | "16:9" | "9:16";
+// Use the same SizeOption type as image generation page
+// type AspectRatio = "1:1" | "16:9" | "9:16";
 
-type ImageSize = "1K" | "2K";
+type ImageSize = "1K" | "2K" | "4K";
 
 interface ImageGenerationParams {
   prompt: string;
   negativePrompt: string[];
   customNegativePrompt: string;
-  aspectRatio: AspectRatio;
+  aspectRatio: string; // Now using string to match SizeOption.ratio
   imageSize: ImageSize;
+  model: 'flash' | 'pro';
   guidanceScale: number;
   mode: GenerationMode;
   structureRef?: string; // base64
   structureStrength: number; // 0 to 1
   styleRef?: string; // base64
   styleStrength: number; // 0 to 1
+  aiCreativity: number; // 0 to 1, replaces guidanceScale for better UX
   useGoogleSearch: boolean;
   useImageSearch: boolean;
 }
+
+interface ModelOption {
+  id: 'flash' | 'pro';
+  label: string;
+  desc: string;
+  credits: number;
+}
+
+const MODEL_OPTIONS: ModelOption[] = [
+  { id: 'flash', label: 'Flash', desc: '快速生成', credits: 1 },
+  { id: 'pro', label: 'Pro', desc: '高质量生成', credits: 3 },
+];
 
 interface GenerationResult {
   imageUrl: string;
@@ -91,29 +109,17 @@ const NEGATIVE_TAGS = [
 ];
 
 const PRESETS: { id: GenerationMode; label: string; desc: string; defaults: Partial<ImageGenerationParams> }[] = [
-  { 
-    id: 'generic', 
-    label: '标准模式', 
-    desc: '通用图像生成', 
-    defaults: { structureStrength: 0.5, styleStrength: 0.6, guidanceScale: 7.5 } 
+  {
+    id: 'cad_to_3d',
+    label: 'CAD 转 3D',
+    desc: '线稿精准建模',
+    defaults: { structureStrength: 0.8, guidanceScale: 9, negativePrompt: ['messy'] }
   },
-  { 
-    id: 'cad_to_3d', 
-    label: 'CAD 转 3D', 
-    desc: '线稿精准建模', 
-    defaults: { structureStrength: 0.8, guidanceScale: 9, negativePrompt: ['messy'] } 
-  },
-  { 
-    id: 'su_render', 
-    label: 'SU 高清渲染', 
-    desc: '建筑方案表达', 
-    defaults: { structureStrength: 0.95, guidanceScale: 7, negativePrompt: ['2d'] } 
-  },
-  { 
-    id: 'furniture_swap', 
-    label: '家具替换', 
-    desc: '室内局部软装', 
-    defaults: { structureStrength: 0.4, styleStrength: 0.8, guidanceScale: 8 } 
+  {
+    id: 'su_render',
+    label: 'SU 高清渲染',
+    desc: '建筑方案表达',
+    defaults: { structureStrength: 0.95, styleStrength: 0.6, aiCreativity: 0.15, negativePrompt: ['2d'] }
   },
 ];
 
@@ -129,14 +135,16 @@ export default function ArchitecturePage() {
     prompt: "",
     negativePrompt: [],
     customNegativePrompt: "",
-    aspectRatio: "1:1",
+    aspectRatio: "1:1", // Use string format to match SizeOption
     imageSize: "1K",
+    model: "flash",
     guidanceScale: 7.5,
     mode: "generic",
     structureRef: undefined,
     structureStrength: 0.9,
     styleRef: undefined,
     styleStrength: 0.6,
+    aiCreativity: 0.5,
     useGoogleSearch: false,
     useImageSearch: false,
   });
@@ -153,6 +161,9 @@ export default function ArchitecturePage() {
   const [progress, setProgress] = useState(0);
   const [hasApiKey, setHasApiKey] = useState<boolean>(true);
   const [isCheckingKey, setIsCheckingKey] = useState(true);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -189,6 +200,19 @@ export default function ArchitecturePage() {
     return "严格遵循";
   };
 
+  const detectImageDimensions = (url: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = new window.Image();
+      img.onload = () => {
+        resolve({ width: img.width, height: img.height });
+      };
+      img.onerror = () => {
+        reject(new Error("Failed to load image"));
+      };
+      img.src = url;
+    });
+  };
+
   const applyPreset = (presetId: GenerationMode) => {
     const preset = PRESETS.find(p => p.id === presetId);
     if (preset) {
@@ -205,20 +229,50 @@ export default function ArchitecturePage() {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setParams(prev => ({ 
-          ...prev, 
-          [type === 'structure' ? 'structureRef' : 'styleRef']: reader.result as string 
-        }));
+        // Auto-detect aspect ratio from uploaded image
+        if (type === 'structure') {
+          const img = new window.Image();
+          img.onload = () => {
+            const ratio = img.width / img.height;
+            let detectedRatio = "1:1";
+            if (Math.abs(ratio - 1) < 0.1) {
+              detectedRatio = "1:1";
+            } else if (ratio > 1.2) {
+              detectedRatio = "16:9";
+            } else if (ratio < 0.85) {
+              detectedRatio = "9:16";
+            }
+            setParams(prev => ({
+              ...prev,
+              structureRef: reader.result as string,
+              aspectRatio: detectedRatio
+            }));
+          };
+          img.src = reader.result as string;
+        } else {
+          setParams(prev => ({
+            ...prev,
+            styleRef: reader.result as string
+          }));
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
   const clearImage = (type: 'structure' | 'style') => {
-    setParams(prev => ({ 
-      ...prev, 
-      [type === 'structure' ? 'structureRef' : 'styleRef']: undefined 
-    }));
+    if (type === 'structure') {
+      setParams(prev => ({
+        ...prev,
+        structureRef: undefined,
+        aspectRatio: "1:1"
+      }));
+    } else {
+      setParams(prev => ({
+        ...prev,
+        styleRef: undefined
+      }));
+    }
   };
 
   const simulateProgress = useCallback(() => {
@@ -278,7 +332,10 @@ export default function ArchitecturePage() {
         negativePrompt: negativePromptText,
         fidelity: params.structureStrength,
         styleImpact: params.styleStrength,
-        aiCreativity: params.guidanceScale,
+        aiCreativity: params.aiCreativity,
+        aspectRatio: params.aspectRatio, // Add aspect ratio parameter
+        model: params.model,
+        imageSize: params.imageSize,
       };
 
       // Call API
@@ -298,6 +355,20 @@ export default function ArchitecturePage() {
       const imageUrl = data.data?.outputUrl || `https://picsum.photos/seed/${Date.now()}/1024/1024`;
       const revisedPrompt = data.data?.revisedPrompt;
 
+      // Detect image dimensions
+      setImageLoading(true);
+      setImageError(false);
+      detectImageDimensions(imageUrl)
+        .then((dims) => {
+          setImageDimensions(dims);
+          setImageLoading(false);
+        })
+        .catch(() => {
+          setImageDimensions(null);
+          setImageLoading(false);
+          setImageError(true);
+        });
+
       const newResult: GenerationResult = {
         imageUrl,
         revisedPrompt,
@@ -308,9 +379,9 @@ export default function ArchitecturePage() {
           guidanceScale: params.guidanceScale,
         }
       };
-      
+
       setResult(newResult);
-      
+
       if (newResult.imageUrl && newResult.params) {
         setHistory(prev => [{
           imageUrl: newResult.imageUrl,
@@ -344,12 +415,14 @@ export default function ArchitecturePage() {
       customNegativePrompt: "",
       aspectRatio: "1:1",
       imageSize: "1K",
+      model: "flash",
       guidanceScale: 7.5,
       mode: "generic",
       structureRef: undefined,
       structureStrength: 0.9,
       styleRef: undefined,
       styleStrength: 0.6,
+      aiCreativity: 0.5,
       useGoogleSearch: false,
       useImageSearch: false,
     });
@@ -486,12 +559,52 @@ export default function ArchitecturePage() {
                   <p className="text-zinc-500 text-sm animate-pulse">正在实时渲染 {Math.round(progress)}%</p>
                 </div>
               ) : result.imageUrl ? (
-                <div className="w-full h-full relative">
-                  <img 
-                    src={result.imageUrl} 
-                    className="w-full h-full object-cover" 
+                <div className="w-full h-full relative flex items-center justify-center">
+                  {/* Loading state */}
+                  {imageLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 rounded-full border-2 border-zinc-700 border-t-yellow-500 animate-spin" />
+                        <span className="text-zinc-400 text-xs">加载中...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error state */}
+                  {imageError && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+                      <div className="flex flex-col items-center gap-3 text-red-400">
+                        <ShieldAlert className="w-10 h-10" />
+                        <span className="text-xs">图片加载失败</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Image with aspect ratio */}
+                  <img
+                    src={result.imageUrl}
+                    className={`max-w-full max-h-full object-contain transition-opacity ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
                     referrerPolicy="no-referrer"
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      if (img.naturalWidth && img.naturalHeight) {
+                        setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+                      }
+                      setImageLoading(false);
+                      setImageError(false);
+                    }}
+                    onError={() => {
+                      setImageLoading(false);
+                      setImageError(true);
+                    }}
                   />
+
+                  {/* Image info badge */}
+                  {imageDimensions && !imageLoading && !imageError && (
+                    <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-sm border border-white/10 px-2 py-1 rounded text-[10px] text-zinc-400 font-mono">
+                      {imageDimensions.width} × {imageDimensions.height}
+                    </div>
+                  )}
                   
                   {/* Parameter Labels Overlay */}
                   {result.params && (
@@ -570,6 +683,75 @@ export default function ArchitecturePage() {
                 />
               </div>
 
+              {/* Model Selection */}
+              <div>
+                <div className="text-sm font-medium text-zinc-300 mb-2 block">
+                  AI 模型
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {MODEL_OPTIONS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setParams({ ...params, model: m.id })}
+                      className={`p-2 rounded-lg border text-left transition-all ${
+                        params.model === m.id
+                        ? 'border-yellow-500 bg-yellow-500/10'
+                        : 'border-[#333] bg-[#1e1e1e] hover:border-zinc-500'
+                      }`}
+                    >
+                      <div className={`text-[11px] font-bold ${params.model === m.id ? 'text-yellow-500' : 'text-zinc-300'}`}>{m.label}</div>
+                      <div className="text-[9px] text-[#666] leading-tight">{m.desc} · {m.credits}积分</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Aspect ratio selection - Moved from advanced section */}
+              <div>
+                <div className="text-sm font-medium text-zinc-300 mb-2 block">
+                  宽高比
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {SIZE_OPTIONS.map((size) => (
+                    <button
+                      key={size.ratio}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
+                        params.aspectRatio === size.ratio
+                          ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                          : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                      )}
+                      onClick={() => setParams({ ...params, aspectRatio: size.ratio })}
+                    >
+                      {size.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Image Quality Selection */}
+              <div>
+                <div className="text-sm font-medium text-zinc-300 mb-2 block">
+                  输出质量
+                </div>
+                <div className="flex gap-2">
+                  {(["1K", "2K", "4K"] as const).map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => setParams({ ...params, imageSize: size })}
+                      className={cn(
+                        "flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
+                        params.imageSize === size
+                          ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                          : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                      )}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Core Mode Selection */}
               <div>
                 <div className="text-sm font-medium text-zinc-300 mb-2 block">
@@ -630,41 +812,6 @@ export default function ArchitecturePage() {
                 </div>
               </div>
 
-              {/* Dynamic Sliders */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-end">
-                    <label className="text-[13px] text-[#ccc]">还原度 (Structure)</label>
-                    <span className="text-[12px] font-mono text-yellow-500">{getFidelityLabel(params.structureStrength)}</span>
-                  </div>
-                  <Slider
-                    value={[params.structureStrength * 100]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onValueChange={(value) => setParams({...params, structureStrength: value[0] / 100})}
-                    className="flex-1"
-                  />
-                  <div className="text-[11px] text-[#666] leading-tight">决定最终生成在多大程度上保留参考图的几何结构。</div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-end">
-                    <label className="text-[13px] text-[#ccc]">风格浸染 (Style)</label>
-                    <span className="text-[12px] font-mono text-yellow-500">{Math.round(params.styleStrength * 100)}%</span>
-                  </div>
-                  <Slider
-                    value={[params.styleStrength * 100]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onValueChange={(value) => setParams({...params, styleStrength: value[0] / 100})}
-                    className="flex-1"
-                  />
-                  <div className="text-[11px] text-[#666] leading-tight">决定参考图的色彩和质感对画面的影响深度。</div>
-                </div>
-              </div>
-
               {/* Negative Tag Cloud */}
               <div>
                 <div className="text-sm font-medium text-zinc-300 mb-2 block">
@@ -689,48 +836,62 @@ export default function ArchitecturePage() {
 
               {/* Advanced Area */}
               <div>
-                <button 
+                <button
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   className="flex items-center gap-2 text-[11px] text-[#888] hover:text-white transition-colors uppercase tracking-[1px]"
                 >
                   高级生成参数 (Advanced)
                   <ChevronRight className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
                 </button>
-                
+
                 {showAdvanced && (
                   <div className="mt-3 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
                     <div className="space-y-2">
                       <div className="flex justify-between items-end">
-                        <label className="text-[13px] text-[#ccc]">AI 脑洞 (Guidance)</label>
-                        <span className="text-[12px] font-mono text-yellow-500">{params.guidanceScale}</span>
+                        <label className="text-[13px] text-[#ccc]">Structure Retention</label>
+                        <span className="text-[12px] font-mono text-yellow-500">{getFidelityLabel(params.structureStrength)}</span>
                       </div>
                       <Slider
-                        value={[params.guidanceScale]}
-                        min={3}
-                        max={15}
-                        step={0.5}
-                        onValueChange={(value) => setParams({...params, guidanceScale: value[0]})}
+                        value={[params.structureStrength * 100]}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onValueChange={(value) => setParams({...params, structureStrength: value[0] / 100})}
                         className="flex-1"
                       />
-                      <div className="text-[11px] text-[#666] leading-tight flex justify-between">
-                        <span>{getGuidanceLabel(params.guidanceScale)}</span>
-                        <span className="font-mono">Range: 3-15</span>
-                      </div>
+                      <div className="text-[11px] text-[#666] leading-tight">决定最终生成在多大程度上保留参考图的几何结构。</div>
                     </div>
 
-                    <div className="flex justify-between items-center gap-2">
-                      <div className="text-[12px] text-[#ccc]">宽高比选择</div>
-                      <div className="flex bg-[#1e1e1e] border border-[#333] rounded-lg p-0.5 gap-0.5">
-                        {["1:1", "16:9", "9:16"].map(ratio => (
-                          <button 
-                            key={ratio}
-                            onClick={() => setParams({...params, aspectRatio: ratio as AspectRatio})}
-                            className={`px-3 py-1 text-[10px] rounded-md transition-all ${params.aspectRatio === ratio ? 'bg-zinc-700 text-white' : 'text-[#666]'}`}
-                          >
-                            {ratio}
-                          </button>
-                        ))}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <label className="text-[13px] text-[#ccc]">Style Fidelity</label>
+                        <span className="text-[12px] font-mono text-yellow-500">{Math.round(params.styleStrength * 100)}%</span>
                       </div>
+                      <Slider
+                        value={[params.styleStrength * 100]}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onValueChange={(value) => setParams({...params, styleStrength: value[0] / 100})}
+                        className="flex-1"
+                      />
+                      <div className="text-[11px] text-[#666] leading-tight">决定参考图的色彩和质感对画面的影响深度。</div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <label className="text-[13px] text-[#ccc]">AI Creativity</label>
+                        <span className="text-[12px] font-mono text-yellow-500">{Math.round(params.aiCreativity * 100)}%</span>
+                      </div>
+                      <Slider
+                        value={[params.aiCreativity * 100]}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onValueChange={(value) => setParams({...params, aiCreativity: value[0] / 100})}
+                        className="flex-1"
+                      />
+                      <div className="text-[11px] text-[#666] leading-tight">控制 AI 在生成过程中的创意发挥程度。</div>
                     </div>
 
                     <div className="space-y-1.5">

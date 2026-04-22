@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
       fidelity,       // 还原度 (0-1)
       styleImpact,    // 风格浸染 (0-1)
       aiCreativity,   // AI 脑洞 (3-15)
+      aspectRatio,    // 图片比例 "1:1", "16:9", "9:16"
+      imageSize,      // 图片质量 "1K", "2K", "4K"
+      model,          // 模型选择 "flash", "pro"
     } = body;
 
     if (!mode || !prompt || !mainImage) {
@@ -112,13 +115,13 @@ export async function POST(request: NextRequest) {
 
       // 调用 Gemini API
       const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-image-preview",
+        model: model === 'pro' ? 'gemini-3-pro-image-preview' : 'gemini-3.1-flash-image-preview',
         contents: contents,
         config: {
           responseModalities: ["IMAGE"],
           imageConfig: {
-            aspectRatio: "1:1",
-            imageSize: "1K",
+            aspectRatio: aspectRatio || "1:1",
+            imageSize: imageSize || "1K",
           },
         },
       });

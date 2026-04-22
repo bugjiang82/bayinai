@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ToolType = 'select' | 'brush' | 'eraser' | 'lasso' | 'rect' | 'circle';
+export type ToolType = 'select' | 'brush' | 'eraser' | 'lasso' | 'polygon' | 'rect' | 'circle';
 
 export interface Shape {
   id: string;

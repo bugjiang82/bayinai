@@ -49,6 +49,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role;
+        // Cache credits in JWT to avoid database query on every page navigation
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { credits: true },
+        });
+        token.credits = dbUser?.credits ?? 0;
       }
       return token;
     },
@@ -56,6 +62,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as { role?: string }).role = token.role as string;
+        (session.user as { credits?: number }).credits = token.credits as number;
       }
       return session;
     },

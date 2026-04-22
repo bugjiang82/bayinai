@@ -1,7 +1,6 @@
 import React from "react";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import prisma from "@/lib/prisma";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import Sidebar from "@/components/layout/Sidebar";
@@ -23,16 +22,8 @@ export default async function MainLayout({
     redirect("/login");
   }
 
-  let credits = 0;
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { credits: true },
-    });
-    if (user) credits = user.credits;
-  } catch {
-    // silently ignore
-  }
+  // Credits are now cached in JWT session, no database query needed
+  const credits = (session.user as { credits?: number }).credits ?? 0;
 
   return (
     <AuthProvider session={session}>

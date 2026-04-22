@@ -47,6 +47,66 @@ const navLinks = [
   { href: "/all-round-test", label: "全能测试", icon: Bot },
 ];
 
+// Independent NavLink component - only re-renders when its own isActive changes
+const NavLink = React.memo(function NavLink({
+  href,
+  pathname,
+  children,
+}: {
+  href: string;
+  pathname: string;
+  children: React.ReactNode;
+}) {
+  const isActive =
+    pathname === href || (href !== "/" && pathname.startsWith(href));
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+        isActive
+          ? "text-white bg-white/[0.08]"
+          : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
+      )}
+    >
+      {children}
+    </Link>
+  );
+});
+
+// Independent Mobile NavLink component
+const MobileNavLink = React.memo(function MobileNavLink({
+  href,
+  pathname,
+  icon: Icon,
+  onNavigate,
+  children,
+}: {
+  href: string;
+  pathname: string;
+  icon: React.ComponentType<{ className?: string }>;
+  onNavigate: () => void;
+  children: React.ReactNode;
+}) {
+  const isActive =
+    pathname === href || (href !== "/" && pathname.startsWith(href));
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className={cn(
+        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+        isActive
+          ? "text-white bg-white/[0.08]"
+          : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
+      )}
+    >
+      <Icon className="w-4 h-4" />
+      {children}
+    </Link>
+  );
+});
+
 interface HeaderProps {
   user?: {
     name?: string | null;
@@ -76,25 +136,11 @@ export default function Header({ user, credits = 0 }: HeaderProps) {
 
         {/* Desktop Nav */}
         <nav className="hidden lg:flex items-center gap-1">
-          {navLinks.map((link) => {
-            const isActive =
-              pathname === link.href ||
-              (link.href !== "/" && pathname.startsWith(link.href));
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                  isActive
-                    ? "text-white bg-white/[0.08]"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
-                )}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+          {navLinks.map((link) => (
+            <NavLink key={link.href} href={link.href} pathname={pathname}>
+              {link.label}
+            </NavLink>
+          ))}
         </nav>
 
         {/* Right Section */}
@@ -190,28 +236,17 @@ export default function Header({ user, credits = 0 }: HeaderProps) {
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-1 mt-6">
-                {navLinks.map((link) => {
-                  const isActive =
-                    pathname === link.href ||
-                    (link.href !== "/" && pathname.startsWith(link.href));
-                  const Icon = link.icon;
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setMobileOpen(false)}
-                      className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                        isActive
-                          ? "text-white bg-white/[0.08]"
-                          : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
-                      )}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {link.label}
-                    </Link>
-                  );
-                })}
+                {navLinks.map((link) => (
+                  <MobileNavLink
+                    key={link.href}
+                    href={link.href}
+                    pathname={pathname}
+                    icon={link.icon}
+                    onNavigate={() => setMobileOpen(false)}
+                  >
+                    {link.label}
+                  </MobileNavLink>
+                ))}
               </nav>
               {user && (
                 <div className="mt-6 pt-4 border-t border-white/[0.06]">
