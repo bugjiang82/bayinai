@@ -53,7 +53,7 @@ npx tsx prisma/seed.ts
 ```
 
 默认管理员账户：
-- 邮箱：`admin@test.com`
+- 邮箱：`admin@admin.com`
 - 密码：`123456`
 
 ---
@@ -72,14 +72,17 @@ nano .env
 DATABASE_URL="file:./dev.db"
 
 # NextAuth 配置（必须和实际访问地址一致）
-NEXTAUTH_URL="http://43.155.210.242:5050"
+NEXTAUTH_URL="http://43.164.135.160:5050"
 NEXTAUTH_SECRET="b766292bd50ceec70dd64887148ce037172046cbcdec56896a19fa3082a73aa9"
 
 # Google Gemini API Key（图片生成）
 GOOGLE_GENAI_API_KEY="你的Gemini API Key"
 
-# 阿里云 DashScope API Key（视频生成，可选）
+# 阿里云 DashScope API Key（视频生成）
 DASHSCOPE_API_KEY="你的DashScope API Key"
+
+# OpenRouter API Key（Image2 模型图片生成）
+OPENROUTER_API_KEY="你的OpenRouter API Key"
 
 # Next.js 只监听本地（配合 Nginx 使用）
 HOSTNAME="127.0.0.1"
@@ -257,7 +260,33 @@ pm2 start ai-studio
 
 ---
 
-## 十、常见问题
+## 十、积分系统说明
+
+### 10.1 积分规则
+
+| 功能 | 积分消耗 | 说明 |
+|------|---------|------|
+| 图片生成 (Flash) | 1 积分/张 | 快速生成 |
+| 图片生成 (Pro) | 3 积分/张 | 高清质量 |
+| 图片生成 (Image2) | 50 积分/张 | 超清质量，需 OpenRouter API |
+| 图片局部重绘 | 2 积分/次 | 编辑功能 |
+| 进阶设计 | 3 积分/次 | 建筑渲染 |
+| 视频生成 | 50 积分/秒 | 按生成时长扣费 |
+
+### 10.2 积分扣减流程
+
+1. 用户提交生成请求时前端校验积分
+2. 后端使用 Prisma 事务原子性扣减积分
+3. 生成失败时自动回滚积分
+4. 所有积分变动记录在 `CreditLog` 表
+
+### 10.3 用户积分查询
+
+用户积分显示在页面右上角 Header 区域，实时从数据库同步。
+
+---
+
+## 十一、常见问题
 
 ### Q: 页面 CSS 加载不出来
 
@@ -276,6 +305,11 @@ pm2 start ai-studio
 
 确认 `.env` 中 `DASHSCOPE_API_KEY` 配置了有效的阿里云 DashScope API Key。
 
+### Q: Image2 模型不工作
+
+1. 确认 `.env` 中 `OPENROUTER_API_KEY` 配置了有效的 API Key
+2. Image2 使用 OpenRouter API 调用 GPT-5.4-image-2 模型
+
 ### Q: 内存不足 OOM
 
 参考 [第八节：性能优化](#八性能优化2核4g-服务器)，添加 Swap。
@@ -288,3 +322,61 @@ pm2 start ai-studio
 ### Q: 数据库文件在哪里
 
 SQLite 数据库文件位于 `prisma/dev.db`。可以直接复制该文件进行备份或迁移。
+
+### Q: 积分显示为 100 不变
+
+这是旧代码的 bug，请确保已更新到最新代码并重新构建。
+
+---
+
+## 十二、项目结构
+
+```
+ai-studio/
+├── prisma/
+│   ├── schema.prisma      # 数据库模型
+│   ├── dev.db             # SQLite 数据库文件
+│   └── seed.ts            # 初始化数据
+├── src/
+│   ├── app/               # Next.js App Router
+│   │   ├── (main)/        # 已登录页面组
+│   │   │   ├── generate/  # 生成功能页面
+│   │   │   └── gallery/   # 作品展示页面
+│   │   └── api/           # API 路由
+│   │       ├── auth/      # 认证相关 API
+│   │       ├── credits/   # 积分相关 API
+│   │       └── generate/  # 生成任务 API
+│   ├── components/        # React 组件
+│   ├── services/          # 业务逻辑服务
+│   │   ├── auth.service.ts
+│   │   ├── credit.service.ts
+│   │   └── generation.service.ts
+│   ├── stores/            # Zustand 状态管理
+│   └── lib/               # 工具函数
+├── public/
+│   ├── outputs/           # 生成的文件存储
+│   └── uploads/           # 用户上传文件
+├── nginx.conf             # Nginx 配置
+└── .env                   # 环境变量
+```
+
+---
+
+## 十三、API 接口一览
+
+### 认证相关
+- `POST /api/auth/[...nextauth]` - NextAuth 认证
+
+### 积分相关
+- `GET /api/credits/balance` - 获取用户积分余额
+
+### 生成任务
+- `POST /api/generate/image` - 图片生成
+- `POST /api/generate/inpaint` - 图片局部重绘
+- `POST /api/generate/video` - 视频生成
+- `GET /api/generate/history` - 获取生成历史
+- `DELETE /api/generate/[id]` - 删除生成记录
+
+### 作品管理
+- `GET /api/gallery` - 获取作品列表
+- `POST /api/generate/favorite` - 收藏/取消收藏
