@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   ZoomIn,
   Palette,
@@ -66,17 +68,47 @@ const STYLE_OPTIONS = [
 ];
 
 export default function EditPage() {
+  const searchParams = useSearchParams();
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<EditMode>("inpaint");
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [resultImage, setResultImage] = useState<string | null>(null);
-  const [credits, setCredits] = useState(100);
+  const [credits, setCredits] = useState(0);
+  const [isApplying, setIsApplying] = useState(false);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const replaceImageInputRef = useRef<HTMLInputElement>(null);
+  const applyAttemptsRef = useRef<number>(0);
 
+  const { data: session } = useSession();
   const { setCurrentImage, clearShapes, setSelectionPath } = useEditStore();
   const konvaCanvasRef = useRef<any>(null);
+
+  useEffect(() => {
+    const sessionCredits = (session?.user as { credits?: number })?.credits;
+    if (sessionCredits !== undefined) {
+      setCredits(sessionCredits);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    const imageUrl = searchParams.get("image");
+    const prompt = searchParams.get("prompt");
+    if (imageUrl) {
+      setSourceImage(imageUrl);
+      setCurrentImage(imageUrl);
+      setResultImage(null);
+      clearShapes();
+      setSelectionPath(null);
+      // 检测图片原始尺寸
+      const img = new Image();
+      img.onload = () => {
+        setOriginalImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = imageUrl;
+    }
+  }, [searchParams, setCurrentImage, clearShapes, setSelectionPath]);
   
   const generateMask = useCallback(() => {
     if (konvaCanvasRef.current) {
@@ -107,17 +139,18 @@ export default function EditPage() {
   // 新增 nano-banana 控制参数
   const [structureRef, setStructureRef] = useState<string | null>(null);
   const [styleRef, setStyleRef] = useState<string | null>(null);
+  const [originalImageSize, setOriginalImageSize] = useState<{ width: number; height: number } | null>(null);
   // 自动检测原图尺寸并计算比例
   const detectImageAspectRatio = useCallback((imageUrl: string): string => {
-    if (!imageUrl) return "1:1";
-    const img = new Image();
-    img.src = imageUrl;
-    const ratio = img.width / img.height;
-    if (Math.abs(ratio - 1) < 0.1) return "1:1";
-    if (ratio > 1.2) return "16:9";
-    if (ratio < 0.85) return "9:16";
+    if (originalImageSize) {
+      const ratio = originalImageSize.width / originalImageSize.height;
+      if (Math.abs(ratio - 1) < 0.1) return "1:1";
+      if (ratio > 1.2) return "16:9";
+      if (ratio < 0.85) return "9:16";
+      return "1:1";
+    }
     return "1:1";
-  }, []);
+  }, [originalImageSize]);
 
   useEffect(() => {
     return () => {
@@ -136,6 +169,12 @@ export default function EditPage() {
       setResultImage(null);
       clearShapes();
       setSelectionPath(null);
+      // 检测图片原始尺寸
+      const img = new Image();
+      img.onload = () => {
+        setOriginalImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = imageUrl;
     };
     reader.readAsDataURL(file);
   }, [setCurrentImage, clearShapes, setSelectionPath]);
@@ -157,20 +196,35 @@ export default function EditPage() {
       setResultImage(null);
       clearShapes();
       setSelectionPath(null);
+      // 检测图片原始尺寸
+      const img = new Image();
+      img.onload = () => {
+        setOriginalImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = imageUrl;
     };
     reader.readAsDataURL(file);
   }, [setCurrentImage, clearShapes, setSelectionPath]);
 
   const handleReset = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
     setSourceImage(null);
     setResultImage(null);
     setIsProcessing(false);
+    setIsApplying(false);
     setProgress(0);
     setMaskImage(null);
-    // 重置 nano-banana 控制参数
     setStructureRef(null);
     setStyleRef(null);
-    // 重置 editStore 状态
+    setOriginalImageSize(null);
+    applyAttemptsRef.current = 0;
     setCurrentImage(null);
     clearShapes();
     setSelectionPath(null);
@@ -178,19 +232,29 @@ export default function EditPage() {
 
   const handleApply = useCallback(async () => {
     if (!sourceImage) return;
+    if (isApplying) return;
 
     const cost = 2;
     if (credits < cost) return;
 
+    setIsApplying(true);
     setIsProcessing(true);
     setProgress(0);
     setResultImage(null);
 
+    applyAttemptsRef.current += 1;
+    const currentAttempt = applyAttemptsRef.current;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     let currentProgress = 0;
     progressIntervalRef.current = setInterval(() => {
+      if (currentAttempt !== applyAttemptsRef.current) return;
       currentProgress += Math.random() * 8 + 2;
       if (currentProgress >= 90) {
-        // 90% 时停止自动增长，等待 API 返回
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
@@ -200,40 +264,14 @@ export default function EditPage() {
       }
     }, 300);
 
-    const fetchWithTimeout = (url: string, options: RequestInit, timeout: number = 30000) => {
-      return Promise.race([
-        fetch(url, options),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('请求超时，请检查网络连接')), timeout)
-        )
-      ]);
-    };
-
-    const retryFetch = async (url: string, options: RequestInit, retries: number = 3) => {
-      for (let i = 0; i < retries; i++) {
-        try {
-          return await fetchWithTimeout(url, options);
-        } catch (error) {
-          if (i === retries - 1) {
-            throw error;
-          }
-          // 等待一段时间后重试
-          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-        }
-      }
-      throw new Error('重试失败');
-    };
-
     try {
       let response;
 
       if (editMode === "inpaint") {
-        // Inpainting 模式
         if (!inpaintDescription.trim()) {
           throw new Error("请输入重绘描述");
         }
 
-        // 生成真实的 mask 图像
         const maskImage = generateMask();
         if (!maskImage) {
           throw new Error("无法生成选区 mask，请重新绘制选区");
@@ -244,6 +282,7 @@ export default function EditPage() {
           headers: {
             "Content-Type": "application/json",
           },
+          signal: abortControllerRef.current?.signal,
           body: JSON.stringify({
             originalImage: sourceImage,
             maskImage: maskImage,
@@ -254,9 +293,16 @@ export default function EditPage() {
           }),
         };
 
-        response = await retryFetch("/api/generate/inpaint", requestOptions);
+        const timeoutId = setTimeout(() => {
+          abortControllerRef.current?.abort();
+        }, 60000);
+
+        try {
+          response = await fetch("/api/generate/inpaint", requestOptions);
+        } finally {
+          clearTimeout(timeoutId);
+        }
       } else {
-        // 其他模式暂时使用 mock，后续可以扩展
         await new Promise((resolve) => setTimeout(resolve, 3000));
         setResultImage(sourceImage);
         setCredits((prev) => Math.max(0, prev - cost));
@@ -276,10 +322,14 @@ export default function EditPage() {
         throw new Error(result.message || "生成失败");
       }
 
-      // 处理结果
+      // 处理结果 - 检查是否当前请求仍然有效
+      if (currentAttempt !== applyAttemptsRef.current) {
+        return;
+      }
+
       console.log("outputBase64:", result.data.outputBase64);
       console.log("outputUrl:", result.data.outputUrl);
-      
+
       if (result.data.outputBase64) {
         const imageUrl = `data:image/png;base64,${result.data.outputBase64}`;
         console.log("Setting resultImage from outputBase64:", imageUrl);
@@ -294,23 +344,26 @@ export default function EditPage() {
       setCredits((prev) => Math.max(0, prev - cost));
       setIsProcessing(false);
       setProgress(100);
+      setIsApplying(false);
 
     } catch (error) {
+      if (currentAttempt !== applyAttemptsRef.current) {
+        return;
+      }
       console.error("Edit failed:", error);
       setIsProcessing(false);
       setProgress(0);
-      // 显示错误信息
+      setIsApplying(false);
       const errorMessage = error instanceof Error ? error.message : "生成失败，请重试";
-      // 使用更友好的错误提示方式
       console.error(errorMessage);
-      // 可以在这里添加一个错误提示组件
     } finally {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
+      abortControllerRef.current = null;
     }
-  }, [sourceImage, credits, editMode, inpaintDescription, structureRef, styleRef, detectImageAspectRatio, generateMask]);
+  }, [sourceImage, credits, editMode, inpaintDescription, structureRef, styleRef, detectImageAspectRatio, generateMask, isApplying]);
 
   const renderModeParams = () => {
     switch (editMode) {
@@ -415,11 +468,8 @@ export default function EditPage() {
                 图片编辑工作台
               </h3>
               <p className="text-sm text-zinc-600 max-w-sm mx-auto leading-relaxed mb-6">
-                上传需要编辑的图片，选择编辑模式
-                <br />
-                AI 将帮你完成专业级图片处理
+                请在右侧面板上传需要编辑的图片
               </p>
-              <ImageUploader onUpload={handleSourceUpload} storageKey="" />
             </div>
           )}
 
@@ -524,7 +574,33 @@ export default function EditPage() {
                   variant="ghost"
                   size="sm"
                   className="text-xs text-zinc-400 hover:text-zinc-200"
-                  onClick={() => window.open(resultImage, "_blank")}
+                  onClick={async () => {
+                    try {
+                      let blob: Blob;
+                      if (resultImage.startsWith("data:")) {
+                        const base64 = resultImage.split(",")[1];
+                        const binary = atob(base64);
+                        const array = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) {
+                          array[i] = binary.charCodeAt(i);
+                        }
+                        blob = new Blob([array], { type: "image/png" });
+                      } else {
+                        const response = await fetch(resultImage);
+                        blob = await response.blob();
+                      }
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `ai-studio-edit-${Date.now()}.png`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      window.URL.revokeObjectURL(url);
+                    } catch {
+                      window.open(resultImage, "_blank");
+                    }
+                  }}
                 >
                   <Download className="w-3.5 h-3.5 mr-1.5" />
                   下载结果
@@ -540,6 +616,17 @@ export default function EditPage() {
         <div className="flex flex-col h-full rounded-2xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
           {/* Scrollable content */}
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+            {/* Image Upload - Top of the panel */}
+            <div>
+              <label className="text-sm font-medium text-zinc-300 mb-2 block">
+                上传图片
+              </label>
+              <ImageUploader onUpload={handleSourceUpload} preview={sourceImage} storageKey="" compact />
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-white/[0.06]" />
+
             {/* Edit mode selection */}
             <div>
               <label className="text-sm font-medium text-zinc-300 mb-2 block">
@@ -587,22 +674,15 @@ export default function EditPage() {
             <div>{renderModeParams()}</div>
           </div>
 
-          {/* Bottom: Apply button + credits */}
+          {/* Bottom: Apply button + cost display */}
           <div className="p-4 border-t border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                <Coins className="w-3.5 h-3.5" />
-                <span>
-                  余额 <span className="text-zinc-300 font-medium">{credits}</span>{" "}
-                  积分
-                </span>
-              </div>
+            <div className="flex items-center justify-end mb-3">
               <span className="text-xs text-zinc-600">
                 消耗{" "}
                 <span
                   className={cn(
                     "font-medium",
-                    credits < 2 ? "text-red-400" : "text-zinc-400"
+                    credits > 0 && credits < 2 ? "text-red-400" : "text-zinc-400"
                   )}
                 >
                   2

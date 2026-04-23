@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import PromptInput from "@/components/generate/PromptInput";
 import ModelSelector, { type ModelType } from "@/components/generate/ModelSelector";
+import DropdownSelector from "@/components/generate/DropdownSelector";
 
 export interface SizeOption {
   label: string;
@@ -150,27 +151,15 @@ export default function ParamPanel({
         <ModelSelector value={model} onChange={onModelChange} />
 
         {/* Aspect ratio selection */}
-        <div>
-          <label className="text-sm font-medium text-zinc-300 mb-2 block">
-            宽高比
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {SIZE_OPTIONS.map((size) => (
-              <button
-                key={size.ratio}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                  selectedSize.ratio === size.ratio
-                    ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                    : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                )}
-                onClick={() => onSizeChange(size)}
-              >
-                {size.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <DropdownSelector
+          label="宽高比"
+          value={selectedSize.ratio}
+          options={SIZE_OPTIONS.map((s) => ({ value: s.ratio, label: s.label }))}
+          onChange={(val) => {
+            const size = SIZE_OPTIONS.find((s) => s.ratio === val);
+            if (size) onSizeChange(size);
+          }}
+        />
 
         {/* Advanced params (collapsible) */}
         <div>
@@ -189,50 +178,21 @@ export default function ParamPanel({
           {showAdvanced && (
             <div className="mt-3 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
               {/* Resolution */}
-              <div className="space-y-2">
-                <label className="text-xs text-zinc-400">分辨率</label>
-                <div className="flex gap-1.5">
-                  {RESOLUTION_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      className={cn(
-                        "flex-1 h-8 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                        resolution === opt.value
-                          ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                          : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                      )}
-                      onClick={() => onResolutionChange(opt.value)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <DropdownSelector
+                label="分辨率"
+                value={resolution}
+                options={RESOLUTION_OPTIONS}
+                onChange={onResolutionChange}
+              />
 
               {/* Thinking level (only for flash model) */}
               {model === "flash" && (
-                <div className="space-y-2">
-                  <label className="text-xs text-zinc-400">
-                    思考级别
-                    <span className="text-zinc-600 ml-1">（平衡质量与速度）</span>
-                  </label>
-                  <div className="flex gap-1.5">
-                    {THINKING_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        className={cn(
-                          "flex-1 h-8 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                          thinkingLevel === opt.value
-                            ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                            : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                        )}
-                        onClick={() => onThinkingLevelChange(opt.value)}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <DropdownSelector
+                  label="思考级别"
+                  value={thinkingLevel}
+                  options={THINKING_OPTIONS}
+                  onChange={onThinkingLevelChange}
+                />
               )}
             </div>
           )}

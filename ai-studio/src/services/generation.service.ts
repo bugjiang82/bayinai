@@ -9,18 +9,244 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
 });
 
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || "";
 const DASHSCOPE_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1";
 
 const MODEL_MAP: Record<string, string> = {
   flash: "gemini-3.1-flash-image-preview",
   pro: "gemini-3-pro-image-preview",
+  image2: "openai/gpt-5.4-image-2",
 };
 
 const COST_MAP: Record<string, number> = {
   flash: 1,
   pro: 3,
+  image2: 50,
 };
+
+// ======================== 积分扣减服务 ========================
+
+export interface CreditDeductionResult {
+  success: boolean;
+  beforeBalance: number;
+  deductedAmount: number;
+  afterBalance: number;
+  error?: string;
+}
+
+export interface CreditDeductionParams {
+  userId: string;
+  amount: number;
+  type: string;
+  refId?: string;
+  remark?: string;
+}
+
+export class InsufficientCreditsError extends Error {
+  constructor(
+    public required: number,
+    public available: number
+  ) {
+    super(`积分不足：需要 ${required} 积分，当前剩余 ${available} 积分`);
+    this.name = "InsufficientCreditsError";
+  }
+}
+
+export class InvalidCreditAmountError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidCreditAmountError";
+  }
+}
+
+export async function deductCredits(
+  params: CreditDeductionParams
+): Promise<CreditDeductionResult> {
+  const { userId, amount, type, refId, remark } = params;
+
+  // 1. 参数验证
+  if (!userId) {
+    throw new InvalidCreditAmountError("用户ID不能为空");
+  }
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0) {
+    throw new InvalidCreditAmountError("扣减积分数量必须为正整数");
+  }
+
+  // 2. 使用事务确保原子性
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 3. 查询当前用户积分余额（加锁）
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, credits: true },
+      });
+
+      if (!user) {
+        throw new Error("用户不存在");
+      }
+
+      // 4. 验证积分余额
+      if (typeof user.credits !== "number" || user.credits < 0) {
+        throw new Error("用户积分数据异常");
+      }
+
+      if (user.credits < amount) {
+        throw new InsufficientCreditsError(amount, user.credits);
+      }
+
+      const beforeBalance = user.credits;
+      const afterBalance = beforeBalance - amount;
+
+      // 5. 执行积分扣减
+      await tx.user.update({
+        where: { id: userId },
+        data: { credits: afterBalance },
+      });
+
+      // 6. 记录积分日志
+      await tx.creditLog.create({
+        data: {
+          userId,
+          type,
+          amount: -amount,
+          balance: afterBalance,
+          remark: remark || type,
+          refId,
+        },
+      });
+
+      return { beforeBalance, afterBalance };
+    });
+
+    return {
+      success: true,
+      beforeBalance: result.beforeBalance,
+      deductedAmount: amount,
+      afterBalance: result.afterBalance,
+    };
+  } catch (err) {
+    if (err instanceof InsufficientCreditsError) {
+      return {
+        success: false,
+        beforeBalance: err.available,
+        deductedAmount: 0,
+        afterBalance: err.available,
+        error: err.message,
+      };
+    }
+    if (err instanceof InvalidCreditAmountError) {
+      return {
+        success: false,
+        beforeBalance: 0,
+        deductedAmount: 0,
+        afterBalance: 0,
+        error: err.message,
+      };
+    }
+    if (err instanceof Error && err.message === "用户不存在") {
+      return {
+        success: false,
+        beforeBalance: 0,
+        deductedAmount: 0,
+        afterBalance: 0,
+        error: "用户不存在",
+      };
+    }
+    // 其他数据库或系统错误
+    return {
+      success: false,
+      beforeBalance: 0,
+      deductedAmount: 0,
+      afterBalance: 0,
+      error: err instanceof Error ? err.message : "积分扣减失败，请重试",
+    };
+  }
+}
+
+export async function getUserCredits(userId: string): Promise<number> {
+  if (!userId) return 0;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { credits: true },
+  });
+  return user?.credits ?? 0;
+}
+
+export async function refundCredits(
+  userId: string,
+  amount: number,
+  refId: string,
+  remark: string
+): Promise<CreditDeductionResult> {
+  if (!userId) {
+    return {
+      success: false,
+      beforeBalance: 0,
+      deductedAmount: 0,
+      afterBalance: 0,
+      error: "用户ID不能为空",
+    };
+  }
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0) {
+    return {
+      success: false,
+      beforeBalance: 0,
+      deductedAmount: 0,
+      afterBalance: 0,
+      error: "退款积分数量必须为正整数",
+    };
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, credits: true },
+      });
+
+      if (!user) {
+        throw new Error("用户不存在");
+      }
+
+      const beforeBalance = user.credits ?? 0;
+      const afterBalance = beforeBalance + amount;
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { credits: afterBalance },
+      });
+
+      await tx.creditLog.create({
+        data: {
+          userId,
+          type: "REFUND",
+          amount,
+          balance: afterBalance,
+          remark,
+          refId,
+        },
+      });
+
+      return { beforeBalance, afterBalance };
+    });
+
+    return {
+      success: true,
+      beforeBalance: result.beforeBalance,
+      deductedAmount: -amount,
+      afterBalance: result.afterBalance,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      beforeBalance: 0,
+      deductedAmount: 0,
+      afterBalance: 0,
+      error: err instanceof Error ? err.message : "积分退款失败，请重试",
+    };
+  }
+}
 
 // ======================== 图片生成 ========================
 
@@ -28,7 +254,7 @@ export interface GenerateImageParams {
   userId: string;
   prompt: string;
   negativePrompt?: string;
-  model?: "flash" | "pro";
+  model?: "flash" | "pro" | "image2";
   aspectRatio?: string;   // 默认 "1:1"
   imageSize?: string;     // 默认 "1K"
   thinkingLevel?: ThinkingLevel;
@@ -69,6 +295,7 @@ export async function generateImage(
   const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
   const cost = COST_MAP[model] || COST_MAP.flash;
   const isProModel = modelName.includes("pro");
+  const isImage2Model = model === "image2";
 
   // 检查积分
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -116,103 +343,199 @@ export async function generateImage(
       fullPrompt += `\n\n编辑要求: ${transformType}`;
     }
 
-    const contents: Array<
-      | { text: string }
-      | { inlineData: { mimeType: string; data: string }; text?: string }
-    > = [];
-
-    if (referenceImage) {
-      // 图生图 / 图片编辑
-      const base64Data = referenceImage.includes(",")
-        ? referenceImage.split(",")[1]
-        : referenceImage;
-      contents.push({
-        inlineData: {
-          mimeType: "image/png",
-          data: base64Data,
-        },
-      });
-      contents.push({ text: fullPrompt });
-    } else {
-      // 文生图
-      contents.push({ text: fullPrompt });
-    }
-
-    // 调用 Gemini API（与官方文档一致）
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: contents,
-      config: {
-        responseModalities: ["IMAGE"],
-        imageConfig: {
-          aspectRatio,
-          imageSize,
-        },
-        // 仅 gemini-3.1-flash-image-preview 支持 thinkingConfig
-        ...(!isProModel
-          ? { thinkingConfig: { thinkingLevel } }
-          : {}),
-      },
-    });
-
-    // 解析响应
+    // 输出目录
     const outputDir = path.join(process.cwd(), "public", "outputs", userId);
     fs.mkdirSync(outputDir, { recursive: true });
-
     const filename = `${generation.id}.png`;
     const filepath = path.join(outputDir, filename);
 
     let outputBase64: string | undefined;
-    let outputMime: string | undefined;
-    let hasImage = false;
+    let outputUrl: string | undefined;
+    let thumbUrl: string | undefined;
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData?.data) {
-        const buffer = Buffer.from(part.inlineData.data, "base64");
-        fs.writeFileSync(filepath, buffer);
-        outputBase64 = part.inlineData.data;
-        outputMime = part.inlineData.mimeType;
-        hasImage = true;
+    if (isImage2Model) {
+      // Image2 模型使用 OpenRouter API
+      try {
+        const requestBody: any = {
+          model: modelName,
+          messages: [],
+          modalities: ["image", "text"],
+        };
+
+        if (referenceImage) {
+          const base64Data = referenceImage.includes(",")
+            ? referenceImage.split(",")[1]
+            : referenceImage;
+          requestBody.messages.push({
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: fullPrompt,
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/png;base64,${base64Data}`,
+                },
+              },
+            ],
+          });
+        } else {
+          requestBody.messages.push({
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: fullPrompt,
+              },
+            ],
+          });
+        }
+
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        const message = data.choices?.[0]?.message;
+
+        if (message?.images) {
+          for (const img of message.images) {
+            const imageUrlObj = img.image_url;
+            if (imageUrlObj?.url) {
+              const imageData = imageUrlObj.url;
+              const match = imageData.split("data:image/")[1];
+              if (match) {
+                const base64Part = match.split(",")[1];
+                const imageBytes = Buffer.from(base64Part, "base64");
+                fs.writeFileSync(filepath, imageBytes);
+                outputBase64 = base64Part;
+              }
+            }
+          }
+        } else if (message?.content) {
+          const contentArray = Array.isArray(message.content) ? message.content : [message.content];
+          for (const content of contentArray) {
+            if (content?.type === "image_url" && content.image_url?.url) {
+              const imageData = content.image_url.url;
+              const match = imageData.split("data:image/")[1];
+              if (match) {
+                const base64Part = match.split(",")[1];
+                const imageBytes = Buffer.from(base64Part, "base64");
+                fs.writeFileSync(filepath, imageBytes);
+                outputBase64 = base64Part;
+              }
+            }
+          }
+        }
+
+        if (!outputBase64) {
+          throw new Error("Image2 未能生成图片");
+        }
+
+        outputUrl = `/outputs/${userId}/${filename}`;
+      } catch (apiError) {
+        throw new Error(`Image2 API 调用失败: ${apiError instanceof Error ? apiError.message : "未知错误"}`);
       }
-    }
+    } else {
+      // Gemini 模型（原有逻辑）
+      const contents: Array<
+        | { text: string }
+        | { inlineData: { mimeType: string; data: string }; text?: string }
+      > = [];
 
-    if (!hasImage) {
-      if (fs.existsSync(filepath)) {
-        fs.unlinkSync(filepath);
+      if (referenceImage) {
+        const base64Data = referenceImage.includes(",")
+          ? referenceImage.split(",")[1]
+          : referenceImage;
+        contents.push({
+          inlineData: {
+            mimeType: "image/png",
+            data: base64Data,
+          },
+        });
+        contents.push({ text: fullPrompt });
+      } else {
+        contents.push({ text: fullPrompt });
       }
-      throw new Error("未能生成图片");
-    }
 
-    const outputUrl = `/outputs/${userId}/${filename}`;
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: contents,
+        config: {
+          responseModalities: ["IMAGE"],
+          imageConfig: {
+            aspectRatio,
+            imageSize,
+          },
+          ...(!isProModel
+            ? { thinkingConfig: { thinkingLevel } }
+            : {}),
+        },
+      });
+
+      let hasImage = false;
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData?.data) {
+          const buffer = Buffer.from(part.inlineData.data, "base64");
+          fs.writeFileSync(filepath, buffer);
+          outputBase64 = part.inlineData.data;
+          hasImage = true;
+        }
+      }
+
+      if (!hasImage) {
+        if (fs.existsSync(filepath)) {
+          fs.unlinkSync(filepath);
+        }
+        throw new Error("未能生成图片");
+      }
+
+      outputUrl = `/outputs/${userId}/${filename}`;
+    }
 
     // 生成缩略图（256px 宽，降低带宽开销）
-    let thumbnailUrl = outputUrl;
+    thumbUrl = outputUrl;
     try {
       const thumbFilename = `${generation.id}_thumb.jpg`;
       const thumbPath = path.join(outputDir, thumbFilename);
       await sharp(filepath).resize(256, 256, { fit: "inside" }).jpeg({ quality: 70 }).toFile(thumbPath);
-      thumbnailUrl = `/outputs/${userId}/${thumbFilename}`;
+      thumbUrl = `/outputs/${userId}/${thumbFilename}`;
     } catch {
       // 缩略图生成失败不影响主流程
     }
 
-    // 扣除积分
-    await prisma.user.update({
-      where: { id: userId },
-      data: { credits: { decrement: cost } },
+    // 扣除积分（使用统一扣减服务）
+    const deductionResult = await deductCredits({
+      userId,
+      amount: cost,
+      type: "GENERATE",
+      refId: generation.id,
+      remark: `图片生成 (${model})`,
     });
 
-    // 创建积分日志
-    await prisma.creditLog.create({
-      data: {
-        userId,
-        type: "GENERATE",
-        amount: -cost,
-        balance: user.credits - cost,
-        remark: `图片生成 (${model})`,
-        refId: generation.id,
-      },
-    });
+    if (!deductionResult.success) {
+      // 更新失败状态并抛出错误
+      await prisma.generation.update({
+        where: { id: generation.id },
+        data: {
+          status: "FAILED",
+          errorMsg: deductionResult.error || "积分扣减失败",
+        },
+      });
+      throw new Error(deductionResult.error || "积分扣减失败");
+    }
 
     // 更新生成记录
     const now = new Date();
@@ -221,7 +544,7 @@ export async function generateImage(
       data: {
         status: "COMPLETED",
         outputUrl,
-        thumbnailUrl,
+        thumbnailUrl: thumbUrl,
         completedAt: now,
       },
     });
@@ -266,6 +589,7 @@ export interface GenerateVideoParams {
   model?: string;
   promptExtend?: boolean;
   ratio?: string;
+  cost?: number;
 }
 
 export interface GenerateVideoResult {
@@ -288,6 +612,7 @@ export async function generateVideo(
     model = "wan2.2-kf2v-flash",
     promptExtend = true,
     ratio = "16:9",
+    cost = 0,
   } = params;
 
   if (!DASHSCOPE_API_KEY) {
@@ -391,7 +716,7 @@ export async function generateVideo(
     throw new Error("未能获取视频生成任务 ID");
   }
 
-  // 创建生成记录
+  // 创建生成记录（保存积分成本，后续完成后扣减）
   await prisma.generation.create({
     data: {
       userId,
@@ -405,7 +730,7 @@ export async function generateVideo(
         taskId,
       }),
       inputUrl: firstFrame || null,
-      cost: 0, // 视频生成积分逻辑后续补充
+      cost: cost || 0,
     },
   });
 
@@ -465,20 +790,44 @@ export async function getVideoStatus(
 export async function updateVideoResult(
   taskId: string,
   videoUrl: string,
-  userId: string
+  userId: string,
+  cost?: number
 ): Promise<void> {
-  await prisma.generation.updateMany({
+  const generation = await prisma.generation.findFirst({
     where: {
       params: {
         contains: taskId,
       },
       userId,
     },
+    select: { id: true, cost: true },
+  });
+
+  if (!generation) {
+    throw new Error("未找到对应的生成记录");
+  }
+
+  await prisma.generation.update({
+    where: { id: generation.id },
     data: {
       status: "COMPLETED",
       outputUrl: videoUrl,
     },
   });
+
+  if (cost && cost > 0) {
+    const deductionResult = await deductCredits({
+      userId,
+      amount: cost,
+      type: "GENERATE",
+      refId: generation.id,
+      remark: "视频生成",
+    });
+
+    if (!deductionResult.success) {
+      throw new Error(deductionResult.error || "积分扣减失败");
+    }
+  }
 }
 
 // ======================== 历史记录 ========================
@@ -486,6 +835,8 @@ export async function updateVideoResult(
 export interface HistoryFilters {
   type?: GenType;
   status?: GenStatus;
+  favorited?: boolean;
+  olderThanDays?: number;
   page?: number;
   pageSize?: number;
 }
@@ -494,42 +845,50 @@ export async function getHistory(
   userId: string,
   filters: HistoryFilters = {}
 ) {
-  const { type, status, page = 1, pageSize = 20 } = filters;
+  const { type, status, favorited, olderThanDays, page = 1, pageSize = 20 } = filters;
 
   const where: Record<string, unknown> = { userId };
   if (type) where.type = type;
   if (status) where.status = status;
+  if (typeof favorited === "boolean") where.favorited = favorited;
+  if (olderThanDays) {
+    where.createdAt = {
+      lt: new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000),
+    };
+    where.favorited = false;
+  }
+
+  const orderBy = favorited
+    ? { favoritedAt: "desc" as const }
+    : { createdAt: "desc" as const };
 
   const [list, total] = await Promise.all([
     prisma.generation.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
-      select: {
-        id: true,
-        type: true,
-        status: true,
-        prompt: true,
-        outputUrl: true,
-        thumbnailUrl: true,
-        width: true,
-        height: true,
-        cost: true,
-        params: true,
-        inputUrl: true,
-        createdAt: true,
-        completedAt: true,
-      },
     }),
     prisma.generation.count({ where }),
   ]);
 
   return {
     list: list.map((item) => ({
-      ...item,
+      id: item.id,
+      type: item.type,
+      status: item.status,
+      prompt: item.prompt,
+      outputUrl: item.outputUrl,
+      thumbnailUrl: item.thumbnailUrl,
+      width: item.width,
+      height: item.height,
+      cost: item.cost,
+      params: item.params,
+      inputUrl: item.inputUrl,
       createdAt: item.createdAt.toISOString(),
       completedAt: item.completedAt?.toISOString(),
+      favorited: (item as any).favorited ?? false,
+      favoritedAt: (item as any).favoritedAt?.toISOString() ?? null,
     })),
     total,
     page,
@@ -671,10 +1030,37 @@ Instructions:
       });
     }
 
-    // 添加原图
-    const originalBase64 = originalImage.includes(",")
-      ? originalImage.split(",")[1]
-      : originalImage;
+    // 处理原图 - 支持 URL 路径和 base64 两种格式
+    let originalBase64: string;
+    if (originalImage.startsWith("/outputs/") || originalImage.startsWith("http")) {
+      // URL 路径格式，需要获取文件内容
+      const filePath = originalImage.startsWith("/outputs/")
+        ? path.join(process.cwd(), "public", originalImage)
+        : originalImage;
+      try {
+        const fileBuffer = fs.existsSync(filePath) ? fs.readFileSync(filePath) : null;
+        if (fileBuffer) {
+          originalBase64 = fileBuffer.toString("base64");
+        } else {
+          // 尝试作为 URL 获取
+          const response = await fetch(originalImage);
+          if (!response.ok) {
+            throw new Error(`无法读取原始图片: ${response.status}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          originalBase64 = Buffer.from(arrayBuffer).toString("base64");
+        }
+      } catch {
+        throw new Error("无法读取原始图片文件，请确保图片存在且可访问");
+      }
+    } else if (originalImage.includes(",")) {
+      // data:image/png;base64,... 格式
+      originalBase64 = originalImage.split(",")[1];
+    } else {
+      // 直接是 base64 字符串
+      originalBase64 = originalImage;
+    }
+
     contents.push({
       inlineData: {
         mimeType: "image/png",
@@ -765,23 +1151,26 @@ Instructions:
       // 缩略图生成失败不影响主流程
     }
 
-    // 扣除积分
-    await prisma.user.update({
-      where: { id: userId },
-      data: { credits: { decrement: cost } },
+    // 扣除积分（使用统一扣减服务）
+    const deductionResult = await deductCredits({
+      userId,
+      amount: cost,
+      type: "GENERATE",
+      refId: generation.id,
+      remark: `图片局部重绘 (${model})`,
     });
 
-    // 创建积分日志
-    await prisma.creditLog.create({
-      data: {
-        userId,
-        type: "GENERATE",
-        amount: -cost,
-        balance: user.credits - cost,
-        remark: `图片局部重绘 (${model})`,
-        refId: generation.id,
-      },
-    });
+    if (!deductionResult.success) {
+      // 更新失败状态并抛出错误
+      await prisma.generation.update({
+        where: { id: generation.id },
+        data: {
+          status: "FAILED",
+          errorMsg: deductionResult.error || "积分扣减失败",
+        },
+      });
+      throw new Error(deductionResult.error || "积分扣减失败");
+    }
 
     // 更新生成记录
     const now = new Date();

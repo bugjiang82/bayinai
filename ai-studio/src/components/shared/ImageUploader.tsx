@@ -213,8 +213,37 @@ export default function ImageUploader({
     onRemove?.();
   };
 
-  // Preview mode
-  if (preview && !compact) {
+  // Preview mode - compact thumbnail style
+  if (preview && compact) {
+    return (
+      <div className={cn("relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]", className)}>
+        <div className="relative w-full h-24">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={preview}
+            alt="预览"
+            className="w-full h-full object-cover"
+          />
+          <Button
+            variant="destructive"
+            size="icon"
+            className="absolute top-1 right-1 h-6 w-6 rounded-full opacity-80 hover:opacity-100"
+            onClick={handleRemove}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+        {isUploading && (
+          <div className="p-2">
+            <Progress value={Math.min(uploadProgress, 100)} className="h-1" />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Preview mode - large square style
+  if (preview) {
     return (
       <div className={cn("relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]", className)}>
         <div className="relative aspect-square">

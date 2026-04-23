@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**" },
     ],
   },
-  allowedDevOrigins: ["43.155.210.242"],
+  allowedDevOrigins: ["43.155.210.242", "43.164.135.160"],
   experimental: {
     optimizePackageImports: [
       "lucide-react",

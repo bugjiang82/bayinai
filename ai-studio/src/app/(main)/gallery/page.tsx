@@ -361,16 +361,55 @@ export default function GalleryPage() {
     };
   }, [hasMore, loading, loadingMore, page, fetchGallery]);
 
-  const handleToggleFavorite = (id: string) => {
+  const handleToggleFavorite = async (id: string) => {
+    const currentlyFavorited = favorites.has(id);
+
     setFavorites((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
+      if (currentlyFavorited) {
         next.delete(id);
       } else {
         next.add(id);
       }
       return next;
     });
+
+    try {
+      const response = await fetch("/api/generate/favorite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generationId: id, favorited: !currentlyFavorited }),
+      });
+
+      if (!response.ok) {
+        setFavorites((prev) => {
+          const next = new Set(prev);
+          if (currentlyFavorited) {
+            next.add(id);
+          } else {
+            next.delete(id);
+          }
+          return next;
+        });
+      } else {
+        const result = await response.json();
+        if (result.code === 0) {
+          if (currentlyFavorited) {
+            setItems((prev) => prev.filter((item) => item.id !== id));
+          }
+        }
+      }
+    } catch {
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        if (currentlyFavorited) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+        return next;
+      });
+    }
   };
 
   const handleDeleteClick = (item: GalleryItem) => {
@@ -411,12 +450,26 @@ export default function GalleryPage() {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handleDownload = (item: GalleryItem) => {
-    // Placeholder download action
-    const link = document.createElement("a");
-    link.href = item.thumbnail || "#";
-    link.download = `${item.id}.png`;
-    link.click();
+  const handleDownload = async (item: GalleryItem) => {
+    const imageUrl = item.thumbnail;
+    if (!imageUrl || imageUrl === "#") return;
+
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error("下载失败");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${item.id}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      window.open(imageUrl, "_blank");
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -602,13 +655,12 @@ export default function GalleryPage() {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2">
+          {Array.from({ length: 16 }).map((_, i) => (
             <Card key={`skeleton-${i}`} className="overflow-hidden">
-              <div className="aspect-[4/3] bg-muted animate-pulse" />
-              <CardContent className="p-3 space-y-2">
-                <div className="h-4 bg-muted rounded animate-pulse" />
-                <div className="h-3 bg-muted rounded w-2/3 animate-pulse" />
+              <div className="aspect-square bg-muted animate-pulse" />
+              <CardContent className="p-1.5">
+                <div className="h-2 bg-muted rounded animate-pulse" />
               </CardContent>
             </Card>
           ))}
@@ -617,7 +669,7 @@ export default function GalleryPage() {
 
       {/* Gallery grid */}
       {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2">
           {items.map((item) => {
             const isFav = favorites.has(item.id) || item.isFavorite;
             return (
@@ -626,7 +678,7 @@ export default function GalleryPage() {
                 className="group overflow-hidden hover:border-primary/50 transition-all duration-300"
               >
                 {/* Thumbnail */}
-                <div className="relative aspect-[4/3] overflow-hidden">
+                <div className="relative aspect-square overflow-hidden">
                   {item.thumbnail ? (
                     <LazyImage
                       src={item.thumbnail}
@@ -704,15 +756,15 @@ export default function GalleryPage() {
                 </div>
 
                 {/* Info */}
-                <CardContent className="p-3">
-                  <p className="text-sm text-foreground/90 line-clamp-2 mb-2 leading-relaxed">
+                <CardContent className="p-1.5">
+                  <p className="text-xs text-foreground/90 line-clamp-1 mb-1 leading-relaxed">
                     {item.prompt}
                   </p>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[10px] text-muted-foreground">
                       {formatDate(item.createdAt)}
                     </span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-[10px] px-1 py-0">
                       {item.model}
                     </Badge>
                   </div>

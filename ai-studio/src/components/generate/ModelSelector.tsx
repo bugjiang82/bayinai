@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { Zap, Crown, Check } from "lucide-react";
+import { Zap, Crown, Sparkles, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ModelType = "flash" | "pro";
+export type ModelType = "flash" | "pro" | "image2";
 
 interface ModelOption {
   type: ModelType;
@@ -32,6 +32,14 @@ const MODELS: ModelOption[] = [
     speed: "~30s",
     quality: "高清",
   },
+  {
+    type: "image2",
+    name: "Image2",
+    description: "超强图像生成，效果最佳",
+    credits: 50,
+    speed: "~60s",
+    quality: "超清",
+  },
 ];
 
 interface ModelSelectorProps {
@@ -45,13 +53,21 @@ export default function ModelSelector({
   onChange,
   className,
 }: ModelSelectorProps) {
+  const getIcon = (type: ModelType) => {
+    switch (type) {
+      case "flash": return Zap;
+      case "pro": return Crown;
+      case "image2": return Sparkles;
+    }
+  };
+
   return (
     <div className={cn("space-y-2", className)}>
       <label className="text-sm font-medium text-zinc-300">模型选择</label>
       <div className="grid grid-cols-2 gap-2">
         {MODELS.map((model) => {
           const isSelected = value === model.type;
-          const Icon = model.type === "flash" ? Zap : Crown;
+          const Icon = getIcon(model.type);
 
           return (
             <button

@@ -12,7 +12,7 @@ interface ComparisonSliderProps {
   className?: string;
 }
 
-export const ComparisonSlider: React.FC<ComparisonSliderProps> = ({
+const ComparisonSlider: React.FC<ComparisonSliderProps> = ({
   beforeImage,
   afterImage,
   beforeLabel = "Original",

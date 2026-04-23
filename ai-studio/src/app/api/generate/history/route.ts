@@ -15,12 +15,26 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") as GenType | null;
     const status = searchParams.get("status") as GenStatus | null;
+    const favoritedParam = searchParams.get("favorited");
+    const olderThanParam = searchParams.get("olderThan");
     const page = parseInt(searchParams.get("page") || "1", 10);
     const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
+
+    let favorited: boolean | undefined;
+    if (favoritedParam === "true") favorited = true;
+    else if (favoritedParam === "false") favorited = false;
+
+    let olderThanDays: number | undefined;
+    if (olderThanParam) {
+      const days = parseInt(olderThanParam.replace("d", ""), 10);
+      if (!isNaN(days)) olderThanDays = days;
+    }
 
     const result = await getHistory(session.user.id, {
       type: type || undefined,
       status: status || undefined,
+      favorited,
+      olderThanDays,
       page,
       pageSize,
     });

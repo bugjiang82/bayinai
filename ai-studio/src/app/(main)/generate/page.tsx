@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function GeneratePage() {
-  redirect("/generate/text-to-image");
+  redirect("/generate/image?mode=image");
 }

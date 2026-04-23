@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useGenerationStore } from "@/stores/generationStore";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SIZE_OPTIONS, type SizeOption } from "@/components/generate/ParamPanel";
+import DropdownSelector from "@/components/generate/DropdownSelector";
 
 interface CanvasImage {
   id: string;
@@ -76,6 +78,17 @@ interface ModelOption {
 const MODEL_OPTIONS: ModelOption[] = [
   { id: 'flash', label: 'Flash', desc: '快速生成', credits: 1 },
   { id: 'pro', label: 'Pro', desc: '高质量生成', credits: 3 },
+];
+
+const ARCH_MODEL_OPTIONS = [
+  { value: 'flash', label: 'Flash', description: '快速生成' },
+  { value: 'pro', label: 'Pro', description: '高质量生成' },
+];
+
+const ARCH_RESOLUTION_OPTIONS = [
+  { value: '1K', label: '1K', description: '1024×1024' },
+  { value: '2K', label: '2K', description: '1536×1536' },
+  { value: '4K', label: '4K', description: '2048×2048' },
 ];
 
 interface GenerationResult {
@@ -156,7 +169,7 @@ export default function ArchitecturePage() {
   
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [credits, setCredits] = useState(100); // Mock credits
+  const [credits, setCredits] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [hasApiKey, setHasApiKey] = useState<boolean>(true);
@@ -164,6 +177,15 @@ export default function ArchitecturePage() {
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+
+  const { data: session } = useSession();
+
+  useEffect(() => {
+    const sessionCredits = (session?.user as { credits?: number })?.credits;
+    if (sessionCredits !== undefined) {
+      setCredits(sessionCredits);
+    }
+  }, [session]);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -515,8 +537,8 @@ export default function ArchitecturePage() {
       </div>
 
       <div className="flex gap-4 flex-1">
-        {/* Left: Canvas area (60%) */}
-        <div className="w-[60%] flex flex-col min-w-0">
+        {/* Left: Canvas area (70%) */}
+        <div className="w-[70%] flex flex-col min-w-0">
           <div className="flex justify-between items-center mb-4">
             <div className="text-sm text-zinc-500">
               渲染分辨率: <span className="text-zinc-300">{params.imageSize === "1K" ? "1024 x 1024" : "1536 x 1536"}</span> | 
@@ -545,7 +567,7 @@ export default function ArchitecturePage() {
           </div>
           
           <div className="flex-1 min-h-[400px] flex items-center justify-center">
-            <div className="w-full max-w-[560px] h-[560px] max-h-full bg-black rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] border border-[#2a2a2a] overflow-hidden flex items-center justify-center relative group">
+            <div className="w-full h-full max-w-4xl max-h-[60vh] bg-black rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] border border-[#2a2a2a] overflow-hidden flex items-center justify-center relative group">
               {result.status === "idle" ? (
                 <div className="text-center space-y-4">
                   <div className="text-zinc-800 font-black text-6xl uppercase tracking-tighter opacity-10 rotate-[-30deg] select-none pointer-events-none">
@@ -665,117 +687,12 @@ export default function ArchitecturePage() {
           )}
         </div>
 
-        {/* Right: Param panel (40%) */}
-        <div className="w-[40%] flex flex-col min-w-[340px] max-w-[480px]">
+        {/* Right: Param panel (30%) */}
+        <div className="w-[30%] flex flex-col min-w-[300px] max-w-[400px]">
           <div className="flex-1 rounded-2xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden flex flex-col">
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto p-4 space-y-5">
-              {/* Prompt Input */}
-              <div>
-                <div className="text-sm font-medium text-zinc-300 mb-2 block">
-                  输入提示词
-                </div>
-                <Textarea
-                  value={params.prompt}
-                  onChange={(e) => setParams(prev => ({ ...prev, prompt: e.target.value }))}
-                  placeholder="描述你想看到的景象..."
-                  className="min-h-[90px] resize-none bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600"
-                />
-              </div>
-
-              {/* Model Selection */}
-              <div>
-                <div className="text-sm font-medium text-zinc-300 mb-2 block">
-                  AI 模型
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {MODEL_OPTIONS.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => setParams({ ...params, model: m.id })}
-                      className={`p-2 rounded-lg border text-left transition-all ${
-                        params.model === m.id
-                        ? 'border-yellow-500 bg-yellow-500/10'
-                        : 'border-[#333] bg-[#1e1e1e] hover:border-zinc-500'
-                      }`}
-                    >
-                      <div className={`text-[11px] font-bold ${params.model === m.id ? 'text-yellow-500' : 'text-zinc-300'}`}>{m.label}</div>
-                      <div className="text-[9px] text-[#666] leading-tight">{m.desc} · {m.credits}积分</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Aspect ratio selection - Moved from advanced section */}
-              <div>
-                <div className="text-sm font-medium text-zinc-300 mb-2 block">
-                  宽高比
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {SIZE_OPTIONS.map((size) => (
-                    <button
-                      key={size.ratio}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                        params.aspectRatio === size.ratio
-                          ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                          : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                      )}
-                      onClick={() => setParams({ ...params, aspectRatio: size.ratio })}
-                    >
-                      {size.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Image Quality Selection */}
-              <div>
-                <div className="text-sm font-medium text-zinc-300 mb-2 block">
-                  输出质量
-                </div>
-                <div className="flex gap-2">
-                  {(["1K", "2K", "4K"] as const).map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setParams({ ...params, imageSize: size })}
-                      className={cn(
-                        "flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                        params.imageSize === size
-                          ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                          : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                      )}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Core Mode Selection */}
-              <div>
-                <div className="text-sm font-medium text-zinc-300 mb-2 block">
-                  核心预设模式
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {PRESETS.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => applyPreset(p.id)}
-                      className={`p-2 rounded-lg border text-left transition-all ${
-                        params.mode === p.id 
-                        ? 'border-yellow-500 bg-yellow-500/10' 
-                        : 'border-[#333] bg-[#1e1e1e] hover:border-zinc-500'
-                      }`}
-                    >
-                      <div className={`text-[11px] font-bold ${params.mode === p.id ? 'text-yellow-500' : 'text-zinc-300'}`}>{p.label}</div>
-                      <div className="text-[9px] text-[#666] leading-tight">{p.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Double Upload Boxes */}
+              {/* 1. 图像参考控制模块 */}
               <div>
                 <div className="text-sm font-medium text-zinc-300 mb-2 block">
                   图像参考控制
@@ -788,9 +705,9 @@ export default function ArchitecturePage() {
                         <Info className="w-3 h-3 text-yellow-500 cursor-help" />
                       </Tooltip>
                     </div>
-                    <UploadBox 
-                      ref={structureInputRef} 
-                      image={params.structureRef} 
+                    <UploadBox
+                      ref={structureInputRef}
+                      image={params.structureRef}
                       onUpload={handleFileUpload('structure')}
                       onClear={() => clearImage('structure')}
                     />
@@ -802,9 +719,9 @@ export default function ArchitecturePage() {
                         <Info className="w-3 h-3 text-yellow-500 cursor-help" />
                       </Tooltip>
                     </div>
-                    <UploadBox 
-                      ref={styleInputRef} 
-                      image={params.styleRef} 
+                    <UploadBox
+                      ref={styleInputRef}
+                      image={params.styleRef}
                       onUpload={handleFileUpload('style')}
                       onClear={() => clearImage('style')}
                     />
@@ -812,7 +729,67 @@ export default function ArchitecturePage() {
                 </div>
               </div>
 
-              {/* Negative Tag Cloud */}
+              {/* 2. 核心预设模式选择区域 */}
+              <div>
+                <div className="text-sm font-medium text-zinc-300 mb-2 block">
+                  核心预设模式
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => applyPreset(p.id)}
+                      className={`p-2 rounded-lg border text-left transition-all ${
+                        params.mode === p.id
+                        ? 'border-yellow-500 bg-yellow-500/10'
+                        : 'border-[#333] bg-[#1e1e1e] hover:border-zinc-500'
+                      }`}
+                    >
+                      <div className={`text-[11px] font-bold ${params.mode === p.id ? 'text-yellow-500' : 'text-zinc-300'}`}>{p.label}</div>
+                      <div className="text-[9px] text-[#666] leading-tight">{p.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. 输入提示词编辑区域 */}
+              <div>
+                <div className="text-sm font-medium text-zinc-300 mb-2 block">
+                  输入提示词
+                </div>
+                <Textarea
+                  value={params.prompt}
+                  onChange={(e) => setParams(prev => ({ ...prev, prompt: e.target.value }))}
+                  placeholder="描述你想看到的景象..."
+                  className="min-h-[90px] resize-none bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600"
+                />
+              </div>
+
+              {/* 4. AI 模型选择下拉菜单 */}
+              <DropdownSelector
+                label="AI 模型"
+                value={params.model}
+                options={ARCH_MODEL_OPTIONS}
+                onChange={(val) => setParams({ ...params, model: val as 'flash' | 'pro' })}
+              />
+
+              {/* 5. 宽高比设置选项 */}
+              <DropdownSelector
+                label="宽高比"
+                value={params.aspectRatio}
+                options={SIZE_OPTIONS.map((s) => ({ value: s.ratio, label: s.label }))}
+                onChange={(val) => setParams({ ...params, aspectRatio: val })}
+              />
+
+              {/* 6. 输出质量调节控件 */}
+              <DropdownSelector
+                label="输出质量"
+                value={params.imageSize}
+                options={ARCH_RESOLUTION_OPTIONS}
+                onChange={(val) => setParams({ ...params, imageSize: val as '1K' | '2K' | '4K' })}
+              />
+
+              {/* 7. 一键避雷 (Negative) 功能区 */}
               <div>
                 <div className="text-sm font-medium text-zinc-300 mb-2 block">
                   一键避雷 (Negative)
@@ -908,15 +885,9 @@ export default function ArchitecturePage() {
               </div>
             </div>
 
-            {/* Bottom: Generate button + credits */}
+            {/* Bottom: Generate button + cost display */}
             <div className="p-4 border-t border-white/[0.06] bg-[#0a0a0a]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                  <Coins className="w-3.5 h-3.5" />
-                  <span>
-                    余额 <span className="text-zinc-300 font-medium">{credits}</span> 积分
-                  </span>
-                </div>
+              <div className="flex items-center justify-end mb-3">
                 <span className="text-xs text-zinc-600">
                   本次消耗 <span className="font-medium text-zinc-400">3</span> 积分
                 </span>

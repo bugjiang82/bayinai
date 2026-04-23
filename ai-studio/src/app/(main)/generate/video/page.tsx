@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
 import {
   Play,
   Download,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ImageUploader from "@/components/shared/ImageUploader";
 import ProgressBar from "@/components/generate/ProgressBar";
+import DropdownSelector from "@/components/generate/DropdownSelector";
 
 interface VideoResult {
   id: string;
@@ -33,34 +35,34 @@ interface VideoResult {
 type VideoMode = "text-to-video" | "image-to-video";
 
 const DURATION_OPTIONS = [
-  { value: 3, label: "3 秒" },
-  { value: 5, label: "5 秒" },
-  { value: 10, label: "10 秒" },
-  { value: 15, label: "15 秒" },
+  { value: "3", label: "3 秒" },
+  { value: "5", label: "5 秒" },
+  { value: "10", label: "10 秒" },
+  { value: "15", label: "15 秒" },
 ];
 
 const MODEL_OPTIONS = {
   "text-to-video": [
-    { value: "wan2.7-t2v", label: "万相 2.7", desc: "文生视频" },
+    { value: "wan2.7-t2v", label: "万相 2.7", description: "文生视频" },
   ],
   "image-to-video": [
-    { value: "wan2.2-kf2v-flash", label: "万相 2.2", desc: "快速生成" },
-    { value: "wan2.7-i2v", label: "万相 2.7", desc: "高质量" },
+    { value: "wan2.2-kf2v-flash", label: "万相 2.2", description: "快速生成" },
+    { value: "wan2.7-i2v", label: "万相 2.7", description: "高质量" },
   ],
 };
 
 const RESOLUTION_OPTIONS = [
-  { value: "480P", label: "480P", desc: "854x480" },
-  { value: "720P", label: "720P", desc: "1280x720" },
-  { value: "1080P", label: "1080P", desc: "1920x1080" },
+  { value: "480P", label: "480P", description: "854×480" },
+  { value: "720P", label: "720P", description: "1280×720" },
+  { value: "1080P", label: "1080P", description: "1920×1080" },
 ];
 
 const RATIO_OPTIONS = [
-  { value: "16:9", label: "16:9", desc: "横屏" },
-  { value: "9:16", label: "9:16", desc: "竖屏" },
-  { value: "1:1", label: "1:1", desc: "方形" },
-  { value: "4:3", label: "4:3", desc: "标准" },
-  { value: "3:4", label: "3:4", desc: "竖版" },
+  { value: "16:9", label: "16:9", description: "横屏" },
+  { value: "9:16", label: "9:16", description: "竖屏" },
+  { value: "1:1", label: "1:1", description: "方形" },
+  { value: "4:3", label: "4:3", description: "标准" },
+  { value: "3:4", label: "3:4", description: "竖版" },
 ];
 
 export default function VideoPage() {
@@ -68,7 +70,7 @@ export default function VideoPage() {
   const [startImage, setStartImage] = useState<string | null>(null);
   const [endImage, setEndImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [duration, setDuration] = useState(5);
+  const [duration, setDuration] = useState("5");
   const [resolution, setResolution] = useState("720P");
   const [ratio, setRatio] = useState("16:9");
   const [model, setModel] = useState("wan2.2-kf2v-flash");
@@ -77,7 +79,8 @@ export default function VideoPage() {
   const [progress, setProgress] = useState(0);
   const [videoResult, setVideoResult] = useState<VideoResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [credits, setCredits] = useState(100);
+  const { data: session } = useSession();
+  const [credits, setCredits] = useState<number>(0);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -95,6 +98,13 @@ export default function VideoPage() {
   useEffect(() => {
     setModel(MODEL_OPTIONS[videoMode][0].value);
   }, [videoMode]);
+
+  useEffect(() => {
+    const sessionCredits = (session?.user as { credits?: number })?.credits;
+    if (sessionCredits !== undefined) {
+      setCredits(sessionCredits);
+    }
+  }, [session]);
 
   const handleStartUpload = useCallback((file: File) => {
     setStartImage(URL.createObjectURL(file));
@@ -122,7 +132,8 @@ export default function VideoPage() {
     if (!prompt.trim()) return;
     if (videoMode === "image-to-video" && !startImage) return;
 
-    const cost = 5;
+    const durationNum = parseInt(duration, 10) || 5;
+    const cost = durationNum * 50;
     if (credits < cost) return;
 
     setIsGenerating(true);
@@ -177,11 +188,12 @@ export default function VideoPage() {
       const requestBody: Record<string, unknown> = {
         prompt: prompt.trim(),
         resolution: resolution.toUpperCase(),
-        duration,
+        duration: parseInt(duration, 10),
         model,
         prompt_extend: promptExtend,
         mode: videoMode,
         ratio,
+        cost,
       };
 
       if (videoMode === "image-to-video") {
@@ -241,7 +253,7 @@ export default function VideoPage() {
               id: taskId,
               url: videoUrl,
               prompt: prompt.trim(),
-              duration,
+              duration: parseInt(duration, 10),
               fps: 24,
               resolution,
             });
@@ -280,15 +292,16 @@ export default function VideoPage() {
   }, [prompt, duration, resolution, model, credits, startImage, endImage]);
 
   const getEstimatedTime = () => {
-    const baseTime = duration * 4;
+    const durationNum = parseInt(duration, 10) || 5;
+    const baseTime = durationNum * 4;
     const resMultiplier = resolution === "1080P" ? 1.5 : resolution === "480P" ? 0.7 : 1;
     return Math.round(baseTime * resMultiplier);
   };
 
   return (
     <div className="h-[calc(100vh-8rem)] flex gap-4">
-      {/* Left: Video preview area (60%) */}
-      <div className="w-[60%] flex flex-col min-w-0">
+      {/* Left: Video preview area (70%) */}
+      <div className="w-[70%] flex flex-col min-w-0">
         <div className="flex-1 rounded-2xl border border-white/[0.06] bg-[#0a0a0a]/50 flex items-center justify-center min-h-[500px] overflow-hidden">
           {/* Empty state */}
           {!isGenerating && !videoResult && !errorMessage && (
@@ -383,8 +396,8 @@ export default function VideoPage() {
         </div>
       </div>
 
-      {/* Right: Param panel (40%) */}
-      <div className="w-[40%] flex flex-col min-w-[340px] max-w-[480px]">
+      {/* Right: Param panel (30%) */}
+      <div className="w-[30%] flex flex-col min-w-[300px] max-w-[400px]">
         <div className="flex flex-col h-full rounded-2xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
           {/* Scrollable content */}
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
@@ -517,105 +530,36 @@ export default function VideoPage() {
             </div>
 
             {/* Model */}
-            <div>
-              <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                模型
-              </label>
-              <div className="flex gap-2">
-                {MODEL_OPTIONS[videoMode].map((opt) => (
-                  <button
-                    key={opt.value}
-                    className={cn(
-                      "flex-1 h-9 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                      model === opt.value
-                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
-                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                    )}
-                    onClick={() => setModel(opt.value)}
-                  >
-                    {opt.label}
-                    <span className="text-[10px] text-zinc-600 ml-1">
-                      {opt.desc}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <DropdownSelector
+              label="模型"
+              value={model}
+              options={MODEL_OPTIONS[videoMode]}
+              onChange={setModel}
+            />
 
             {/* Duration */}
-            <div>
-              <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                视频时长
-              </label>
-              <div className="flex gap-2">
-                {DURATION_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    className={cn(
-                      "flex-1 h-9 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                      duration === opt.value
-                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
-                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                    )}
-                    onClick={() => setDuration(opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <DropdownSelector
+              label="视频时长"
+              value={duration}
+              options={DURATION_OPTIONS}
+              onChange={setDuration}
+            />
 
             {/* Resolution */}
-            <div>
-              <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                分辨率
-              </label>
-              <div className="flex gap-2">
-                {RESOLUTION_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    className={cn(
-                      "flex-1 h-9 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                      resolution === opt.value
-                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
-                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                    )}
-                    onClick={() => setResolution(opt.value)}
-                  >
-                    {opt.label}
-                    <span className="text-[10px] text-zinc-600 ml-1">
-                      {opt.desc}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <DropdownSelector
+              label="分辨率"
+              value={resolution}
+              options={RESOLUTION_OPTIONS}
+              onChange={setResolution}
+            />
 
             {/* Aspect Ratio */}
-            <div className="mt-4">
-              <label className="text-sm font-medium text-zinc-300 mb-2 block">
-                画面比例
-              </label>
-              <div className="flex gap-2">
-                {RATIO_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    className={cn(
-                      "flex-1 h-9 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer",
-                      ratio === opt.value
-                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
-                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                    )}
-                    onClick={() => setRatio(opt.value)}
-                  >
-                    {opt.label}
-                    <span className="text-[10px] text-zinc-600 ml-1">
-                      {opt.desc}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <DropdownSelector
+              label="画面比例"
+              value={ratio}
+              options={RATIO_OPTIONS}
+              onChange={setRatio}
+            />
 
             {/* Prompt Extend */}
             <div className="mt-4">
@@ -634,27 +578,20 @@ export default function VideoPage() {
             </div>
           </div>
 
-          {/* Bottom: Generate button + credits */}
+          {/* Bottom: Generate button + cost display */}
           <div className="p-4 border-t border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                <Coins className="w-3.5 h-3.5" />
-                <span>
-                  余额 <span className="text-zinc-300 font-medium">{credits}</span>{" "}
-                  积分
-                </span>
-              </div>
+            <div className="flex items-center justify-end mb-3">
               <span className="text-xs text-zinc-600">
                 消耗{" "}
                 <span
                   className={cn(
                     "font-medium",
-                    credits < 5 ? "text-red-400" : "text-zinc-400"
+                    credits > 0 && credits < (parseInt(duration, 10) || 5) * 50 ? "text-red-400" : "text-zinc-400"
                   )}
                 >
-                  5
+                  {(parseInt(duration, 10) || 5) * 50}
                 </span>{" "}
-                积分/个
+                积分/秒
               </span>
             </div>
             <Button
@@ -665,7 +602,7 @@ export default function VideoPage() {
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               )}
               onClick={handleGenerate}
-              disabled={!prompt.trim() || (videoMode === "image-to-video" && !startImage) || credits < 5 || isGenerating}
+              disabled={!prompt.trim() || (videoMode === "image-to-video" && !startImage) || credits < (parseInt(duration, 10) || 5) * 50 || isGenerating}
             >
               {isGenerating ? (
                 <>
@@ -689,7 +626,7 @@ export default function VideoPage() {
                 请上传起始图片
               </p>
             )}
-            {prompt.trim() && credits < 5 && (
+            {prompt.trim() && credits < (parseInt(duration, 10) || 5) * 50 && (
               <p className="text-xs text-red-400/80 text-center mt-2">
                 积分不足，请充值后重试
               </p>

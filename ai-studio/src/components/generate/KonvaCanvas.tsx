@@ -32,7 +32,8 @@ const KonvaCanvas = forwardRef<KonvaCanvasRef, KonvaCanvasProps>(({ className = 
   const [newShape, setNewShape] = useState<{ id: string; type: 'rect' | 'circle'; x: number; y: number; width?: number; height?: number; radius?: number; stroke: string; strokeWidth: number } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
+  const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 });
 
   // 检测图片尺寸并计算合适的显示尺寸
   useEffect(() => {
@@ -44,18 +45,17 @@ const KonvaCanvas = forwardRef<KonvaCanvasRef, KonvaCanvasProps>(({ className = 
       const imgWidth = image.width || 800;
       const imgHeight = image.height || 600;
 
-      // 计算宽高比
+      setOriginalSize({ width: imgWidth, height: imgHeight });
+
       const imgRatio = imgWidth / imgHeight;
       const containerRatio = containerWidth / containerHeight;
 
       let displayWidth, displayHeight;
 
       if (imgWidth <= containerWidth && imgHeight <= containerHeight) {
-        // 图片小于容器，居中显示，不放大
         displayWidth = imgWidth;
         displayHeight = imgHeight;
       } else {
-        // 图片大于容器，按比例缩小
         if (imgRatio > containerRatio) {
           displayWidth = containerWidth;
           displayHeight = containerWidth / imgRatio;
@@ -82,6 +82,7 @@ const KonvaCanvas = forwardRef<KonvaCanvasRef, KonvaCanvasProps>(({ className = 
 
   const generateMask = useCallback(() => {
     if (!stageRef.current) return null;
+    if (originalSize.width === 0 || originalSize.height === 0) return null;
 
     try {
       const canvas = document.createElement('canvas');
@@ -89,32 +90,50 @@ const KonvaCanvas = forwardRef<KonvaCanvasRef, KonvaCanvasProps>(({ className = 
       if (!ctx) return null;
 
       const stage = stageRef.current;
-      canvas.width = stage.width();
-      canvas.height = stage.height();
+      const displayWidth = stage.width();
+      const displayHeight = stage.height();
+
+      canvas.width = originalSize.width;
+      canvas.height = originalSize.height;
+
+      const scaleX = originalSize.width / displayWidth;
+      const scaleY = originalSize.height / displayHeight;
 
       ctx.fillStyle = 'black';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.fillStyle = 'white';
       ctx.strokeStyle = 'white';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * Math.max(scaleX, scaleY);
+
+      const scalePoint = (x: number, y: number) => ({
+        x: x * scaleX,
+        y: y * scaleY
+      });
 
       shapes.forEach(shape => {
-        if (shape.type === 'path') {
+        if (shape.type === 'path' && shape.points && shape.points.length >= 2) {
           ctx.beginPath();
-          ctx.moveTo(shape.points[0], shape.points[1]);
+          const p0 = scalePoint(shape.points[0], shape.points[1]);
+          ctx.moveTo(p0.x, p0.y);
           for (let i = 2; i < shape.points.length; i += 2) {
-            ctx.lineTo(shape.points[i], shape.points[i + 1]);
+            const p = scalePoint(shape.points[i], shape.points[i + 1]);
+            ctx.lineTo(p.x, p.y);
           }
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
         } else if (shape.type === 'rect' && shape.isSelection) {
-          ctx.fillRect(shape.x!, shape.y!, shape.width || 0, shape.height || 0);
-          ctx.strokeRect(shape.x!, shape.y!, shape.width || 0, shape.height || 0);
+          const p = scalePoint(shape.x!, shape.y!);
+          const w = (shape.width || 0) * scaleX;
+          const h = (shape.height || 0) * scaleY;
+          ctx.fillRect(p.x, p.y, w, h);
+          ctx.strokeRect(p.x, p.y, w, h);
         } else if (shape.type === 'circle' && shape.isSelection) {
+          const p = scalePoint(shape.x!, shape.y!);
+          const r = (shape.radius || 0) * Math.max(scaleX, scaleY);
           ctx.beginPath();
-          ctx.arc(shape.x!, shape.y!, shape.radius || 0, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
@@ -122,9 +141,11 @@ const KonvaCanvas = forwardRef<KonvaCanvasRef, KonvaCanvasProps>(({ className = 
 
       if (selectionPath && selectionPath.length >= 4) {
         ctx.beginPath();
-        ctx.moveTo(selectionPath[0], selectionPath[1]);
+        const p0 = scalePoint(selectionPath[0], selectionPath[1]);
+        ctx.moveTo(p0.x, p0.y);
         for (let i = 2; i < selectionPath.length; i += 2) {
-          ctx.lineTo(selectionPath[i], selectionPath[i + 1]);
+          const p = scalePoint(selectionPath[i], selectionPath[i + 1]);
+          ctx.lineTo(p.x, p.y);
         }
         ctx.closePath();
         ctx.fill();
@@ -136,7 +157,7 @@ const KonvaCanvas = forwardRef<KonvaCanvasRef, KonvaCanvasProps>(({ className = 
       console.error('生成 mask 失败:', error);
       return null;
     }
-  }, [shapes, selectionPath]);
+  }, [shapes, selectionPath, originalSize]);
 
   useImperativeHandle(ref, () => ({
     generateMask

@@ -30,6 +30,7 @@ interface GalleryData {
 interface PrismaWhere {
   userId: string;
   status: string;
+  favorited?: boolean;
   type?: string | { in: string[] };
   createdAt?: { gte: Date; lt: Date };
   prompt?: { contains: string; mode: string };
@@ -131,6 +132,7 @@ export async function GET(request: NextRequest) {
     const where: PrismaWhere = {
       userId: session.user.id,
       status: 'COMPLETED',
+      favorited: true,
     };
 
     // 类型过滤
@@ -166,29 +168,26 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        select: {
-          id: true,
-          type: true,
-          prompt: true,
-          outputUrl: true,
-          thumbnailUrl: true,
-          width: true,
-          height: true,
-          cost: true,
-          createdAt: true,
-        },
       }),
       prisma.generation.count({ where }),
     ]);
 
     const data = {
-      list: list.map((g) => ({
-        ...g,
-        createdAt: g.createdAt.toISOString(),
+      list: list.map((g: any) => ({
+        id: g.id,
         type: (['TEXT_TO_VIDEO'].includes(g.type) ? 'video' : 'image') as 'image' | 'video',
+        prompt: g.prompt,
+        outputUrl: g.outputUrl,
+        thumbnailUrl: g.thumbnailUrl,
+        width: g.width,
+        height: g.height,
+        cost: g.cost,
+        createdAt: g.createdAt.toISOString(),
+        favorited: g.favorited ?? false,
+        favoritedAt: g.favoritedAt?.toISOString() ?? null,
         thumbnail: g.thumbnailUrl || g.outputUrl || '',
         model: 'Gemini',
-        isFavorite: false,
+        isFavorite: g.favorited ?? false,
       })),
       total,
       page,

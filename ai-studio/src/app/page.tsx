@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { auth } from "@/lib/auth";
 import {
@@ -921,17 +922,10 @@ function HomePageContent({ session }: { session: any }) {
   );
 }
 
-export default async function HomePage() {
-  let session;
-  try {
-    session = await auth();
-  } catch {
-    session = null;
-  }
+export default function HomePage() {
+  const { data: session } = useSession();
 
   return (
-    <AuthProvider session={session}>
-      <HomePageContent session={session} />
-    </AuthProvider>
+    <HomePageContent session={session} />
   );
 }

@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
       prompt_extend = true,
       mode = "image-to-video",
       ratio = "16:9",
+      cost = 0,
     } = body;
 
     if (!model) {
@@ -124,6 +125,7 @@ export async function POST(request: NextRequest) {
       model,
       promptExtend: prompt_extend,
       ratio,
+      cost,
     });
 
     return NextResponse.json(
