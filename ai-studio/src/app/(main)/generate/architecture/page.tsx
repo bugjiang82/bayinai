@@ -146,18 +146,18 @@ export default function ArchitecturePage() {
   // Local state
   const [params, setParams] = useState<ImageGenerationParams>({
     prompt: "",
-    negativePrompt: [],
+    negativePrompt: ["2d"],
     customNegativePrompt: "",
-    aspectRatio: "1:1", // Use string format to match SizeOption
+    aspectRatio: "1:1",
     imageSize: "1K",
     model: "flash",
     guidanceScale: 7.5,
-    mode: "generic",
+    mode: "su_render",
     structureRef: undefined,
-    structureStrength: 0.9,
+    structureStrength: 0.95,
     styleRef: undefined,
     styleStrength: 0.6,
-    aiCreativity: 0.5,
+    aiCreativity: 0.15,
     useGoogleSearch: false,
     useImageSearch: false,
   });
@@ -337,6 +337,8 @@ export default function ArchitecturePage() {
 
     if (credits < totalCost) return;
 
+    // Set status to generating to show loading animation in canvas
+    setResult(prev => ({ ...prev, status: "generating" }));
     simulateProgress();
 
     try {
@@ -376,6 +378,13 @@ export default function ArchitecturePage() {
       // Handle response
       const imageUrl = data.data?.outputUrl || `https://picsum.photos/seed/${Date.now()}/1024/1024`;
       const revisedPrompt = data.data?.revisedPrompt;
+
+      // Clear generating state since API call succeeded
+      setIsGenerating(false);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
 
       // Detect image dimensions
       setImageLoading(true);
@@ -427,6 +436,10 @@ export default function ArchitecturePage() {
         error: errorMsg || "生成失败，请重试。",
       });
       setIsGenerating(false);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
     }
   }, [params, credits, simulateProgress, result]);
 
@@ -900,10 +913,10 @@ export default function ArchitecturePage() {
                   重置
                 </button>
                 <button
-                  disabled={!params.prompt || !params.structureRef || isGenerating}
+                  disabled={!params.prompt || !params.structureRef || isGenerating || (result.status === "success" && !!result.imageUrl && !imageLoading && !imageError)}
                   onClick={handleGenerate}
                   className={`flex-1 py-3 text-sm font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-2
-                    ${(!params.prompt || !params.structureRef || isGenerating) ? 'opacity-50 cursor-not-allowed' : ''}
+                    ${(!params.prompt || !params.structureRef || isGenerating || (result.status === "success" && !!result.imageUrl && !imageLoading && !imageError)) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                   style={{
                     background: 'linear-gradient(to right, #eab308, #f59e0b)',
@@ -915,6 +928,11 @@ export default function ArchitecturePage() {
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       铸造中...
+                    </>
+                  ) : result.status === "success" && result.imageUrl && !imageLoading && !imageError ? (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      再次生成方案
                     </>
                   ) : (
                     <>

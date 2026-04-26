@@ -19,11 +19,15 @@ export async function POST(request: NextRequest) {
       thinkingLevel = "MINIMAL",
       model = "flash",
       referenceImage,
+      referenceImages,
     } = body;
 
     if (!prompt) {
       return NextResponse.json(error("请输入提示词"), { status: 400 });
     }
+
+    // 兼容新旧两种传参方式：referenceImages 数组优先，referenceImage 单数备用
+    const refImages = referenceImages || (referenceImage ? [referenceImage] : undefined);
 
     const result = await generateImage({
       userId: session.user.id,
@@ -32,7 +36,7 @@ export async function POST(request: NextRequest) {
       imageSize,
       thinkingLevel,
       model,
-      referenceImage,
+      referenceImages: refImages,
     });
 
     return NextResponse.json(success(result, "生成成功"));

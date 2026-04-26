@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
 import { success, error } from "@/types/api";
+import sharp from "sharp";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -82,6 +83,17 @@ export async function POST(request: NextRequest) {
 
       const outputUrl = `/outputs/${session.user.id}/${filename}`;
 
+      // 生成缩略图
+      let thumbnailUrl: string | null = null;
+      try {
+        const thumbFilename = `${generation.id}_thumb.jpg`;
+        const thumbPath = path.join(outputDir, thumbFilename);
+        await sharp(filepath).resize(256, 256, { fit: "inside" }).jpeg({ quality: 70 }).toFile(thumbPath);
+        thumbnailUrl = `/outputs/${session.user.id}/${thumbFilename}`;
+      } catch (thumbErr) {
+        console.error("缩略图生成失败:", thumbErr);
+      }
+
       await prisma.user.update({
         where: { id: session.user.id },
         data: { credits: { decrement: cost } },
@@ -104,11 +116,12 @@ export async function POST(request: NextRequest) {
         data: {
           status: "COMPLETED",
           outputUrl,
+          thumbnailUrl,
           completedAt: now,
         },
       });
 
-      return NextResponse.json(success({ outputUrl }, "生成成功"));
+      return NextResponse.json(success({ outputUrl, thumbnailUrl }, "生成成功"));
     } catch (err) {
       await prisma.generation.update({
         where: { id: generation.id },

@@ -13,7 +13,8 @@ export interface SubTask {
   status: TaskStatus;
   agentId?: string;
   result?: string;
-  imageUrl?: string;
+  imageUrl?: string; // 兼容旧版：单张图片
+  imageUrls?: string[]; // 新版：多张图片
   reasoning?: string;
   progress: number;
 }

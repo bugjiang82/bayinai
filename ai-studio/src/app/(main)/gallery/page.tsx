@@ -159,19 +159,36 @@ interface LazyImageProps {
 
 function LazyImage({ src, alt, className = "", placeholder }: LazyImageProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  // 本地动态生成的图片使用普通 img 标签，不使用 next/image 优化
+  // 因为 /outputs/ 下的文件是运行时创建的，不在构建时扫描范围内
+  const isLocalOutput = src.startsWith("/outputs/");
 
   return (
     <div className="relative w-full h-full">
-      {!imageLoaded && <div className="absolute inset-0">{placeholder}</div>}
-      <NextImage
-        src={src}
-        alt={alt}
-        fill
-        className={`w-full h-full object-cover transition-all duration-300 ${className} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-        onLoad={() => setImageLoaded(true)}
-        onError={() => setImageLoaded(false)}
-        sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-      />
+      {!imageLoaded && !imageError && <div className="absolute inset-0">{placeholder}</div>}
+      {imageError ? (
+        <div className="absolute inset-0">{placeholder}</div>
+      ) : isLocalOutput ? (
+        <img
+          src={src}
+          alt={alt}
+          className={`w-full h-full object-cover transition-all duration-300 ${className} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => { setImageLoaded(false); setImageError(true); }}
+        />
+      ) : (
+        <NextImage
+          src={src}
+          alt={alt}
+          fill
+          className={`w-full h-full object-cover transition-all duration-300 ${className} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => { setImageLoaded(false); setImageError(true); }}
+          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+        />
+      )}
     </div>
   );
 }

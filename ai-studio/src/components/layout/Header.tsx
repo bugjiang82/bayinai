@@ -44,7 +44,7 @@ const navLinks = [
   { href: "/gallery", label: "作品", icon: Image },
   { href: "/credits", label: "积分", icon: Coins },
   { href: "/team", label: "团队", icon: Users },
-  { href: "/all-round-test", label: "全能测试", icon: Bot },
+  { href: "/all-round-test", label: "自动化测试", icon: Bot },
 ];
 
 // Independent NavLink component - only re-renders when its own isActive changes
@@ -130,7 +130,7 @@ export default function Header({ user, credits = 0 }: HeaderProps) {
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent hidden sm:inline">
-            六维AI工作平台
+            八音-六维AI工作平台
           </span>
         </Link>
 

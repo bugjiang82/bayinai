@@ -258,7 +258,8 @@ export interface GenerateImageParams {
   aspectRatio?: string;   // 默认 "1:1"
   imageSize?: string;     // 默认 "1K"
   thinkingLevel?: ThinkingLevel;
-  referenceImage?: string;
+  referenceImage?: string; // 兼容旧版
+  referenceImages?: string[]; // 新版支持多张参考图片
   transformType?: string;
 }
 
@@ -289,6 +290,7 @@ export async function generateImage(
     imageSize = "1K",
     thinkingLevel = ThinkingLevel.MINIMAL,
     referenceImage,
+    referenceImages,
     transformType,
   } = params;
 
@@ -306,11 +308,14 @@ export async function generateImage(
     throw new Error("积分不足");
   }
 
+  // 兼容新旧传参方式
+  const refImages = referenceImages || (referenceImage ? [referenceImage] : []);
+
   // 确定生成类型
   let genType: GenType = "TEXT_TO_IMAGE";
-  if (referenceImage && transformType) {
+  if (refImages.length > 0 && transformType) {
     genType = "EDIT";
-  } else if (referenceImage) {
+  } else if (refImages.length > 0) {
     genType = "IMAGE_TO_IMAGE";
   }
 
@@ -328,7 +333,7 @@ export async function generateImage(
         imageSize,
         transformType,
       }),
-      inputUrl: referenceImage || null,
+      inputUrl: refImages.length > 0 ? refImages[0] : null,
       cost,
     },
   });
@@ -346,52 +351,83 @@ export async function generateImage(
     // 输出目录
     const outputDir = path.join(process.cwd(), "public", "outputs", userId);
     fs.mkdirSync(outputDir, { recursive: true });
-    const filename = `${generation.id}.png`;
-    const filepath = path.join(outputDir, filename);
+    let filename = `${generation.id}.png`;
+    let filepath = path.join(outputDir, filename);
 
     let outputBase64: string | undefined;
     let outputUrl: string | undefined;
     let thumbUrl: string | undefined;
 
     if (isImage2Model) {
-      // Image2 模型使用 OpenRouter API
+      // Image2 模型使用 OpenRouter API（参考 test-image2.ts 实现）
       try {
-        const requestBody: any = {
-          model: modelName,
-          messages: [],
-          modalities: ["image", "text"],
-        };
+        // 构建消息内容
+        const contentParts: any[] = [];
 
-        if (referenceImage) {
-          const base64Data = referenceImage.includes(",")
-            ? referenceImage.split(",")[1]
-            : referenceImage;
-          requestBody.messages.push({
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: fullPrompt,
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/png;base64,${base64Data}`,
-                },
-              },
-            ],
-          });
-        } else {
-          requestBody.messages.push({
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: fullPrompt,
-              },
-            ],
+        // 1. 添加所有参考图片（多图支持）
+        for (const refImg of refImages) {
+          // 处理 URL 路径或 base64 数据
+          let imageBase64: string;
+          
+          if (refImg.startsWith("/outputs/") || refImg.startsWith("http")) {
+            // URL 路径格式：从文件系统读取
+            const filePath = refImg.startsWith("/outputs/")
+              ? path.join(process.cwd(), "public", refImg)
+              : refImg;
+            try {
+              const fileBuffer = fs.existsSync(filePath) ? fs.readFileSync(filePath) : null;
+              if (fileBuffer) {
+                const ext = path.extname(filePath).toLowerCase();
+                const mimeType = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" 
+                                 : ext === ".webp" ? "image/webp" 
+                                 : "image/png";
+                imageBase64 = `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
+              } else {
+                throw new Error(`文件不存在: ${filePath}`);
+              }
+            } catch {
+              // 尝试作为 URL 获取
+              const response = await fetch(refImg);
+              if (!response.ok) {
+                throw new Error(`无法读取参考图片: ${response.status}`);
+              }
+              const arrayBuffer = await response.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+              imageBase64 = `data:image/png;base64,${buffer.toString("base64")}`;
+            }
+          } else if (refImg.includes(",")) {
+            // 已经是 base64 data URL 格式
+            imageBase64 = refImg;
+          } else {
+            // 纯 base64 字符串
+            imageBase64 = `data:image/png;base64,${refImg}`;
+          }
+
+          contentParts.push({
+            type: "image_url",
+            image_url: {
+              url: imageBase64,
+            },
           });
         }
+
+        // 2. 添加文本提示词（在所有图片之后）
+        contentParts.push({
+          type: "text",
+          text: fullPrompt,
+        });
+
+        // 构建请求体
+        const requestBody = {
+          model: modelName,
+          messages: [
+            {
+              role: "user",
+              content: contentParts,
+            },
+          ],
+          modalities: ["image", "text"],
+        };
 
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
@@ -410,32 +446,41 @@ export async function generateImage(
         const data = await response.json();
         const message = data.choices?.[0]?.message;
 
+        // 解析返回的图片数据
         if (message?.images) {
+          // 方式1：message.images 数组
           for (const img of message.images) {
             const imageUrlObj = img.image_url;
             if (imageUrlObj?.url) {
               const imageData = imageUrlObj.url;
-              const match = imageData.split("data:image/")[1];
-              if (match) {
-                const base64Part = match.split(",")[1];
-                const imageBytes = Buffer.from(base64Part, "base64");
-                fs.writeFileSync(filepath, imageBytes);
-                outputBase64 = base64Part;
-              }
+              const mimeMatch = imageData.match(/data:image\/([^;]+)/);
+              const mimeType = mimeMatch ? mimeMatch[1] : "png";
+              const base64Part = imageData.split(",")[1];
+              const imageBytes = Buffer.from(base64Part, "base64");
+              const actualFilename = `${generation.id}.${mimeType}`;
+              const actualFilepath = path.join(outputDir, actualFilename);
+              fs.writeFileSync(actualFilepath, imageBytes);
+              outputBase64 = base64Part;
+              filename = actualFilename;
+              filepath = actualFilepath;
             }
           }
         } else if (message?.content) {
+          // 方式2：message.content 数组
           const contentArray = Array.isArray(message.content) ? message.content : [message.content];
-          for (const content of contentArray) {
-            if (content?.type === "image_url" && content.image_url?.url) {
-              const imageData = content.image_url.url;
-              const match = imageData.split("data:image/")[1];
-              if (match) {
-                const base64Part = match.split(",")[1];
-                const imageBytes = Buffer.from(base64Part, "base64");
-                fs.writeFileSync(filepath, imageBytes);
-                outputBase64 = base64Part;
-              }
+          for (const contentItem of contentArray) {
+            if (contentItem?.type === "image_url" && contentItem.image_url?.url) {
+              const imageData = contentItem.image_url.url;
+              const mimeMatch = imageData.match(/data:image\/([^;]+)/);
+              const mimeType = mimeMatch ? mimeMatch[1] : "png";
+              const base64Part = imageData.split(",")[1];
+              const imageBytes = Buffer.from(base64Part, "base64");
+              const actualFilename = `${generation.id}.${mimeType}`;
+              const actualFilepath = path.join(outputDir, actualFilename);
+              fs.writeFileSync(actualFilepath, imageBytes);
+              outputBase64 = base64Part;
+              filename = actualFilename;
+              filepath = actualFilepath;
             }
           }
         }
@@ -449,59 +494,79 @@ export async function generateImage(
         throw new Error(`Image2 API 调用失败: ${apiError instanceof Error ? apiError.message : "未知错误"}`);
       }
     } else {
-      // Gemini 模型（原有逻辑）
-      const contents: Array<
-        | { text: string }
-        | { inlineData: { mimeType: string; data: string }; text?: string }
-      > = [];
+      // Gemini 模型（flash / pro）
+      // 构建 contents：多图 Part + 文字 Part（参考多图 API 文档逻辑）
+      const parts: any[] = [];
 
-      if (referenceImage) {
-        const base64Data = referenceImage.includes(",")
-          ? referenceImage.split(",")[1]
-          : referenceImage;
-        contents.push({
-          inlineData: {
-            mimeType: "image/png",
-            data: base64Data,
-          },
-        });
-        contents.push({ text: fullPrompt });
+      // 1. 添加所有参考图片
+      if (refImages.length > 0) {
+        for (const refImg of refImages) {
+          const base64Data = refImg.includes(",")
+            ? refImg.split(",")[1]
+            : refImg;
+          const mimeType = refImg.includes("data:")
+            ? refImg.split(";")[0].split(":")[1] || "image/png"
+            : "image/png";
+          
+          parts.push({
+            inlineData: {
+              mimeType,
+              data: base64Data,
+            },
+          });
+        }
+        // 2. 添加文字提示词（在所有图片之后）
+        parts.push({ text: fullPrompt });
       } else {
-        contents.push({ text: fullPrompt });
+        // 文生图模式：只有文字提示词
+        parts.push({ text: fullPrompt });
       }
+
+      // 构建 contents 结构
+      const contents = [{ parts }];
+
+      // Pro 模型不支持 Thinking Level，固定使用 MINIMAL
+      const thinkingConfig = isProModel
+        ? {}
+        : { thinkingConfig: { thinkingLevel } };
 
       const response = await ai.models.generateContent({
         model: modelName,
         contents: contents,
         config: {
-          responseModalities: ["IMAGE"],
+          responseModalities: ["IMAGE", "TEXT"],
           imageConfig: {
             aspectRatio,
             imageSize,
           },
-          ...(!isProModel
-            ? { thinkingConfig: { thinkingLevel } }
-            : {}),
+          ...thinkingConfig,
         },
       });
 
       let hasImage = false;
+      let actualMimeType = "image/png";
+      console.log("API Response structure:", JSON.stringify(response, null, 2).substring(0, 1000));
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData?.data) {
-          const buffer = Buffer.from(part.inlineData.data, "base64");
-          fs.writeFileSync(filepath, buffer);
           outputBase64 = part.inlineData.data;
+          actualMimeType = part.inlineData.mimeType || "image/png";
           hasImage = true;
         }
       }
 
       if (!hasImage) {
-        if (fs.existsSync(filepath)) {
-          fs.unlinkSync(filepath);
+        console.error("未能获取图片数据，响应内容:", JSON.stringify(response, null, 2).substring(0, 2000));
+        const finishReason = response.candidates?.[0]?.finishReason;
+        if (finishReason === "NO_IMAGE") {
+          throw new Error("模型未能生成图片，请尝试使用更详细的提示词或不同的描述");
         }
         throw new Error("未能生成图片");
       }
 
+      const ext = actualMimeType.split("/")[1] || "png";
+      filename = `${generation.id}.${ext}`;
+      filepath = path.join(outputDir, filename);
+      fs.writeFileSync(filepath, Buffer.from(outputBase64!, "base64"));
       outputUrl = `/outputs/${userId}/${filename}`;
     }
 
@@ -833,7 +898,7 @@ export async function updateVideoResult(
 // ======================== 历史记录 ========================
 
 export interface HistoryFilters {
-  type?: GenType;
+  types?: GenType[];
   status?: GenStatus;
   favorited?: boolean;
   olderThanDays?: number;
@@ -845,10 +910,10 @@ export async function getHistory(
   userId: string,
   filters: HistoryFilters = {}
 ) {
-  const { type, status, favorited, olderThanDays, page = 1, pageSize = 20 } = filters;
+  const { types, status, favorited, olderThanDays, page = 1, pageSize = 20 } = filters;
 
   const where: Record<string, unknown> = { userId };
-  if (type) where.type = type;
+  if (types && types.length > 0) where.type = { in: types };
   if (status) where.status = status;
   if (typeof favorited === "boolean") where.favorited = favorited;
   if (olderThanDays) {
@@ -1112,19 +1177,16 @@ Instructions:
     const outputDir = path.join(process.cwd(), "public", "outputs", userId);
     fs.mkdirSync(outputDir, { recursive: true });
 
-    const filename = `${generation.id}.png`;
-    const filepath = path.join(outputDir, filename);
-
     let outputBase64: string | undefined;
     let hasImage = false;
     let revisedPrompt: string | undefined;
+    let actualMimeType = "image/png";
 
     const parts = response.candidates?.[0]?.content?.parts || [];
     for (const part of parts) {
       if (part.inlineData?.data) {
-        const buffer = Buffer.from(part.inlineData.data, "base64");
-        fs.writeFileSync(filepath, buffer);
         outputBase64 = part.inlineData.data;
+        actualMimeType = part.inlineData.mimeType || "image/png";
         hasImage = true;
       } else if (part.text) {
         revisedPrompt = part.text;
@@ -1132,11 +1194,18 @@ Instructions:
     }
 
     if (!hasImage) {
-      if (fs.existsSync(filepath)) {
-        fs.unlinkSync(filepath);
+      console.error("Inpaint API 未能获取图片数据，响应内容:", JSON.stringify(response, null, 2).substring(0, 2000));
+      const finishReason = response.candidates?.[0]?.finishReason;
+      if (finishReason === "NO_IMAGE") {
+        throw new Error("局部重绘未能生成图片，请尝试使用更详细的提示词");
       }
       throw new Error("模型未返回图像数据。这可能是由于提示词触发了安全过滤，或参数设置超出了模型当前支持的范围。");
     }
+
+    const ext = actualMimeType.split("/")[1] || "png";
+    const filename = `${generation.id}.${ext}`;
+    const filepath = path.join(outputDir, filename);
+    fs.writeFileSync(filepath, Buffer.from(outputBase64!, "base64"));
 
     const outputUrl = `/outputs/${userId}/${filename}`;
 

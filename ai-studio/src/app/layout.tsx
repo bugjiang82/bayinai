@@ -11,13 +11,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "六维AI工作平台",
+  title: "八音-六维AI工作平台",
   description:
     "AI Creative Studio - 利用人工智能释放你的创造力，生成图像、视频和更多创意内容",
   keywords: ["AI", "创意", "生成", "图像", "视频", "工作室"],
   authors: [{ name: "AI Creative Studio" }],
   openGraph: {
-    title: "六维AI工作平台",
+    title: "八音-六维AI工作平台",
     description: "利用人工智能释放你的创造力",
     type: "website",
   },

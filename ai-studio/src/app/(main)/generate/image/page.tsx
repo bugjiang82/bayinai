@@ -20,6 +20,7 @@ interface CanvasImage {
   id: string;
   url: string;
   prompt?: string;
+  favorited?: boolean;
 }
 
 type TransformType = "style-transfer" | "inpaint" | "outpaint" | "upscale";
@@ -89,6 +90,7 @@ export default function UnifiedImagePage() {
     createdAt?: string;
     type?: string;
     inputUrl?: string;
+    favorited?: boolean;
   }>>([]);
   const [historyPage, setHistoryPage] = useState(1);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
@@ -131,13 +133,9 @@ export default function UnifiedImagePage() {
   useEffect(() => {
     const savedPrompt = localStorage.getItem("unified-image-prompt");
     const savedNegativePrompt = localStorage.getItem("unified-image-negative-prompt");
-    const savedReference = localStorage.getItem("unified-image-reference");
 
     if (savedPrompt) setPrompt(savedPrompt);
     if (savedNegativePrompt) setNegativePrompt(savedNegativePrompt);
-    if (savedReference && referenceImages.length === 0) {
-      setReferenceImages([savedReference]);
-    }
   }, []);
 
   useEffect(() => {
@@ -145,7 +143,7 @@ export default function UnifiedImagePage() {
       try {
         setLoadingHistory(true);
         setHistoryError(null);
-        const res = await fetch(`/api/generate/history?status=COMPLETED&pageSize=${historyPageSize}&page=${page}`);
+        const res = await fetch(`/api/generate/history?type=TEXT_TO_IMAGE&type=IMAGE_TO_IMAGE&type=INPAINT&type=EDIT&status=COMPLETED&pageSize=${historyPageSize}&page=${page}`);
         if (res.ok) {
           const json = await res.json();
           console.log("History API response:", json);
@@ -213,7 +211,7 @@ export default function UnifiedImagePage() {
     setHistoryPage(nextPage);
     try {
       setLoadingHistory(true);
-      const res = await fetch(`/api/generate/history?status=COMPLETED&pageSize=${historyPageSize}&page=${nextPage}`);
+      const res = await fetch(`/api/generate/history?type=TEXT_TO_IMAGE&type=IMAGE_TO_IMAGE&type=INPAINT&type=EDIT&status=COMPLETED&pageSize=${historyPageSize}&page=${nextPage}`);
       if (res.ok) {
         const json = await res.json();
         if (json.code === 0 && json.data?.list) {
@@ -276,16 +274,12 @@ export default function UnifiedImagePage() {
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       setReferenceImages((prev) => [...prev, dataUrl]);
-      localStorage.setItem("unified-image-reference", dataUrl);
     };
     reader.readAsDataURL(file);
   }, []);
 
   const handleRemoveImage = useCallback((index: number) => {
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
-    if (index === 0) {
-      localStorage.removeItem("unified-image-reference");
-    }
   }, []);
 
   const handleGenerate = useCallback(async () => {
@@ -313,7 +307,7 @@ export default function UnifiedImagePage() {
       };
 
       if (mode === "image-to-image" && referenceImages.length > 0) {
-        body.referenceImage = referenceImages[0];
+        body.referenceImages = referenceImages;
       }
 
       const response = await fetch("/api/generate/image", {
@@ -395,7 +389,7 @@ export default function UnifiedImagePage() {
   );
 
   const handleHistoryItemClick = useCallback((item: typeof history[number]) => {
-    setImages([{ id: item.id, url: item.url, prompt: item.prompt }]);
+    setImages([{ id: item.id, url: item.url, prompt: item.prompt, favorited: item.favorited }]);
     setPrompt(item.prompt);
     if (item.inputUrl) {
       setMode("image-to-image");
@@ -468,18 +462,18 @@ export default function UnifiedImagePage() {
                   参考图片
                 </label>
                 {referenceImages.length > 0 && (
-                  <div className="flex gap-2 mb-3 flex-wrap">
+                  <div className="grid grid-cols-3 gap-2 mb-3">
                     {referenceImages.map((img, index) => (
                       <div
                         key={index}
-                        className="relative group w-16 h-16 rounded-lg overflow-hidden border border-white/[0.08]"
+                        className="relative group aspect-square rounded-lg overflow-hidden border border-white/[0.08]"
                       >
                         <Image
                           src={img}
                           alt={`参考图 ${index + 1}`}
                           fill
                           className="object-cover"
-                          sizes="64px"
+                          sizes="(max-width: 768px) 33vw, 33vw"
                         />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
                           <button
@@ -491,8 +485,8 @@ export default function UnifiedImagePage() {
                         </div>
                       </div>
                     ))}
-                    {referenceImages.length < 4 && (
-                      <div className="w-16 h-16">
+                    {referenceImages.length < 9 && (
+                      <div className="aspect-square">
                         <ImageUploader
                           onUpload={handleUpload}
                           compact
@@ -503,11 +497,14 @@ export default function UnifiedImagePage() {
                   </div>
                 )}
                 {referenceImages.length === 0 && (
-                  <ImageUploader
-                    onUpload={handleUpload}
-                    compact
-                    className="mb-3"
-                  />
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <ImageUploader
+                      onUpload={handleUpload}
+                      compact
+                    />
+                    <div className="aspect-square rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02]" />
+                    <div className="aspect-square rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02]" />
+                  </div>
                 )}
               </div>
             )}

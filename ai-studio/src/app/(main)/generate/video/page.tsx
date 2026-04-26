@@ -357,13 +357,13 @@ export default function VideoPage() {
           {/* Video result */}
           {videoResult && !isGenerating && (
             <div className="w-full h-full flex flex-col">
-              <div className="flex-1 relative bg-black">
+              <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
                 <video
                   src={videoResult.url}
                   controls
                   autoPlay
                   loop
-                  className="w-full h-full object-contain"
+                  className="max-w-full max-h-full object-contain"
                 />
               </div>
               <div className="p-3 flex items-center justify-between border-t border-white/[0.06] bg-[#0a0a0a]">

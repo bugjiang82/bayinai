@@ -32,6 +32,7 @@ interface CanvasImage {
   id: string;
   url: string;
   prompt?: string;
+  favorited?: boolean;
 }
 
 interface HistoryItem {
@@ -442,7 +443,7 @@ export default function Canvas({
                   onFavorite={(e) => handleFavorite(image, e)}
                   onUseAsReference={(e) => handleUseAsReference(image, e)}
                   onEdit={(e) => handleEdit(image, e)}
-                  isFavorite={favorites.has(image.id)}
+                  isFavorite={image.favorited ?? favorites.has(image.id)}
                   className={singleImageMode && images.length === 1 ? "w-full max-h-[60vh]" : ""}
                 />
               ))}
@@ -480,23 +481,33 @@ export default function Canvas({
                 <div className="grid grid-cols-6 gap-2">
                   {history.map((item) => (
                     <div
-                      key={item.id}
-                      className={cn(
-                        "group relative aspect-square rounded-md overflow-hidden border cursor-pointer transition-all duration-200",
-                        images.some(img => img.id === item.id)
-                          ? "border-indigo-500 ring-1 ring-indigo-500/30"
-                          : "border-white/[0.06] hover:border-indigo-500/40"
-                      )}
-                      onClick={() => onHistoryItemClick?.(item)}
-                    >
-                      <Image
-                        src={item.thumb}
-                        alt={item.prompt || ""}
-                        fill
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
-                        sizes="15vw"
-                        loading="lazy"
-                      />
+                        key={item.id}
+                        className={cn(
+                          "group relative aspect-square rounded-md overflow-hidden border cursor-pointer transition-all duration-200",
+                          images.some(img => img.id === item.id)
+                            ? "border-indigo-500 ring-1 ring-indigo-500/30"
+                            : "border-white/[0.06] hover:border-indigo-500/40"
+                        )}
+                        onClick={() => onHistoryItemClick?.(item)}
+                      >
+                        {item.thumb.startsWith("/outputs/") ? (
+                          <img
+                            src={item.thumb}
+                            alt={item.prompt || ""}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Image
+                            src={item.thumb}
+                            alt={item.prompt || ""}
+                            fill
+                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                            sizes="15vw"
+                            loading="lazy"
+                            unoptimized
+                          />
+                        )}
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition-all flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
                         <div className="flex justify-end">
                           <button

@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type") as GenType | null;
+    const types = searchParams.getAll("type") as GenType[];
     const status = searchParams.get("status") as GenStatus | null;
     const favoritedParam = searchParams.get("favorited");
     const olderThanParam = searchParams.get("olderThan");
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getHistory(session.user.id, {
-      type: type || undefined,
+      types: types.length > 0 ? types : undefined,
       status: status || undefined,
       favorited,
       olderThanDays,

@@ -24,6 +24,9 @@ import { AgentCard } from "@/components/ai/AgentCard";
 interface StreamMessage {
   type: "text" | "image" | "waiting" | "done" | "error";
   content: string;
+  thumbUrl?: string;
+  index?: number;
+  imageUrls?: string[];
 }
 
 export default function AllRoundTestPage() {
@@ -35,6 +38,10 @@ export default function AllRoundTestPage() {
   const [interactionPrompt, setInteractionPrompt] = useState("");
   const [interactionOptions, setInteractionOptions] = useState<{id: string; label: string}[]>([]);
   const [currentText, setCurrentText] = useState("");
+  const [credits, setCredits] = useState<number | null>(null);
+  const [creditsLoading, setCreditsLoading] = useState(false);
+  const [showInsufficientCredits, setShowInsufficientCredits] = useState(false);
+  const REQUIRED_CREDITS = 500;
 
   const scrollToBottom = useCallback(() => {
     if (contentScrollRef.current) {
@@ -56,8 +63,37 @@ export default function AllRoundTestPage() {
     scrollToBottom();
   }, [scrollToBottom]);
 
+  // 页面加载时获取用户积分
+  useEffect(() => {
+    const fetchCredits = async () => {
+      try {
+        setCreditsLoading(true);
+        const res = await fetch("/api/credits/balance");
+        const json = await res.json();
+        if (json.code === 0 && json.data?.balance !== undefined) {
+          setCredits(json.data.balance);
+        }
+      } catch {
+        console.error("获取积分失败");
+      } finally {
+        setCreditsLoading(false);
+      }
+    };
+    fetchCredits();
+  }, []);
+
   const handleStart = async () => {
     if (!input.trim()) return;
+
+    // 前端积分检查
+    if (credits !== null && credits < REQUIRED_CREDITS) {
+      setShowInsufficientCredits(true);
+      store.addLog(`积分不足 // INSUFFICIENT CREDITS: 需要 ${REQUIRED_CREDITS} 积分，当前 ${credits} 积分`);
+      // 3秒后自动关闭提示
+      setTimeout(() => setShowInsufficientCredits(false), 3000);
+      return;
+    }
+
     store.setInitializing(true);
     store.addLog(`初始化任务：${input}`);
     try {
@@ -67,7 +103,23 @@ export default function AllRoundTestPage() {
         body: JSON.stringify({ objective: input }),
       });
       const data = await response.json();
+      
+      // 处理积分不足错误
+      if (response.status === 402) {
+        setShowInsufficientCredits(true);
+        store.addLog(`积分不足 // INSUFFICIENT CREDITS: ${data.error || "需要500积分"}`);
+        store.setInitializing(false);
+        setTimeout(() => setShowInsufficientCredits(false), 5000);
+        return;
+      }
+      
       if (!response.ok) throw new Error(data.error);
+
+      // 更新积分显示
+      if (data.creditsRemaining !== undefined) {
+        setCredits(data.creditsRemaining);
+      }
+
       store.initializeSystem(data.tasks, data.agents);
       store.setObjective(input);
       store.setInitializing(false);
@@ -88,7 +140,7 @@ export default function AllRoundTestPage() {
       const agent = agents.find(a => a.id === task.agentId) || agents[0];
       store.setCurrentStep(i);
       store.setFocusedTaskId(task.id);
-      store.updateTask(task.id, { status: TaskStatus.IN_PROGRESS, reasoning: "", imageUrl: undefined, progress: 0 });
+      store.updateTask(task.id, { status: TaskStatus.IN_PROGRESS, reasoning: "", imageUrl: undefined, imageUrls: [], progress: 0 });
       store.addLog(`部署节点：${agent.name}`);
 
       setCurrentText("");
@@ -137,7 +189,15 @@ export default function AllRoundTestPage() {
                       });
                       break;
                     case "image":
-                      store.updateTask(task.id, { imageUrl: message.content });
+                      // 收集多张图片 - 直接读取当前状态并追加
+                      const currentTask = store.tasks.find(t => t.id === task.id);
+                      const existingUrls = (currentTask as any)?.imageUrls || [];
+                      const newUrls = [...existingUrls, message.content];
+                      store.updateTask(task.id, {
+                        imageUrl: message.content, // 兼容旧版：保留最新一张
+                        imageUrls: newUrls,
+                      });
+                      store.addLog(`资产已生成 (${newUrls.length}/${newUrls.length})`);
                       break;
                     case "waiting":
                     case "done":
@@ -268,6 +328,37 @@ export default function AllRoundTestPage() {
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           <div>
             <label className="text-[10px] text-[var(--accent-blue)] uppercase tracking-widest block mb-4">指令输入 // COMMAND INPUT</label>
+
+            {/* 积分不足提示 */}
+            {showInsufficientCredits && (
+              <div className="mb-4 p-4 rounded-xl border-2 border-red-500/60 bg-red-500/10 backdrop-blur-sm animate-pulse">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-red-400 mb-1">积分不足</p>
+                    <p className="text-xs text-red-300/80">
+                      执行该操作需要 <span className="font-bold text-red-300">{REQUIRED_CREDITS} 积分</span>，当前可用积分：<span className="font-bold">{credits ?? 0} 积分</span>
+                    </p>
+                    <p className="text-[10px] text-white/30 mt-2">请前往充值页面获取积分后重试</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 积分显示 */}
+            {credits !== null && (
+              <div className="mb-4 flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                <span className="text-[10px] text-white/40 uppercase tracking-widest">当前积分</span>
+                <span className={`text-sm font-bold ${credits >= REQUIRED_CREDITS ? 'text-green-400' : 'text-red-400'}`}>
+                  {credits} / {REQUIRED_CREDITS}
+                </span>
+              </div>
+            )}
+
             <div className="relative group p-px rounded-xl bg-gradient-to-br from-white/10 to-transparent">
               <Textarea
                 value={input}
@@ -438,16 +529,24 @@ export default function AllRoundTestPage() {
                         )}
                       </div>
 
-                      {focusedTask?.imageUrl && (
-                        <div className="mt-4 rounded-xl overflow-hidden border border-white/10 shadow-2xl max-w-md bg-black/40">
-                          <img
-                            src={focusedTask.imageUrl}
-                            alt="Generated"
-                            className="w-full h-auto"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="p-3 bg-white/5 border-t border-white/5 flex items-center justify-between">
-                            <span className="text-[9px] text-white/30 uppercase tracking-widest">已生成资产 // GENERATED ASSET</span>
+                      {(focusedTask?.imageUrl || (focusedTask as any)?.imageUrls?.length > 0) && (
+                        <div className="mt-4 space-y-4">
+                          {((focusedTask as any).imageUrls || (focusedTask?.imageUrl ? [focusedTask.imageUrl] : [])).map((url: string, idx: number) => (
+                            <div key={idx} className="rounded-xl overflow-hidden border border-white/10 shadow-2xl bg-black/40">
+                              <img
+                                src={url}
+                                alt={`生成图片 ${idx + 1}`}
+                                className="w-full h-auto"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="p-2 bg-white/5 border-t border-white/5 flex items-center justify-between">
+                                <span className="text-[9px] text-white/30 uppercase tracking-widest">资产 {idx + 1}</span>
+                                <Activity className="w-3 h-3 text-[var(--accent-blue)] opacity-50" />
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex items-center justify-between px-1">
+                            <span className="text-[9px] text-white/30 uppercase tracking-widest">已生成资产 ({((focusedTask as any).imageUrls || (focusedTask?.imageUrl ? [focusedTask.imageUrl] : [])).length}) // GENERATED ASSETS</span>
                             <Activity className="w-3 h-3 text-[var(--accent-blue)] opacity-50" />
                           </div>
                         </div>

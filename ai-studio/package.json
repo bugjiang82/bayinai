@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 5050",
-    "build": "next build && mkdir -p .next/standalone/public && mkdir -p .next/standalone/.next/static && cp -r public/* .next/standalone/public/ && cp -r .next/static .next/standalone/.next/static",
+    "build": "next build && mkdir -p .next/standalone/public && mkdir -p .next/standalone/.next/static && cp -r public/* .next/standalone/public/ && cp -r .next/static .next/standalone/.next/static && rm -rf .next/standalone/public/outputs && ln -s \"$(pwd)/public/outputs\" .next/standalone/public/outputs && rm -rf .next/standalone/public/uploads && ln -s \"$(pwd)/public/uploads\" .next/standalone/public/uploads",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",

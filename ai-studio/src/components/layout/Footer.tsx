@@ -55,7 +55,7 @@ export default function Footer() {
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
               <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                六维AI工作平台
+                八音-六维AI工作平台
               </span>
             </Link>
             <p className="text-sm text-zinc-500 leading-relaxed max-w-xs">
