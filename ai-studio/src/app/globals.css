@@ -417,6 +417,215 @@ select {
     box-shadow 0.2s ease;
 }
 
+/* --- Cyberpunk Theme --- */
+:root {
+  --dark-bg: #0a0a0f;
+  --cyber-cyan: #00f5ff;
+  --cyber-magenta: #ff00ff;
+  --cyber-yellow: #ffff00;
+  --glass-bg: rgba(10, 10, 15, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: 10px;
+}
+
+/* --- Cyber Grid Background --- */
+.cyber-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    linear-gradient(rgba(0, 245, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 245, 255, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: -1px -1px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --- Glass Effect --- */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* --- Cyber Colors --- */
+.text-cyber-cyan {
+  color: var(--cyber-cyan);
+}
+
+.text-cyber-magenta {
+  color: var(--cyber-magenta);
+}
+
+.text-cyber-yellow {
+  color: var(--cyber-yellow);
+}
+
+.border-cyber-cyan {
+  border-color: var(--cyber-cyan);
+}
+
+.border-cyber-magenta {
+  border-color: var(--cyber-magenta);
+}
+
+.border-cyber-yellow {
+  border-color: var(--cyber-yellow);
+}
+
+/* --- Gradient Borders --- */
+.gradient-border {
+  position: relative;
+  border-radius: 8px;
+  z-index: 0;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  padding: 1px;
+  background: linear-gradient(45deg, var(--cyber-cyan), var(--cyber-magenta), var(--cyber-yellow));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: -1;
+}
+
+/* --- Node Styles --- */
+.react-flow__node {
+  border-radius: 8px;
+  padding: 0;
+  font-size: 12px;
+  color: #fff;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.react-flow__handle {
+  background: var(--cyber-magenta);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--cyber-magenta);
+}
+
+.react-flow__edge-path {
+  stroke: var(--cyber-cyan);
+  stroke-width: 2;
+  stroke-dasharray: 5, 5;
+  animation: dash 1s linear infinite;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.react-flow__controls {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.react-flow__controls-button {
+  background: transparent;
+  border: none;
+  color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--cyber-cyan);
+}
+
+.react-flow__minimap {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* --- Animations --- */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* --- Custom Scrollbar --- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--glass-bg);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--cyber-cyan);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cyber-magenta);
+  box-shadow: 0 0 10px var(--cyber-magenta);
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 768px) {
+  .cyber-grid {
+    background-size: 30px 30px;
+  }
+  
+  .react-flow__node {
+    min-width: 200px;
+  }
+}
+
 /* --- Nano Banana Styles --- */
 :root {
   --color-zinc-950: #0f0f0f;
