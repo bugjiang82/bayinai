@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片编辑</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/edit.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>图片编辑</h1>
+            <p>涂抹选择区域，描述修改内容</p>
+        </div>
+
+        <nav class="nav-tabs">
+            <a href="/">文字生成</a>
+            <a href="/upload">图片参考生成</a>
+            <a href="/edit" class="active">图片编辑</a>
+            <a href="/video-create">视频创作</a>
+            <a href="/batch">批量任务</a>
+            <a href="/admin">用户管理</a>
+            <a href="/logout">退出登录</a>
+        </nav>
+
+        <div class="edit-layout">
+            <div class="edit-toolbar card">
+                <div class="tool-section">
+                    <h3>工具</h3>
+                    <div class="tool-buttons">
+                        <button id="brush-tool" class="tool-btn active" title="画笔">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                                <path d="M2 2l7.586 7.586"></path>
+                            </svg>
+                            <span>画笔</span>
+                        </button>
+                        <button id="eraser-tool" class="tool-btn" title="橡皮擦">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8l10-10c.8-.8 2-.8 2.8 0l5.2 5.2c.8.8.8 2 0 2.8L12 20"></path>
+                                <path d="M6.5 13.5L12 8"></path>
+                            </svg>
+                            <span>橡皮擦</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="tool-section">
+                    <h3>画笔大小</h3>
+                    <input type="range" id="brush-size" min="5" max="100" value="30">
+                    <span id="brush-size-value">30px</span>
+                </div>
+
+                <div class="tool-section">
+                    <h3>操作</h3>
+                    <div class="tool-buttons">
+                        <button id="undo-btn" class="tool-btn" title="撤销" disabled>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 7v6h6"></path>
+                                <path d="M3 13a9 9 0 1 0 2-5.3L3 7"></path>
+                            </svg>
+                            <span>撤销</span>
+                        </button>
+                        <button id="redo-btn" class="tool-btn" title="重做" disabled>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 7v6h-6"></path>
+                                <path d="M21 13a9 9 0 1 1-2-5.3L21 7"></path>
+                            </svg>
+                            <span>重做</span>
+                        </button>
+                        <button id="clear-btn" class="tool-btn" title="清除">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18"></path>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            <span>清除</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="tool-section">
+                    <h3>蒙版预览</h3>
+                    <div class="mask-preview">
+                        <canvas id="mask-preview-canvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="tool-section edit-actions">
+                    <button id="apply-edit-btn" class="btn btn-primary" disabled>
+                        应用修改
+                    </button>
+                </div>
+            </div>
+
+            <div class="edit-canvas-area">
+                <div class="canvas-wrapper card">
+                    <div class="canvas-container" id="canvas-container">
+                        <canvas id="image-canvas"></canvas>
+                        <canvas id="draw-canvas"></canvas>
+                    </div>
+                    <div id="image-placeholder" class="placeholder">
+                        <p>请从历史记录选择一张图片开始编辑</p>
+                    </div>
+                </div>
+
+                <div class="edit-prompt card">
+                    <h3>修改描述</h3>
+                    <textarea id="edit-prompt" rows="3" placeholder="描述你想要对选中区域进行的修改..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="history-section">
+            <h2>选择要编辑的图片</h2>
+            <div id="history-grid" class="history-grid"></div>
+        </div>
+    </div>
+
+    <script src="/static/edit.js"></script>
+</body>
+</html>

@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片生成测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 1.8rem;
+            color: #fff;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .control-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        select, input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px 16px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1rem;
+            resize: vertical;
+            transition: all 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 120px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 56px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .toggle.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .toggle.active::after {
+            left: 30px;
+        }
+
+        .toggle-label {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .status {
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            display: none;
+        }
+
+        .status.loading {
+            display: block;
+            background: rgba(102, 126, 234, 0.2);
+            color: #a8b4fd;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .status.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .status.success {
+            display: block;
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .result-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .result-card .info {
+            padding: 16px;
+        }
+
+        .result-card .prompt {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+
+        .result-card .meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .result-card.loading-card {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .countdown {
+            font-size: 0.875rem;
+            color: #a8b4fd;
+            margin-left: 12px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .nav a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="/">生成图片</a>
+            <a href="/upload">图生图</a>
+            <a href="/test">多图生成测试</a>
+        </nav>
+
+        <h1>多图生成测试</h1>
+
+        <div class="controls">
+            <div class="control-row">
+                <div class="control-group" style="flex: 3;">
+                    <label>描述</label>
+                    <textarea id="prompt" placeholder="输入图片描述...">一只可爱的橘猫</textarea>
+                </div>
+            </div>
+
+            <div class="control-row" style="margin-top: 16px;">
+                <div class="control-group">
+                    <label>图片比例</label>
+                    <select id="aspect_ratio">
+                        <option value="1:1">1:1 (正方形)</option>
+                        <option value="16:9" selected>16:9 (横向)</option>
+                        <option value="9:16">9:16 (纵向)</option>
+                        <option value="21:9">21:9 (超宽)</option>
+                        <option value="4:3">4:3</option>
+                        <option value="3:2">3:2</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>图片数量</label>
+                    <select id="image_count">
+                        <option value="1">1 张</option>
+                        <option value="2">2 张</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>图片质量</label>
+                    <select id="image_size">
+                        <option value="1K">1K</option>
+                        <option value="2K" selected>2K</option>
+                        <option value="4K">4K</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>模型</label>
+                    <select id="model">
+                        <option value="gemini-3.1-flash-image-preview">Banana2 (快速)</option>
+                        <option value="gemini-3-pro-image-preview">Banana Pro (高质量)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Thinking Level</label>
+                    <div class="toggle-container">
+                        <div class="toggle" id="thinking_toggle"></div>
+                        <span class="toggle-label" id="thinking_label">Minimal</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" id="generate_btn" onclick="generateImages()">
+                    生成
+                </button>
+            </div>
+
+            <div class="status" id="status"></div>
+        </div>
+
+        <div class="results" id="results"></div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let activeRequests = 0;
+        const BASE_TIME = 60;
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth_status');
+                const data = await response.json();
+
+                if (!data.authenticated) {
+                    window.location.href = '/login';
+                    return null;
+                }
+
+                currentUser = data.user;
+                return currentUser;
+            } catch (error) {
+                window.location.href = '/login';
+                return null;
+            }
+        }
+
+        async function init() {
+            await checkAuth();
+        }
+        init();
+
+        function loadSettings() {
+            const savedPrompt = localStorage.getItem('nano_test_prompt');
+            const savedAspect = localStorage.getItem('nano_test_aspect_ratio');
+            const savedSize = localStorage.getItem('nano_test_image_size');
+            const savedCount = localStorage.getItem('nano_test_image_count');
+            const savedModel = localStorage.getItem('nano_test_model');
+            const savedThinking = localStorage.getItem('nano_test_thinking');
+
+            if (savedPrompt !== null) document.getElementById('prompt').value = savedPrompt;
+            if (savedAspect !== null) document.getElementById('aspect_ratio').value = savedAspect;
+            if (savedSize !== null) document.getElementById('image_size').value = savedSize;
+            if (savedCount !== null) document.getElementById('image_count').value = savedCount;
+            if (savedModel !== null) document.getElementById('model').value = savedModel;
+            if (savedThinking === 'true') {
+                thinkingToggle.classList.add('active');
+                thinkingLabel.textContent = 'High';
+            }
+        }
+
+        function saveSettings() {
+            localStorage.setItem('nano_test_prompt', document.getElementById('prompt').value);
+            localStorage.setItem('nano_test_aspect_ratio', document.getElementById('aspect_ratio').value);
+            localStorage.setItem('nano_test_image_size', document.getElementById('image_size').value);
+            localStorage.setItem('nano_test_image_count', document.getElementById('image_count').value);
+            localStorage.setItem('nano_test_model', document.getElementById('model').value);
+            localStorage.setItem('nano_test_thinking', thinkingToggle.classList.contains('active'));
+        }
+
+        loadSettings();
+
+        const thinkingToggle = document.getElementById('thinking_toggle');
+        const thinkingLabel = document.getElementById('thinking_label');
+
+        thinkingToggle.addEventListener('click', () => {
+            thinkingToggle.classList.toggle('active');
+            thinkingLabel.textContent = thinkingToggle.classList.contains('active') ? 'High' : 'Minimal';
+            saveSettings();
+        });
+
+        document.getElementById('aspect_ratio').addEventListener('change', saveSettings);
+        document.getElementById('image_size').addEventListener('change', saveSettings);
+        document.getElementById('image_count').addEventListener('change', saveSettings);
+        document.getElementById('model').addEventListener('change', saveSettings);
+        document.getElementById('prompt').addEventListener('change', saveSettings);
+
+        function showStatus(text, type) {
+            const status = document.getElementById('status');
+            status.textContent = text;
+            status.className = `status ${type}`;
+        }
+
+        function hideStatus() {
+            const status = document.getElementById('status');
+            status.className = 'status';
+            status.textContent = '';
+        }
+
+        function startCountdown(duration, startTime) {
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            countdownInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const remaining = Math.max(0, duration - elapsed);
+                const minutes = Math.floor(remaining / 60);
+                const seconds = remaining % 60;
+                const countdown = document.querySelector('.countdown');
+
+                if (countdown) {
+                    countdown.textContent = `预计还需 ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+
+                if (remaining === 0) {
+                    if (countdown) countdown.textContent = '请耐心等待...';
+                }
+            }, 1000);
+        }
+
+        function stopCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+
+        function getImageUrl(filename) {
+            return `/data/${currentUser.id}/images/${filename}`;
+        }
+
+        async function generateSingleImage(index, prompt, aspectRatio, imageSize, thinkingLevel, model) {
+            activeRequests++;
+            updateStatus();
+
+            const startTime = Date.now();
+            const cardId = `result-${Date.now()}-${index}`;
+            const resultsContainer = document.getElementById('results');
+
+            const card = document.createElement('div');
+            card.className = 'result-card loading-card';
+            card.id = cardId;
+            card.innerHTML = `
+                <div class="spinner"></div>
+                <span style="margin-left: 12px; color: rgba(255,255,255,0.7);">生成中...</span>
+            `;
+            resultsContainer.appendChild(card);
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        aspect_ratio: aspectRatio,
+                        image_size: imageSize,
+                        thinking_level: thinkingLevel,
+                        model: model,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || '生成失败');
+                }
+
+                document.getElementById(cardId).outerHTML = `
+                    <div class="result-card">
+                        <img src="${getImageUrl(data.filename)}" alt="Generated image">
+                        <div class="info">
+                            <div class="prompt">${escapeHtml(prompt)}</div>
+                            <div class="meta">
+                                <span>${aspectRatio} | ${imageSize}</span>
+                                <span>${thinkingLevel}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                document.getElementById(cardId).outerHTML = `
+                    <div class="result-card">
+                        <div class="info" style="color: #fca5a5;">
+                            <div class="prompt">生成失败: ${escapeHtml(error.message)}</div>
+                        </div>
+                    </div>
+                `;
+            } finally {
+                activeRequests--;
+                updateStatus();
+            }
+        }
+
+        function updateStatus() {
+            const btn = document.getElementById('generate_btn');
+            if (activeRequests > 0) {
+                btn.disabled = true;
+                btn.textContent = `生成中 (${activeRequests})`;
+            } else {
+                btn.disabled = false;
+                btn.textContent = '生成';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function generateImages() {
+            if (isGenerating) return;
+
+            const prompt = document.getElementById('prompt').value.trim();
+            const aspectRatio = document.getElementById('aspect_ratio').value;
+            const imageSize = document.getElementById('image_size').value;
+            const imageCount = parseInt(document.getElementById('image_count').value);
+            const model = document.getElementById('model').value;
+            const thinkingLevel = thinkingToggle.classList.contains('active') ? 'HIGH' : 'MINIMAL';
+
+            if (!prompt) {
+                showStatus('请输入描述', 'error');
+                return;
+            }
+
+            isGenerating = true;
+            activeRequests = 0;
+
+            const btn = document.getElementById('generate_btn');
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+
+            document.getElementById('results').innerHTML = '';
+            const startTime = Date.now();
+            const estimatedTime = thinkingLevel === 'HIGH' ? BASE_TIME * 2 : BASE_TIME;
+            showStatus(`正在生成 ${imageCount} 张图片... <span class="countdown">预计还需 ${Math.floor(estimatedTime/60)}:00</span>`, 'loading');
+            startCountdown(estimatedTime * imageCount, startTime);
+
+            const promises = [];
+            for (let i = 0; i < imageCount; i++) {
+                promises.push(generateSingleImage(i, prompt, aspectRatio, imageSize, thinkingLevel, model));
+            }
+
+            await Promise.all(promises);
+
+            stopCountdown();
+            showStatus(`成功生成 ${imageCount} 张图片！`, 'success');
+
+            isGenerating = false;
+            btn.disabled = false;
+            btn.textContent = '生成';
+
+            setTimeout(hideStatus, 3000);
+        }
+    </script>
+</body>
+</html>

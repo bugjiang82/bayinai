@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 图片生成器</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI 图片生成器</h1>
+            <p>使用 Gemini 生成精美图片</p>
+        </div>
+
+        <nav class="nav-tabs">
+            <a href="/" class="active">文字生成</a>
+            <a href="/upload">图片参考生成</a>
+            <a href="/edit">图片编辑</a>
+            <a href="/video-create">视频创作</a>
+            <a href="/batch">批量任务</a>
+            <a href="/agent">交互式智能体（试验功能）</a>
+            <a href="/admin">用户管理</a>
+            <a href="/logout">退出登录</a>
+        </nav>
+
+        <div class="preview-section" id="preview-section" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>生成结果</h2>
+                </div>
+                <div class="card-body">
+                    <div class="preview-container">
+                        <div class="preview-box">
+                            <div class="preview-label">生成的图片</div>
+                            <img id="preview-image" src="" alt="Generated Image">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>创建新图片</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <div class="prompt-input-wrapper">
+                        <label for="prompt">图片描述</label>
+                        <div class="prompt-input-container">
+                            <textarea id="prompt" rows="4" placeholder="描述你想要生成的图片..."></textarea>
+                            <button type="button" id="smart-optimize-btn" class="btn btn-smart-optimize">
+                                <span>✨ 智能优化</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="model">模型</label>
+                        <select id="model">
+                            <option value="gemini-3.1-flash-image-preview">Banana2 (快速)</option>
+                            <option value="gemini-3-pro-image-preview">Banana Pro (高质量)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="aspect_ratio">图片比例</label>
+                        <select id="aspect_ratio">
+                            <option value="1:1">1:1 (正方形)</option>
+                            <option value="16:9">16:9 (横向)</option>
+                            <option value="9:16">9:16 (纵向)</option>
+                            <option value="21:9">21:9 (超宽)</option>
+                            <option value="4:3">4:3</option>
+                            <option value="3:2">3:2</option>
+                            <option value="3:4">3:4</option>
+                            <option value="4:5">4:5</option>
+                            <option value="2:3">2:3</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image_size">图片质量</label>
+                        <select id="image_size">
+                            <option value="1K">1K (低)</option>
+                            <option value="2K">2K (中)</option>
+                            <option value="4K">4K (高)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="toggle-group">
+                        <label class="toggle-label">
+                            <span>Thinking Level</span>
+                            <div class="toggle-wrapper">
+                                <input type="checkbox" id="thinking-toggle">
+                                <span class="toggle-slider"></span>
+                            </div>
+                            <span id="thinking-label" class="toggle-text">Minimal</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button id="generate-btn" class="btn btn-primary">
+                    <span>生成图片</span>
+                </button>
+                <div id="status" class="status"></div>
+            </div>
+        </div>
+
+        <div class="history-section">
+            <h2>生成历史</h2>
+            <div id="history-grid" class="history-grid"></div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
