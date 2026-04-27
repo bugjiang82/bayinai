@@ -1,8 +1,48 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Save, FolderOpen, Trash2, Download, Upload, ZoomIn, ZoomOut, Move, Layers, ArrowLeft, X, Sparkles, ImageIcon, Pencil, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import {
+  Background,
+  Controls,
+  Flowbite,
+  Handle,
+  MiniMap,
+  NodeToolbar,
+  ReactFlow,
+  ReactFlowProvider,
+  addEdge,
+  applyNodeChanges,
+  applyEdgeChanges,
+  useNodesState,
+  useEdgesState,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import {
+  Plus,
+  Save,
+  FolderOpen,
+  Trash2,
+  Download,
+  Upload,
+  ZoomIn,
+  ZoomOut,
+  Move,
+  Layers,
+  ArrowLeft,
+  X,
+  Sparkles,
+  ImageIcon,
+  Pencil,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Eye,
+  EyeOff,
+  PlayCircle,
+  RefreshCw,
+  Settings,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,41 +50,129 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useCanvasStore } from "@/stores/canvasStore";
 
-// 使用 Konva 实现画布功能
-import { Stage, Layer, Rect, Text, Circle, Line, Group } from 'react-konva';
+// 自定义节点类型
+const ImageNode = ({ id, data, selected }: any) => {
+  return (
+    <div 
+      className={`flex flex-col items-center justify-center w-40 h-40 rounded-lg border-2 ${selected ? 'border-white' : 'border-transparent'} transition-colors`}
+      style={{ backgroundColor: '#00f5ff' }}
+    >
+      <div className="flex items-center justify-center w-full h-full">
+        {data.image ? (
+          <img 
+            src={data.image} 
+            alt="Node Image" 
+            className="w-full h-full object-cover rounded-lg"
+          />
+        ) : (
+          <ImageIcon className="w-8 h-8 text-[#0a0a0a]" />
+        )}
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 p-1 bg-[#0a0a0a]/70 text-xs text-white text-center">
+        图像
+      </div>
+      <Handle
+        type="source"
+        position="right"
+        id={`${id}-output`}
+        style={{ background: '#00f5ff' }}
+      />
+      <Handle
+        type="target"
+        position="left"
+        id={`${id}-input`}
+        style={{ background: '#00f5ff' }}
+      />
+    </div>
+  );
+};
+
+const PromptNode = ({ id, data, selected }: any) => {
+  return (
+    <div 
+      className={`flex flex-col items-center justify-center w-40 h-40 rounded-lg border-2 ${selected ? 'border-white' : 'border-transparent'} transition-colors`}
+      style={{ backgroundColor: '#f59e0b' }}
+    >
+      <div className="flex items-center justify-center w-full h-full">
+        <Pencil className="w-8 h-8 text-[#0a0a0a]" />
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 p-1 bg-[#0a0a0a]/70 text-xs text-white text-center">
+        提示词
+      </div>
+      <Handle
+        type="source"
+        position="right"
+        id={`${id}-output`}
+        style={{ background: '#f59e0b' }}
+      />
+      <Handle
+        type="target"
+        position="left"
+        id={`${id}-input`}
+        style={{ background: '#f59e0b' }}
+      />
+    </div>
+  );
+};
+
+const CustomToolbar = () => {
+  return (
+    <div className="flex flex-col gap-2 p-2 bg-[#0a0a0a]/80 border border-white/[0.1] rounded-lg">
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-white hover:bg-white/[0.1]"
+      >
+        <PlayCircle className="w-4 h-4 mr-2" />
+        运行
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-white hover:bg-white/[0.1]"
+      >
+        <RefreshCw className="w-4 h-4 mr-2" />
+        刷新
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-white hover:bg-white/[0.1]"
+      >
+        <Settings className="w-4 h-4 mr-2" />
+        设置
+      </Button>
+    </div>
+  );
+};
+
+const nodeTypes = {
+  image: ImageNode,
+  prompt: PromptNode,
+};
 
 const CanvasPage = () => {
   const router = useRouter();
-  const [zoom, setZoom] = useState(1);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [showNodeTypeModal, setShowNodeTypeModal] = useState(false);
-  const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
-  const [connectingNode, setConnectingNode] = useState<string | null>(null);
-  const [connectionStart, setConnectionStart] = useState({ x: 0, y: 0 });
-  const [connectionEnd, setConnectionEnd] = useState({ x: 0, y: 0 });
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('');
   const [showCanvasList, setShowCanvasList] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [advancedSettings, setAdvancedSettings] = useState(false);
+  const [imageSize, setImageSize] = useState('1024');
+  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [strength, setStrength] = useState(75);
   
   // 从 store 获取状态和方法
   const {
     currentProject,
-    nodes,
-    connections,
     isLoading,
     error,
     createNewProject,
     saveProject,
     loadProject,
     deleteProject,
-    addNode,
-    updateNode,
-    deleteNode,
-    addConnection,
-    deleteConnection,
   } = useCanvasStore();
 
   useEffect(() => {
@@ -53,6 +181,51 @@ const CanvasPage = () => {
       createNewProject();
     }
   }, [currentProject, createNewProject]);
+
+  useEffect(() => {
+    // 监听节点选择
+    const handleSelectionChange = (event: any) => {
+      const { nodes: selectedNodes } = event;
+      if (selectedNodes.length > 0) {
+        setSelectedNode(selectedNodes[0].id);
+      } else {
+        setSelectedNode(null);
+      }
+    };
+
+    // 模拟初始节点
+    const initialNodes = [
+      {
+        id: '1',
+        type: 'prompt',
+        position: { x: 100, y: 100 },
+        data: { label: '提示词 1' },
+      },
+      {
+        id: '2',
+        type: 'image',
+        position: { x: 300, y: 100 },
+        data: { label: '图像 1' },
+      },
+    ];
+
+    const initialEdges = [
+      {
+        id: 'e1-2',
+        source: '1',
+        target: '2',
+        sourceHandle: '1-output',
+        targetHandle: '2-input',
+      },
+    ];
+
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+
+    return () => {
+      // 清理
+    };
+  }, []);
 
   const handleSaveProject = async () => {
     if (currentProject) {
@@ -94,29 +267,20 @@ const CanvasPage = () => {
     setTimeout(() => setSaveStatus(''), 2000);
   };
 
-  const handleAddNode = (type: string, position: { x: number; y: number }) => {
-    addNode(type, position);
-  };
-
-  const handleZoomIn = () => {
-    setZoom(zoom * 1.2);
-  };
-
-  const handleZoomOut = () => {
-    setZoom(zoom * 0.8);
-  };
-
-  const handleFitView = () => {
-    // 实现适应视图功能
-    setZoom(1);
-    setStagePos({ x: 0, y: 0 });
+  const handleAddNode = (type: string) => {
+    const newNode = {
+      id: `${Date.now()}`,
+      type,
+      position: { x: 100, y: 100 },
+      data: { label: `${type === 'prompt' ? '提示词' : '图像'} ${nodes.length + 1}` },
+    };
+    setNodes([...nodes, newNode]);
   };
 
   const handleClearCanvas = () => {
     if (confirm("确定要清空画布吗？")) {
-      // 清空所有节点和连接
-      nodes.forEach(node => deleteNode(node.id));
-      connections.forEach(conn => deleteConnection(conn.id));
+      setNodes([]);
+      setEdges([]);
     }
   };
 
@@ -124,97 +288,15 @@ const CanvasPage = () => {
     router.back();
   };
 
-  const handleNodeClick = (nodeId: string) => {
-    setSelectedNode(nodeId);
+  const handleGenerate = () => {
+    // 实现生成逻辑
+    console.log('生成图像:', prompt);
   };
 
-  const handleNodeDragStart = (e: any, nodeId: string) => {
-    setSelectedNode(nodeId);
-  };
-
-  const handleNodeDragEnd = (e: any, nodeId: string) => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (node) {
-      updateNode(nodeId, {
-        position: {
-          x: e.target.x(),
-          y: e.target.y()
-        }
-      });
-    }
-  };
-
-  const handleConnectStart = (e: any, nodeId: string) => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (node) {
-      setConnectingNode(nodeId);
-      setConnectionStart({
-        x: node.position.x + 100,
-        y: node.position.y + 50
-      });
-      setIsConnecting(true);
-    }
-  };
-
-  const handleConnectEnd = (e: any) => {
-    if (isConnecting && connectingNode) {
-      const stage = e.target.getStage();
-      const pos = stage.getPointerPosition();
-      if (pos) {
-        setConnectionEnd(pos);
-        // 检查是否连接到另一个节点
-        const targetNode = nodes.find(node => {
-          const nodeX = node.position.x;
-          const nodeY = node.position.y;
-          return pos.x >= nodeX && pos.x <= nodeX + 100 && pos.y >= nodeY && pos.y <= nodeY + 100;
-        });
-        if (targetNode && targetNode.id !== connectingNode) {
-          addConnection(connectingNode, targetNode.id);
-        }
-      }
-      setIsConnecting(false);
-      setConnectingNode(null);
-    }
-  };
-
-  const handleStageMouseDown = (e: any) => {
-    if (e.evt.button === 0) { // 左键
-      setIsDragging(true);
-      setDragStart({
-        x: e.evt.clientX - stagePos.x,
-        y: e.evt.clientY - stagePos.y
-      });
-    }
-  };
-
-  const handleStageMouseMove = (e: any) => {
-    if (isDragging) {
-      setStagePos({
-        x: e.evt.clientX - dragStart.x,
-        y: e.evt.clientY - dragStart.y
-      });
-    }
-    if (isConnecting) {
-      const stage = e.target.getStage();
-      const pos = stage.getPointerPosition();
-      if (pos) {
-        setConnectionEnd(pos);
-      }
-    }
-  };
-
-  const handleStageMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleStageMouseLeave = () => {
-    setIsDragging(false);
-  };
-
-  const getNodeColor = (node: any) => {
-    if (node.type === 'prompt') return '#f59e0b';
-    return node.data?.image ? '#00f5ff' : '#ff00ff';
-  };
+  const onConnect = useCallback(
+    (params: any) => setEdges((eds) => addEdge(params, eds)),
+    []
+  );
 
   return (
     <div className="fixed inset-0 bg-[#0a0a0a] text-white overflow-hidden">
@@ -235,8 +317,7 @@ const CanvasPage = () => {
               value={currentProject?.name || "新建项目"}
               onChange={(e) => {
                 if (currentProject) {
-                  // 这里需要更新项目名称，暂时直接修改 store 中的状态
-                  // 实际应该通过 updateProject 方法
+                  // 这里需要更新项目名称
                   console.log('更新项目名称:', e.target.value);
                 }
               }}
@@ -292,8 +373,100 @@ const CanvasPage = () => {
         </div>
       </div>
 
+      {/* 生成控制栏 */}
+      <div className="flex items-center justify-between p-4 border-b border-white/[0.06] bg-[#0a0a0a] z-10">
+        <div className="flex items-center flex-1 gap-4">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              className="w-full bg-white/[0.05] border border-white/[0.1] rounded px-4 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              placeholder="输入提示词生成新图像..."
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAdvancedSettings(!advancedSettings)}
+              className="flex items-center gap-1 px-3 py-2 bg-white/[0.05] border border-white/[0.1] rounded text-sm hover:bg-white/[0.1] transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              <span>高级设置</span>
+              {advancedSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            <span className="text-sm text-zinc-400">
+              {imageSize} ({aspectRatio}) | 强度 {strength}%
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleGenerate}
+            disabled={!prompt}
+            className="flex items-center gap-1 px-4 py-2 bg-indigo-500/20 border border-indigo-500/30 rounded text-sm hover:bg-indigo-500/30 transition-colors disabled:opacity-50"
+          >
+            <Sparkles className="w-4 h-4" />
+            生成
+          </Button>
+          <Button
+            disabled
+            className="flex items-center gap-1 px-4 py-2 bg-white/[0.05] border border-white/[0.1] rounded text-sm hover:bg-white/[0.1] transition-colors disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            下载
+          </Button>
+        </div>
+      </div>
+
+      {/* 高级设置面板 */}
+      {advancedSettings && (
+        <div className="p-4 border-b border-white/[0.06] bg-[#0a0a0a]">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1">图像尺寸</label>
+              <select
+                value={imageSize}
+                onChange={(e) => setImageSize(e.target.value)}
+                className="w-full bg-white/[0.05] border border-white/[0.1] rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              >
+                <option value="512">512</option>
+                <option value="1024">1024</option>
+                <option value="2048">2048</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1">宽高比</label>
+              <select
+                value={aspectRatio}
+                onChange={(e) => setAspectRatio(e.target.value)}
+                className="w-full bg-white/[0.05] border border-white/[0.1] rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              >
+                <option value="1:1">1:1</option>
+                <option value="16:9">16:9</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1">强度: {strength}%</label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={strength}
+                onChange={(e) => setStrength(Number(e.target.value))}
+                className="w-full h-2 bg-white/[0.05] rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, #00f5ff 0%, #00f5ff ${strength}%, #ffffff10 ${strength}%, #ffffff10 100%)`
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 主内容区 */}
-      <div className="flex h-[calc(100vh-72px)] overflow-hidden">
+      <div className="flex h-[calc(100vh-160px)] overflow-hidden">
         {/* 左侧节点库 */}
         <div className="w-48 border-r border-white/[0.06] p-4 bg-[#0a0a0a]">
           <h3 className="text-sm font-medium text-zinc-400 mb-3 uppercase tracking-wider">
@@ -301,14 +474,14 @@ const CanvasPage = () => {
           </h3>
           <div className="space-y-2">
             <button
-              onClick={() => handleAddNode('image', { x: 100, y: 100 })}
+              onClick={() => handleAddNode('image')}
               className="w-full flex items-center gap-2 p-2 bg-white/[0.05] border border-white/[0.1] rounded text-sm hover:bg-white/[0.1] transition-colors"
             >
               <ImageIcon className="w-4 h-4" />
               <span>图像节点</span>
             </button>
             <button
-              onClick={() => handleAddNode('prompt', { x: 100, y: 200 })}
+              onClick={() => handleAddNode('prompt')}
               className="w-full flex items-center gap-2 p-2 bg-white/[0.05] border border-white/[0.1] rounded text-sm hover:bg-white/[0.1] transition-colors"
             >
               <Pencil className="w-4 h-4" />
@@ -319,147 +492,31 @@ const CanvasPage = () => {
 
         {/* 中央画布区域 */}
         <div className="flex-1 relative overflow-hidden bg-[#0d0d0d]">
-          {/* 画布控制 */}
-          <div className="absolute top-4 right-4 flex flex-col gap-2 bg-white/[0.05] border border-white/[0.1] rounded p-2 z-10">
-            <button
-              onClick={handleZoomIn}
-              className="p-2 rounded hover:bg-white/[0.1] transition-colors"
-              title="放大"
+          <ReactFlowProvider>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              nodeTypes={nodeTypes}
+              defaultZoom={1}
+              defaultPosition={{ x: 0, y: 0 }}
             >
-              <ZoomIn className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleZoomOut}
-              className="p-2 rounded hover:bg-white/[0.1] transition-colors"
-              title="缩小"
-            >
-              <ZoomOut className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleFitView}
-              className="p-2 rounded hover:bg-white/[0.1] transition-colors"
-              title="适应视图"
-            >
-              <Move className="w-4 h-4" />
-            </button>
-            <div className="border-t border-white/[0.1] my-1"></div>
-            <button
-              className="p-2 rounded hover:bg-white/[0.1] transition-colors"
-              title="层级"
-            >
-              <Layers className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Konva 画布 */}
-          <Stage
-            width={window.innerWidth - 48}
-            height={window.innerHeight - 72}
-            onMouseDown={handleStageMouseDown}
-            onMouseMove={handleStageMouseMove}
-            onMouseUp={handleStageMouseUp}
-            onMouseLeave={handleStageMouseLeave}
-            scale={{ x: zoom, y: zoom }}
-            position={stagePos}
-            draggable={false}
-          >
-            <Layer>
-              {/* 网格背景 */}
-              <Rect
-                width={window.innerWidth * 10}
-                height={window.innerHeight * 10}
-                fillPatternImage={
-                  new Image(50, 50)
-                }
-                fillPatternScale={{ x: 50, y: 50 }}
-                fillPatternOffset={{ x: 0, y: 0 }}
-                fillPatternRepeat="repeat"
+              <Background variant="dots" gap={16} size={1} color="#ffffff10" />
+              <Controls className="bg-[#0a0a0a]/80 border border-white/[0.1] rounded-lg" />
+              <MiniMap 
+                nodeColor={(n) => {
+                  if (n.type === 'prompt') return '#f59e0b';
+                  return '#00f5ff';
+                }}
+                className="bg-[#0a0a0a]/80 border border-white/[0.1] rounded-lg"
               />
-              
-              {/* 连接线条 */}
-              {connections.map(connection => {
-                const sourceNode = nodes.find(n => n.id === connection.source);
-                const targetNode = nodes.find(n => n.id === connection.target);
-                if (sourceNode && targetNode) {
-                  return (
-                    <Line
-                      key={connection.id}
-                      points={[
-                        sourceNode.position.x + 100,
-                        sourceNode.position.y + 50,
-                        targetNode.position.x,
-                        targetNode.position.y + 50
-                      ]}
-                      stroke="#00f5ff"
-                      strokeWidth={2}
-                      tension={0.5}
-                      dash={[5, 5]}
-                      draggable={false}
-                    />
-                  );
-                }
-                return null;
-              })}
-              
-              {/* 连接预览线 */}
-              {isConnecting && (
-                <Line
-                  points={[connectionStart.x, connectionStart.y, connectionEnd.x, connectionEnd.y]}
-                  stroke="#ff00ff"
-                  strokeWidth={2}
-                  tension={0.5}
-                  dash={[5, 5]}
-                  draggable={false}
-                />
-              )}
-              
-              {/* 节点 */}
-              {nodes.map(node => (
-                <Group
-                  key={node.id}
-                  x={node.position.x}
-                  y={node.position.y}
-                  draggable
-                  onDragStart={(e) => handleNodeDragStart(e, node.id)}
-                  onDragEnd={(e) => handleNodeDragEnd(e, node.id)}
-                  onClick={() => handleNodeClick(node.id)}
-                >
-                  <Rect
-                    width={100}
-                    height={100}
-                    fill={getNodeColor(node)}
-                    stroke={selectedNode === node.id ? '#ffffff' : 'transparent'}
-                    strokeWidth={selectedNode === node.id ? 2 : 0}
-                    cornerRadius={8}
-                  />
-                  <Text
-                    text={node.type === 'image' ? '图像' : '提示词'}
-                    x={50}
-                    y={45}
-                    align="center"
-                    verticalAlign="middle"
-                    fill="#0a0a0a"
-                    fontSize={14}
-                    fontWeight="bold"
-                  />
-                  {/* 连接点 */}
-                  <Circle
-                    x={100}
-                    y={50}
-                    radius={6}
-                    fill="#0a0a0a"
-                    stroke="#00f5ff"
-                    strokeWidth={2}
-                    draggable={false}
-                    onClick={(e) => {
-                      e.cancelBubble = true;
-                      handleConnectStart(e, node.id);
-                    }}
-                  />
-                </Group>
-              ))}
-            </Layer>
-          </Stage>
+              <NodeToolbar>
+                <CustomToolbar />
+              </NodeToolbar>
+            </ReactFlow>
+          </ReactFlowProvider>
 
           {/* 操作指南 */}
           <div className="absolute bottom-4 left-4 bg-white/[0.05] border border-white/[0.1] rounded-xl p-4 max-w-xs z-10">
