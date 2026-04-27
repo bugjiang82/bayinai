@@ -361,8 +361,7 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
           accept="image/*"
           onChange={handleImageUpload}
           className="hidden"
-        >
-        </input>
+        />
 
         {/* 提示词输入 */}
         <textarea
