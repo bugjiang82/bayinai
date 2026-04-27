@@ -21,6 +21,7 @@ const generateModes = [
   { key: "video", label: "视频生成", icon: Video, href: "/generate/video" },
   { key: "edit", label: "图片编辑", icon: Pencil, href: "/generate/edit" },
   { key: "architecture", label: "进阶设计", icon: Building2, href: "/generate/architecture" },
+  { key: "canvas", label: "画布模式", icon: Building2, href: "/generate/canvas" },
   { key: "all-round-test", label: "自动化测试", icon: Bot, href: "/all-round-test" },
 ];
 
@@ -117,6 +118,7 @@ export default function Sidebar({ currentMode = "text-to-image" }: SidebarProps)
     if (pathname.includes("video")) return "video";
     if (pathname.includes("edit")) return "edit";
     if (pathname.includes("architecture")) return "architecture";
+    if (pathname.includes("canvas")) return "canvas";
     if (pathname.includes("all-round-test")) return "all-round-test";
     if (pathname.includes("/generate/image")) return "image";
     return "image";
