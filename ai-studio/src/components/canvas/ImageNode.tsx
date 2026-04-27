@@ -242,22 +242,9 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
     </div>
   );
 
-  const nodeStyle = useMemo(() => {
-    return {
-      width: 288,
-      minHeight: 300,
-      position: 'relative',
-      borderRadius: '12px',
-      overflow: 'hidden',
-      boxShadow: isGenerating ? '0 0 30px rgba(255,0,255,0.3)' : (hover ? '0 0 20px rgba(0,245,255,0.2)' : '0 8px 32px 0 rgba(0, 0, 0, 0.37)'),
-      transition: 'all 0.3s ease'
-    };
-  }, [isGenerating, hover]);
-
   return (
     <div 
-      style={nodeStyle} 
-      className="glass"
+      className={`w-72 glass rounded-xl relative transition-all duration-300 ${isGenerating ? 'border-cyber-magenta shadow-[0_0_30px_rgba(255,0,255,0.3)]' : 'hover:shadow-[0_0_20px_rgba(0,245,255,0.2)]'}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => { setHover(false); setShowCrop(false); setShowAnnotate(false); }}
     >

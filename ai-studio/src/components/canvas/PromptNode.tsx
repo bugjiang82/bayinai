@@ -68,20 +68,9 @@ const PromptNode: React.FC<PromptNodeProps> = ({ id, data, selected, position })
     </div>
   );
 
-  const nodeStyle = {
-    width: 288,
-    minHeight: 300,
-    position: 'relative',
-    borderRadius: '12px',
-    overflow: 'hidden',
-    boxShadow: isAnalyzing ? '0 0 30px rgba(0,245,255,0.3)' : (hover ? '0 0 20px rgba(0,245,255,0.2)' : '0 8px 32px 0 rgba(0, 0, 0, 0.37)'),
-    transition: 'all 0.3s ease'
-  };
-
   return (
     <div 
-      style={nodeStyle} 
-      className="glass"
+      className={`w-72 glass rounded-xl relative transition-all duration-300 ${isAnalyzing ? 'border-cyber-cyan shadow-[0_0_30px_rgba(0,245,255,0.3)]' : 'hover:shadow-[0_0_20px_rgba(0,245,255,0.2)]'}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
