@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 /* ========================================
@@ -79,6 +80,10 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #6366f1;
+  --dark-bg: #0a0a0f;
+  --cyber-cyan: #00f5ff;
+  --cyber-magenta: #ff00ff;
+  --cyber-yellow: #ffff00;
 }
 
 /* --- Tailwind v4 Theme Configuration --- */
@@ -117,6 +122,9 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-cyber-cyan: var(--cyber-cyan);
+  --color-cyber-magenta: var(--cyber-magenta);
+  --color-cyber-yellow: var(--cyber-yellow);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -131,6 +139,9 @@
   --animate-spin-slow: spin 3s linear infinite;
   --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
   --animate-shimmer: shimmer 2s linear infinite;
+  --animate-bounce: bounce 1s infinite;
+  --animate-spin: spin 1s linear infinite;
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* --- Base Styles --- */
@@ -285,6 +296,57 @@ body {
   }
 }
 
+/* --- Cyber Grid Background --- */
+.cyber-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image: linear-gradient(rgba(0, 245, 255, 0.1) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0, 245, 255, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+}
+
+/* --- Cyber Animation Classes --- */
+.animate-bounce {
+  animation: bounce 1s infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* --- Glassmorphism Utility Classes --- */
 .glass {
   background: rgba(255, 255, 255, 0.05);
@@ -353,4 +415,82 @@ textarea,
 select {
   transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+/* --- Nano Banana Styles --- */
+:root {
+  --color-zinc-950: #0f0f0f;
+  --color-zinc-900: #161616;
+  --color-zinc-800: #2a2a2a;
+  --color-zinc-700: #333333;
+  --color-yellow-500: #ffe135;
+}
+
+.dark {
+  --color-zinc-950: #0f0f0f;
+  --color-zinc-900: #161616;
+  --color-zinc-800: #2a2a2a;
+  --color-zinc-700: #333333;
+  --color-yellow-500: #ffe135;
+}
+
+@layer components {
+  .section-header {
+    @apply flex items-center gap-2 text-[12px] uppercase tracking-[1px] text-[#888] mb-3 mt-5;
+  }
+  
+  .section-header::after {
+    content: '';
+    @apply flex-grow h-[1px] bg-zinc-800;
+  }
+
+  .upload-box {
+    @apply border-2 border-dashed border-zinc-700 rounded-xl p-5 text-center bg-[#1e1e1e] cursor-pointer hover:border-yellow-500 transition-colors;
+  }
+
+  .input-field {
+    @apply w-full bg-[#0a0a0a] border border-zinc-700 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-yellow-500 transition-all;
+  }
+
+  .sleek-slider {
+    @apply w-full accent-yellow-500 bg-zinc-700 h-1 rounded-full appearance-none;
+  }
+  
+  .banana-btn {
+    @apply px-4 py-2 rounded-lg font-semibold transition-all active:scale-95;
+  }
+  
+  .btn-primary {
+    @apply bg-yellow-500 text-black hover:bg-yellow-400;
+  }
+  
+  .btn-secondary {
+    @apply bg-zinc-800 text-white hover:bg-zinc-700;
+  }
+
+  .glass-status {
+    @apply bg-black/80 backdrop-blur-md border border-zinc-700 px-5 py-2.5 rounded-full flex items-center gap-3 text-xs shadow-2xl;
+  }
+
+  .glass-card {
+    @apply bg-black/60 backdrop-blur-xl border border-zinc-700 rounded-2xl shadow-2xl;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-700 rounded-full hover:bg-zinc-600;
+}
+
+/* --- Font Configuration --- */
+@theme inline {
+  --font-sans: Outfit, system-ui, -apple-system, sans-serif;
+  --font-mono: JetBrains Mono, ui-monospace, SFMono-Regular, monospace;
 }
