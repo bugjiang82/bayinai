@@ -273,6 +273,23 @@ export default function CanvasPage() {
           nodeTypes={nodeTypes}
           fitView
           deleteKeyCode={['Delete', 'Backspace']}
+          onPaneClick={(event) => {
+            // 双击画布添加节点
+            if (event.detail === 2) {
+              const { top, left } = reactFlowWrapper.current.getBoundingClientRect();
+              const flowPos = screenToFlowPosition({
+                x: event.clientX - left,
+                y: event.clientY - top
+              });
+              const newNode = {
+                id: getId(),
+                type: 'imageNode',
+                position: flowPos,
+                data: { image: null, prompt: '' }
+              };
+              setNodes((nds) => nds.concat(newNode));
+            }
+          }}
         >
           <Background color="rgba(0, 245, 255, 0.1)" gap={50} size={1} />
           <Controls className="glass" />
@@ -310,8 +327,9 @@ export default function CanvasPage() {
             <div className="glass p-4 rounded-xl max-w-xs">
               <h4 className="text-cyber-cyan font-semibold mb-2 text-sm">💡 操作指南</h4>
               <div className="text-xs text-gray-300 space-y-1">
+                <p>• 双击画布任意位置添加新节点</p>
                 <p>• 点击 <span className="text-cyber-cyan">+ 添加节点</span> 创建新节点</p>
-                <p>• 从节点右侧的 <span className="text-cyber-cyan">●</span> 拖拽到空白处</p>
+                <p>• 从节点右侧的 <span className="text-cyber-cyan">+</span> 拖拽到空白处</p>
                 <p>• 选择<span className="text-cyber-cyan">提取提示词</span>分析并编辑父节点图像</p>
                 <p>• 选择<span className="text-cyber-magenta">图生图编辑</span>基于父节点生成新图</p>
               </div>

@@ -96,13 +96,15 @@ const PromptNode: React.FC<PromptNodeProps> = ({ id, data, selected, position })
         {hover && inheritImage && floatingMenu}
 
         {/* 节点头部 */}
-        <div className="px-4 py-3 bg-gradient-to-r from-cyber-cyan/10 to-transparent border-b border-white/10 flex items-center gap-2">
-          <div className="w-2 h-2 bg-cyber-cyan rounded-full shadow-[0_0_8px_#00f5ff] animate-pulse" />
-          <span className="text-xs font-semibold tracking-wider uppercase text-cyber-cyan">
-            NODE {id.slice(-4).toUpperCase()}
-          </span>
+        <div className="px-4 py-3 bg-gradient-to-r from-cyber-cyan/10 to-transparent border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-cyber-cyan rounded-full shadow-[0_0_8px_#00f5ff] animate-pulse" />
+            <span className="text-xs font-semibold tracking-wider uppercase text-cyber-cyan">
+              提示词节点
+            </span>
+          </div>
           {isAnalyzing && (
-            <div className="ml-auto flex items-center gap-1">
+            <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-cyber-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
               <span className="w-1.5 h-1.5 bg-cyber-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
               <span className="w-1.5 h-1.5 bg-cyber-cyan rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
