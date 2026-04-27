@@ -260,9 +260,16 @@ export default function CanvasPage() {
   return (
     <div className="w-full h-screen overflow-hidden bg-gray-950">
       {/* 顶部导航栏 */}
-      <div className="fixed top-0 left-0 right-0 h-14 bg-black/80 backdrop-blur-md border-b border-gray-800 z-50 flex items-center justify-between px-6">
-        <div className="flex items-center space-x-4">
-          <div className="text-white font-bold text-xl">TapNow</div>
+      <div className="fixed top-0 left-0 right-0 h-16 bg-black/90 backdrop-blur-md border-b border-gray-800 z-50 flex items-center justify-between px-6">
+        <div className="flex items-center space-x-6">
+          <div className="text-white font-bold text-2xl flex items-center">
+            <span className="text-blue-400 mr-1">Tap</span>Now
+          </div>
+          <nav className="hidden md:flex space-x-6">
+            <a href="/" className="text-gray-400 hover:text-white text-sm font-medium transition-colors">Home</a>
+            <a href="/" className="text-gray-400 hover:text-white text-sm font-medium transition-colors">Templates</a>
+            <a href="/" className="text-gray-400 hover:text-white text-sm font-medium transition-colors">Community</a>
+          </nav>
         </div>
         <div className="flex items-center space-x-4">
           <button 
@@ -281,8 +288,53 @@ export default function CanvasPage() {
         </div>
       </div>
 
+      {/* 左侧工具栏 */}
+      <div className="fixed left-0 top-16 bottom-0 w-16 bg-black/80 backdrop-blur-md border-r border-gray-800 z-40 flex flex-col items-center space-y-6 pt-6">
+        <button 
+          onClick={addNode} 
+          className="flex flex-col items-center space-y-1 text-gray-400 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors"
+          title="Add Image Node"
+        >
+          <Plus size={20} />
+          <span className="text-xs">Image</span>
+        </button>
+        <button 
+          onClick={() => {
+            const newNode = {
+              id: getId(),
+              type: 'promptNode',
+              position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
+              data: { inheritImage: null, extractedPrompt: '', editedPrompt: '' }
+            };
+            setNodes((nds) => nds.concat(newNode));
+          }} 
+          className="flex flex-col items-center space-y-1 text-gray-400 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors"
+          title="Add Prompt Node"
+        >
+          <Edit size={20} />
+          <span className="text-xs">Prompt</span>
+        </button>
+        <div className="border-t border-gray-800 w-8 my-2" />
+        <button 
+          onClick={newCanvas} 
+          className="flex flex-col items-center space-y-1 text-gray-400 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors"
+          title="New Canvas"
+        >
+          <Trash2 size={20} />
+          <span className="text-xs">New</span>
+        </button>
+        <button 
+          onClick={() => setShowCanvasList(true)} 
+          className="flex flex-col items-center space-y-1 text-gray-400 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors"
+          title="Open Projects"
+        >
+          <FolderOpen size={20} />
+          <span className="text-xs">Open</span>
+        </button>
+      </div>
+
       {/* 主画布区域 */}
-      <div ref={reactFlowWrapper} className="w-full h-full pt-14">
+      <div ref={reactFlowWrapper} className="w-full h-full pt-32 pl-16">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -323,53 +375,6 @@ export default function CanvasPage() {
             maskColor="rgba(10, 10, 15, 0.8)"
           />
 
-          {/* 右侧工具栏 */}
-          <Panel position="right">
-            <div className="bg-black/30 backdrop-blur-md border border-gray-800 rounded-lg p-4 space-y-4">
-              <h4 className="text-white font-medium text-sm mb-2">Add Node</h4>
-              <button 
-                onClick={addNode} 
-                className="w-full flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
-              >
-                <Plus size={16} />
-                <span>Image Node</span>
-              </button>
-              <button 
-                onClick={() => {
-                  const newNode = {
-                    id: getId(),
-                    type: 'promptNode',
-                    position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
-                    data: { inheritImage: null, extractedPrompt: '', editedPrompt: '' }
-                  };
-                  setNodes((nds) => nds.concat(newNode));
-                }} 
-                className="w-full flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
-              >
-                <Plus size={16} />
-                <span>Prompt Node</span>
-              </button>
-              
-              <div className="border-t border-gray-800 pt-4">
-                <h4 className="text-white font-medium text-sm mb-2">Canvas</h4>
-                <button 
-                  onClick={newCanvas} 
-                  className="w-full flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
-                >
-                  <Trash2 size={16} />
-                  <span>New Canvas</span>
-                </button>
-                <button 
-                  onClick={() => setShowCanvasList(true)} 
-                  className="w-full flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
-                >
-                  <FolderOpen size={16} />
-                  <span>Open Projects</span>
-                </button>
-              </div>
-            </div>
-          </Panel>
-
           {showHint && (
             <Panel position="center">
               <div className="bg-black/70 backdrop-blur-md border border-gray-800 px-6 py-3 rounded-lg text-white font-medium">
@@ -378,6 +383,19 @@ export default function CanvasPage() {
             </Panel>
           )}
         </ReactFlow>
+        <Toolbar
+          onAddNode={addNode}
+          onClear={newCanvas}
+          onSave={saveCanvasToServer}
+          onNew={newCanvas}
+          onOpenProjects={() => setShowCanvasList(true)}
+          onLogout={async () => {
+            'use server';
+            await signOut();
+          }}
+          saveStatus={saveStatus}
+          user={session.user}
+        />
         <NodeTypeModal
           isOpen={showNodeTypeModal}
           position={menuPosition}

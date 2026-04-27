@@ -185,14 +185,14 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
 
   const floatingMenu = (
     <div
-      className="absolute -top-10 left-1/2 -translate-x-1/2 z-50 glass px-2 py-1.5 rounded-xl flex gap-1 items-center whitespace-nowrap"
+      className="absolute -top-10 left-1/2 -translate-x-1/2 z-50 bg-white/10 backdrop-blur-md border border-gray-700 px-2 py-1.5 rounded-xl flex gap-1 items-center whitespace-nowrap"
       style={{ animation: 'fadeInUp 0.2s ease-out' }}
     >
       <button
         onClick={(e) => { e.stopPropagation(); setShowCrop(true); }}
         disabled={!image}
-        className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-cyber-cyan transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-        title="裁剪"
+        className="p-1.5 rounded-lg hover:bg-white/20 text-gray-400 hover:text-blue-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        title="Crop"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21V7.7l-1.4 1A2 2 0 017 4h10a2 2 0 011.4 3.4L17 8v13" />
@@ -201,8 +201,8 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
       <button
         onClick={(e) => { e.stopPropagation(); setIsGenerating(true); handleGenerate(); }}
         disabled={!image || isGenerating}
-        className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-cyber-yellow transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-        title="重绘"
+        className="p-1.5 rounded-lg hover:bg-white/20 text-gray-400 hover:text-blue-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        title="Regenerate"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -211,19 +211,19 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
       <button
         onClick={(e) => { e.stopPropagation(); setShowAnnotate(true); }}
         disabled={!image}
-        className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-cyber-magenta transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-        title="标注"
+        className="p-1.5 rounded-lg hover:bg-white/20 text-gray-400 hover:text-blue-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        title="Annotate"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
         </svg>
       </button>
-      <div className="w-px h-5 bg-white/20" />
+      <div className="w-px h-5 bg-gray-700" />
       <button
         onClick={handleDownload}
         disabled={!image}
-        className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-cyber-cyan transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-        title="下载"
+        className="p-1.5 rounded-lg hover:bg-white/20 text-gray-400 hover:text-blue-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        title="Download"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -232,8 +232,8 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
       <button
         onClick={(e) => { e.stopPropagation(); setShowFullscreen(true); }}
         disabled={!image}
-        className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-cyber-cyan transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-        title="全屏查看"
+        className="p-1.5 rounded-lg hover:bg-white/20 text-gray-400 hover:text-blue-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        title="Fullscreen"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4m4 0l-5-5" />
@@ -244,7 +244,7 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
 
   return (
     <div 
-      className={`w-72 glass rounded-xl relative transition-all duration-300 ${isGenerating ? 'border-cyber-magenta shadow-[0_0_30px_rgba(255,0,255,0.3)]' : 'hover:shadow-[0_0_20px_rgba(0,245,255,0.2)]'}`}
+      className={`w-72 bg-white/5 backdrop-blur-md border border-gray-800 rounded-xl relative transition-all duration-300 ${isGenerating ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]'}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => { setHover(false); setShowCrop(false); setShowAnnotate(false); }}
     >
@@ -252,7 +252,7 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
         <Handle 
           type="target" 
           position={Position.Left} 
-          className="!w-6 !h-6 !-left-3 !z-50 !bg-cyber-magenta !border-[3px] !border-white !shadow-[0_0_15px_#ff00ff] hover:!scale-150 hover:!shadow-[0_0_25px_#ff00ff] !transition-all !duration-200 flex items-center justify-center text-white font-bold text-xs"
+          className="!w-6 !h-6 !-left-3 !z-50 !bg-gray-700 !border-[2px] !border-gray-500 hover:!bg-blue-500 hover:!border-blue-300 !transition-all !duration-200 flex items-center justify-center text-white font-bold text-xs"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           +
@@ -260,7 +260,7 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
         <Handle 
           type="source" 
           position={Position.Right} 
-          className="!w-6 !h-6 !-right-3 !z-50 !bg-cyber-cyan !border-[3px] !border-white !shadow-[0_0_15px_#00f5ff] hover:!scale-150 hover:!shadow-[0_0_25px_#00f5ff] !transition-all !duration-200 cursor-crosshair flex items-center justify-center text-white font-bold text-xs"
+          className="!w-6 !h-6 !-right-3 !z-50 !bg-gray-700 !border-[2px] !border-gray-500 hover:!bg-blue-500 hover:!border-blue-300 !transition-all !duration-200 cursor-crosshair flex items-center justify-center text-white font-bold text-xs"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           +
@@ -270,18 +270,18 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
         {hover && image && floatingMenu}
 
         {/* 节点头部 */}
-        <div className="px-4 py-3 bg-gradient-to-r from-cyber-cyan/10 to-transparent border-b border-white/10 flex items-center justify-between">
+        <div className="px-4 py-3 bg-black/30 border-b border-gray-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-cyber-cyan rounded-full shadow-[0_0_8px_#00f5ff] animate-pulse" />
-            <span className="text-xs font-semibold tracking-wider uppercase text-cyber-cyan">
-              图片节点
+            <div className="w-2 h-2 bg-blue-400 rounded-full shadow-[0_0_8px_#3b82f6] animate-pulse" />
+            <span className="text-xs font-semibold tracking-wider uppercase text-white">
+              Image
             </span>
           </div>
           {isGenerating && (
             <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-cyber-magenta rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 bg-cyber-magenta rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 bg-cyber-magenta rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
           )}
         </div>
@@ -291,7 +291,7 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
 
         {/* 图片区域 */}
         <div
-          className={`w-full h-44 bg-black/30 rounded-lg overflow-hidden relative border transition-all duration-300 group ${image ? 'border-white/10' : 'border-dashed border-white/20 hover:border-cyber-cyan hover:bg-cyber-cyan/5'}`}
+          className={`w-full h-44 bg-black/30 rounded-lg overflow-hidden relative border transition-all duration-300 group ${image ? 'border-gray-700' : 'border-dashed border-gray-700 hover:border-blue-500 hover:bg-blue-500/5'}`}
           onClick={() => !image && inputRef.current?.click()}
           ref={cropRef}
           onMouseMove={handleCropMouseMove}
@@ -317,7 +317,7 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
                   <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  <span className="text-white/80 text-xs font-medium">替换图片</span>
+                  <span className="text-white/80 text-xs font-medium">Replace Image</span>
                 </div>
               </div>
             </>
@@ -328,17 +328,17 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
                 alt="Inherited image"
                 className="w-24 h-24 object-cover rounded-md mb-2"
               />
-              <p className="text-sm text-gray-300">继承自父节点</p>
+              <p className="text-sm text-gray-400">Inherited from parent</p>
             </div>
           ) : (
             <div
               className="w-full h-full bg-black/50 rounded-md flex flex-col items-center justify-center cursor-pointer hover:bg-black/60 transition-colors"
               onClick={() => inputRef.current?.click()}
             >
-              <svg className="w-8 h-8 text-cyber-cyan mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-8 h-8 text-blue-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <span className="text-xs text-white/60">点击上传图片</span>
+              <span className="text-xs text-gray-400">Click to upload</span>
             </div>
           )}
 
@@ -347,13 +347,13 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
             <>
               <div className="absolute bottom-0 left-0 w-full h-1 bg-black/50">
                 <div
-                  className="h-full bg-gradient-to-r from-cyber-cyan to-cyber-magenta shadow-[0_0_10px_#00f5ff] transition-all duration-300"
+                  className="h-full bg-blue-500 shadow-[0_0_10px_#3b82f6] transition-all duration-300"
                   style={{ width: `${progress}%` }}
                 />
               </div>
               {estimatedTime > 0 && (
-                <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/70 rounded text-[10px] text-cyber-cyan">
-                  预计 {estimatedTime}s
+                <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/70 rounded text-[10px] text-blue-400">
+                  Estimated {estimatedTime}s
                 </div>
               )}
             </>
@@ -369,9 +369,9 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
 
         {/* 提示词输入 */}
         <textarea
-          className="w-full mt-3 px-3 py-2 bg-black/30 border border-white/10 rounded-md text-white text-sm outline-none resize-none focus:border-cyber-cyan focus:shadow-[0_0_10px_rgba(0,245,255,0.2)] placeholder:text-white/30"
+          className="w-full mt-3 px-3 py-2 bg-black/30 border border-gray-700 rounded-md text-white text-sm outline-none resize-none focus:border-blue-500 focus:shadow-[0_0_10px_rgba(59,130,246,0.2)] placeholder:text-gray-500"
           rows={2}
-          placeholder="输入提示词生成新图像..."
+          placeholder="Enter prompt to generate new image..."
           value={prompt}
           onChange={(e) => {
             setPrompt(e.target.value);
@@ -383,20 +383,20 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
         <div className="mt-3">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1 text-xs text-white/50 hover:text-cyber-cyan transition-colors"
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-400 transition-colors"
           >
             <span className={`transform transition-transform ${showAdvanced ? 'rotate-90' : ''}`}>▶</span>
-            <span>高级设置</span>
+            <span>Advanced Settings</span>
             <span className="ml-2 text-[10px] opacity-60">
-              {getResolutionLabel(resolution)} | {aspectRatio} | 强度 {Math.round(strength * 100)}%
+              {getResolutionLabel(resolution)} | {aspectRatio} | Strength {Math.round(strength * 100)}%
             </span>
           </button>
 
           {showAdvanced && (
-            <div className="mt-3 p-3 bg-black/20 rounded-lg border border-white/5 space-y-3">
+            <div className="mt-3 p-3 bg-black/20 rounded-lg border border-gray-700 space-y-3">
               {/* 分辨率选择 */}
               <div>
-                <label className="text-[10px] text-white/50 uppercase tracking-wider">分辨率</label>
+                <label className="text-[10px] text-gray-400 uppercase tracking-wider">Resolution</label>
                 <div className="flex gap-2 mt-1">
                   {['1k', '2k', '4k'].map((res) => (
                     <button
@@ -405,7 +405,7 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
                         setResolution(res);
                         (data as any).resolution = res;
                       }}
-                      className={`flex-1 py-1 px-2 text-[10px] rounded border transition-all ${resolution === res ? 'bg-cyber-cyan/20 border-cyber-cyan text-cyber-cyan' : 'bg-white/5 border-white/10 text-white/50 hover:border-white/30'}`}
+                      className={`flex-1 py-1 px-2 text-[10px] rounded border transition-all ${resolution === res ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-gray-700 text-gray-400 hover:border-gray-500'}`}
                     >
                       {res.toUpperCase()}
                     </button>
@@ -415,33 +415,35 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
 
               {/* 图片比例选择 */}
               <div>
-                <label className="text-[10px] text-white/50 uppercase tracking-wider">图片比例</label>
+                <label className="text-[10px] text-gray-400 uppercase tracking-wider">Aspect Ratio</label>
                 <div className="flex gap-2 mt-1">
-                  {[
-                    { value: '1:1', label: '1:1' },
-                    { value: '4:3', label: '4:3' },
-                    { value: '16:9', label: '16:9' },
-                    { value: '9:16', label: '9:16' }
-                  ].map((ratio) => (
-                    <button
-                      key={ratio.value}
-                      onClick={() => {
-                        setAspectRatio(ratio.value);
-                        (data as any).aspectRatio = ratio.value;
-                      }}
-                      className={`flex-1 py-1 px-2 text-[10px] rounded border transition-all ${aspectRatio === ratio.value ? 'bg-cyber-magenta/20 border-cyber-magenta text-cyber-magenta' : 'bg-white/5 border-white/10 text-white/50 hover:border-white/30'}`}
-                    >
-                      {ratio.label}
-                    </button>
-                  ))}
+                  {
+                    [
+                      { value: '1:1', label: '1:1' },
+                      { value: '4:3', label: '4:3' },
+                      { value: '16:9', label: '16:9' },
+                      { value: '9:16', label: '9:16' }
+                    ].map((ratio) => (
+                      <button
+                        key={ratio.value}
+                        onClick={() => {
+                          setAspectRatio(ratio.value);
+                          (data as any).aspectRatio = ratio.value;
+                        }}
+                        className={`flex-1 py-1 px-2 text-[10px] rounded border transition-all ${aspectRatio === ratio.value ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-gray-700 text-gray-400 hover:border-gray-500'}`}
+                      >
+                        {ratio.label}
+                      </button>
+                    ))
+                  }
                 </div>
               </div>
 
               {/* 强度滑块 */}
               <div>
                 <div className="flex justify-between">
-                  <label className="text-[10px] text-white/50 uppercase tracking-wider">保留度</label>
-                  <span className="text-[10px] text-cyber-cyan">{Math.round(strength * 100)}%</span>
+                  <label className="text-[10px] text-gray-400 uppercase tracking-wider">Strength</label>
+                  <span className="text-[10px] text-blue-400">{Math.round(strength * 100)}%</span>
                 </div>
                 <input
                   type="range"
@@ -453,11 +455,11 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
                     setStrength(val);
                     (data as any).strength = val;
                   }}
-                  className="w-full mt-2 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-cyber-cyan [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_#00f5ff] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-125"
+                  className="w-full mt-2 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_#3b82f6] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-125"
                 />
-                <div className="flex justify-between text-[9px] text-white/30 mt-1">
-                  <span>创新</span>
-                  <span>保留</span>
+                <div className="flex justify-between text-[9px] text-gray-500 mt-1">
+                  <span>Creative</span>
+                  <span>Preserve</span>
                 </div>
               </div>
             </div>
@@ -465,26 +467,26 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
         </div>
 
         {/* 节点底部 */}
-        <div className="px-4 py-3 border-t border-white/10 flex gap-2">
+        <div className="px-4 py-3 border-t border-gray-800 flex gap-2">
           <button
             onClick={handleGenerate}
             disabled={isGenerating || !prompt.trim()}
-            className="flex-1 py-2 px-4 text-xs font-semibold uppercase tracking-wide rounded-md bg-gradient-to-br from-cyber-cyan/20 to-cyber-cyan/5 border border-cyber-cyan/30 text-cyber-cyan hover:from-cyber-cyan/40 hover:to-cyber-cyan/10 hover:shadow-[0_0_15px_rgba(0,245,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+            className="flex-1 py-2 px-4 text-xs font-semibold uppercase tracking-wide rounded-md bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
           >
             {isGenerating ? (
               <span className="flex items-center justify-center gap-2">
-                <span className="w-3 h-3 border-2 border-cyber-cyan/30 border-t-cyber-cyan rounded-full animate-spin" />
-                生成中
+                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Generating
               </span>
-            ) : '生成'}
+            ) : 'Generate'}
           </button>
 
           <button
             onClick={handleDownload}
             disabled={!image}
-            className="flex-1 py-2 px-4 text-xs font-semibold uppercase tracking-wide rounded-md bg-gradient-to-br from-cyber-magenta/20 to-cyber-magenta/5 border border-cyber-magenta/30 text-cyber-magenta hover:from-cyber-magenta/40 hover:to-cyber-magenta/10 hover:shadow-[0_0_15px_rgba(255,0,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+            className="flex-1 py-2 px-4 text-xs font-semibold uppercase tracking-wide rounded-md bg-gray-700 hover:bg-gray-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
           >
-            下载
+            Download
           </button>
         </div>
 
@@ -492,20 +494,20 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
         {showCrop && image && (
           <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm rounded-xl p-4 flex flex-col">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-cyber-cyan">裁剪图片</span>
+              <span className="text-xs font-semibold text-blue-400">Crop Image</span>
               <div className="flex gap-2">
                 <button
                   onClick={() => { setShowCrop(false); setCropRect(null); setCropStart(null); }}
-                  className="px-3 py-1 text-[10px] rounded-lg bg-white/10 text-white/60 hover:text-white transition-all"
+                  className="px-3 py-1 text-[10px] rounded-lg bg-gray-700 text-gray-300 hover:text-white transition-all"
                 >
-                  取消
+                  Cancel
                 </button>
                 <button
                   onClick={applyCrop}
                   disabled={!cropRect || (cropRect as any).w < 5}
-                  className="px-3 py-1 text-[10px] rounded-lg bg-cyber-cyan/20 border border-cyber-cyan/30 text-cyber-cyan hover:bg-cyber-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  className="px-3 py-1 text-[10px] rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
-                  应用
+                  Apply
                 </button>
               </div>
             </div>
@@ -522,13 +524,13 @@ const ImageNode: React.FC<ImageNodeProps> = ({ id, data, selected, position }) =
               />
               {cropRect && (cropRect as any).w >= 5 && (cropRect as any).h >= 5 && (
                 <div
-                  className="absolute border-2 border-cyber-cyan shadow-[0_0_10px_rgba(0,245,255,0.5)]"
+                  className="absolute border-2 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
                   style={{
                     left: (cropRect as any).x,
                     top: (cropRect as any).y,
                     width: (cropRect as any).w,
                     height: (cropRect as any).h,
-                    boxShadow: '0 0 10px rgba(0,245,255,0.5)',
+                    boxShadow: '0 0 10px rgba(59,130,246,0.5)',
                     pointerEvents: 'none'
                   }}
                 >
@@ -586,7 +588,7 @@ function AnnotatePanel({ image, onDone, onCancel }) {
   const [annotations, setAnnotations] = useState([]);
   const [text, setText] = useState('');
   const [textPos, setTextPos] = useState(null);
-  const [color, setColor] = useState('#ff00ff');
+  const [color, setColor] = useState('#3b82f6');
 
   // 画初始化图片
   React.useEffect(() => {
@@ -649,7 +651,7 @@ function AnnotatePanel({ image, onDone, onCancel }) {
   return (
     <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm rounded-xl p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-cyber-magenta">标注模式</span>
+        <span className="text-xs font-semibold text-blue-400">Annotate Mode</span>
         <div className="flex gap-2 items-center">
           <input
             type="color"
@@ -661,20 +663,20 @@ function AnnotatePanel({ image, onDone, onCancel }) {
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="输入标注文字..."
-            className="px-3 py-1 text-xs bg-black/30 border border-white/10 rounded-lg text-white outline-none focus:border-cyber-magenta w-40"
+            placeholder="Enter annotation text..."
+            className="px-3 py-1 text-xs bg-black/30 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500 w-40"
           />
           <button
             onClick={handleExport}
-            className="px-3 py-1 text-[10px] rounded-lg bg-cyber-magenta/20 border border-cyber-magenta/30 text-cyber-magenta hover:bg-cyber-magenta/30 transition-all"
+            className="px-3 py-1 text-[10px] rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all"
           >
-            完成
+            Done
           </button>
           <button
             onClick={onCancel}
-            className="px-3 py-1 text-[10px] rounded-lg bg-white/10 text-white/60 hover:text-white transition-all"
+            className="px-3 py-1 text-[10px] rounded-lg bg-gray-700 text-gray-300 hover:text-white transition-all"
           >
-            取消
+            Cancel
           </button>
         </div>
       </div>
@@ -683,8 +685,8 @@ function AnnotatePanel({ image, onDone, onCancel }) {
           ref={canvasRef}
           className="w-full h-full object-contain"
         />
-        <div className="absolute bottom-2 left-2 text-[10px] text-white/30">
-          点击图片添加标注
+        <div className="absolute bottom-2 left-2 text-[10px] text-gray-400">
+          Click on image to add annotation
         </div>
       </div>
     </div>
