@@ -78,13 +78,19 @@ const PromptNode: React.FC<PromptNodeProps> = ({ id, data, selected, position })
         <Handle 
           type="target" 
           position={Position.Left} 
-          className="!w-5 !h-5 !-left-2.5 !z-50 !bg-cyber-magenta !border-[3px] !border-white !shadow-[0_0_15px_#ff00ff] hover:!scale-150 hover:!shadow-[0_0_25px_#ff00ff] !transition-all !duration-200"
-        />
+          className="!w-6 !h-6 !-left-3 !z-50 !bg-cyber-magenta !border-[3px] !border-white !shadow-[0_0_15px_#ff00ff] hover:!scale-150 hover:!shadow-[0_0_25px_#ff00ff] !transition-all !duration-200 flex items-center justify-center text-white font-bold text-xs"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          +
+        </Handle>
         <Handle 
           type="source" 
           position={Position.Right} 
-          className="!w-5 !h-5 !-right-2.5 !z-50 !bg-cyber-cyan !border-[3px] !border-white !shadow-[0_0_15px_#00f5ff] hover:!scale-150 hover:!shadow-[0_0_25px_#00f5ff] !transition-all !duration-200 cursor-crosshair"
-        />
+          className="!w-6 !h-6 !-right-3 !z-50 !bg-cyber-cyan !border-[3px] !border-white !shadow-[0_0_15px_#00f5ff] hover:!scale-150 hover:!shadow-[0_0_25px_#00f5ff] !transition-all !duration-200 cursor-crosshair flex items-center justify-center text-white font-bold text-xs"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          +
+        </Handle>
 
         {/* 悬浮菜单 */}
         {hover && inheritImage && floatingMenu}
