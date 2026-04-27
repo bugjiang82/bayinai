@@ -258,10 +258,31 @@ export default function CanvasPage() {
   }
 
   return (
-    <div className="w-full h-screen overflow-hidden" style={{ background: 'var(--dark-bg)' }}>
-      <div ref={reactFlowWrapper} className="w-full h-full">
-        <div className="cyber-grid" />
+    <div className="w-full h-screen overflow-hidden bg-gray-950">
+      {/* 顶部导航栏 */}
+      <div className="fixed top-0 left-0 right-0 h-14 bg-black/80 backdrop-blur-md border-b border-gray-800 z-50 flex items-center justify-between px-6">
+        <div className="flex items-center space-x-4">
+          <div className="text-white font-bold text-xl">TapNow</div>
+        </div>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={saveCanvasToServer} 
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Save size={16} />
+            <span>{saveStatus || 'Save'}</span>
+          </button>
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
+              <User size={16} className="text-white" />
+            </div>
+            <span className="text-white text-sm">{session.user?.name || 'User'}</span>
+          </div>
+        </div>
+      </div>
 
+      {/* 主画布区域 */}
+      <div ref={reactFlowWrapper} className="w-full h-full pt-14">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -291,50 +312,71 @@ export default function CanvasPage() {
             }
           }}
         >
-          <Background color="rgba(0, 245, 255, 0.1)" gap={50} size={1} />
-          <Controls className="glass" />
+          <Background color="rgba(50, 50, 50, 0.1)" gap={20} size={1} />
+          <Controls className="bg-black/30 border border-gray-800 rounded-lg" />
           <MiniMap
-            className="glass"
+            className="bg-black/30 border border-gray-800 rounded-lg"
             nodeColor={(node) => {
               if (node.type === 'promptNode') return '#f59e0b';
-              return node.data?.image ? '#00f5ff' : '#ff00ff';
+              return node.data?.image ? '#3b82f6' : '#ec4899';
             }}
             maskColor="rgba(10, 10, 15, 0.8)"
           />
 
-          <Panel position="top-center">
-            <Toolbar
-              onAddNode={addNode}
-              onClear={clearCanvas}
-              onSave={saveCanvasToServer}
-              onNew={newCanvas}
-              saveStatus={saveStatus}
-              onOpenProjects={() => setShowCanvasList(true)}
-              user={session.user}
-              onLogout={handleLogout}
-            />
+          {/* 右侧工具栏 */}
+          <Panel position="right">
+            <div className="bg-black/30 backdrop-blur-md border border-gray-800 rounded-lg p-4 space-y-4">
+              <h4 className="text-white font-medium text-sm mb-2">Add Node</h4>
+              <button 
+                onClick={addNode} 
+                className="w-full flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
+              >
+                <Plus size={16} />
+                <span>Image Node</span>
+              </button>
+              <button 
+                onClick={() => {
+                  const newNode = {
+                    id: getId(),
+                    type: 'promptNode',
+                    position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
+                    data: { inheritImage: null, extractedPrompt: '', editedPrompt: '' }
+                  };
+                  setNodes((nds) => nds.concat(newNode));
+                }} 
+                className="w-full flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
+              >
+                <Plus size={16} />
+                <span>Prompt Node</span>
+              </button>
+              
+              <div className="border-t border-gray-800 pt-4">
+                <h4 className="text-white font-medium text-sm mb-2">Canvas</h4>
+                <button 
+                  onClick={newCanvas} 
+                  className="w-full flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
+                >
+                  <Trash2 size={16} />
+                  <span>New Canvas</span>
+                </button>
+                <button 
+                  onClick={() => setShowCanvasList(true)} 
+                  className="w-full flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
+                >
+                  <FolderOpen size={16} />
+                  <span>Open Projects</span>
+                </button>
+              </div>
+            </div>
           </Panel>
 
           {showHint && (
             <Panel position="center">
-              <div className="glass px-6 py-3 rounded-lg text-cyber-magenta font-medium">
-                拖拽到空白处创建新节点
+              <div className="bg-black/70 backdrop-blur-md border border-gray-800 px-6 py-3 rounded-lg text-white font-medium">
+                Drag to create a new node
               </div>
             </Panel>
           )}
-
-          <Panel position="bottom-left">
-            <div className="glass p-4 rounded-xl max-w-xs">
-              <h4 className="text-cyber-cyan font-semibold mb-2 text-sm">💡 操作指南</h4>
-              <div className="text-xs text-gray-300 space-y-1">
-                <p>• 双击画布任意位置添加新节点</p>
-                <p>• 点击 <span className="text-cyber-cyan">+ 添加节点</span> 创建新节点</p>
-                <p>• 从节点右侧的 <span className="text-cyber-cyan">+</span> 拖拽到空白处</p>
-                <p>• 选择<span className="text-cyber-cyan">提取提示词</span>分析并编辑父节点图像</p>
-                <p>• 选择<span className="text-cyber-magenta">图生图编辑</span>基于父节点生成新图</p>
-              </div>
-            </div>
-          </Panel>
         </ReactFlow>
         <NodeTypeModal
           isOpen={showNodeTypeModal}
