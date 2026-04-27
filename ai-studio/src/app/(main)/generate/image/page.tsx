@@ -53,14 +53,16 @@ const THINKING_OPTIONS = [
 export default function UnifiedImagePage() {
   const router = useRouter();
   const [mode, setMode] = useState<ImageMode>("image-to-image");
-  const isGenerating = useGenerationStore(state => state.isGenerating);
+  const status = useGenerationStore(state => state.status);
   const progress = useGenerationStore(state => state.progress);
+  const error = useGenerationStore(state => state.error);
   const startGeneration = useGenerationStore(state => state.startGeneration);
   const updateProgress = useGenerationStore(state => state.updateProgress);
   const completeGeneration = useGenerationStore(state => state.completeGeneration);
   const failGeneration = useGenerationStore(state => state.failGeneration);
   const currentParams = useGenerationStore(state => state.currentParams);
   const setParams = useGenerationStore(state => state.setParams);
+  const isGenerating = status === "generating";
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [prompt, setPrompt] = useState(currentParams.prompt || "");

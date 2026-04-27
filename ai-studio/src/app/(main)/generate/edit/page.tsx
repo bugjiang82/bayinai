@@ -67,6 +67,28 @@ const STYLE_OPTIONS = [
   "印象派",
 ];
 
+const MODEL_OPTIONS = [
+  { value: "flash", label: "Flash", description: "快速生成" },
+  { value: "pro", label: "Pro", description: "高质量输出" },
+  { value: "image2", label: "Image2", description: "超强图像生成" },
+];
+
+const RESOLUTION_OPTIONS = [
+  { value: "512", label: "512", description: "标准" },
+  { value: "1K", label: "1K", description: "1K 质量" },
+  { value: "2K", label: "2K", description: "2K 质量" },
+  { value: "4K", label: "4K", description: "4K 高清" },
+];
+
+const SIZE_OPTIONS = [
+  { label: "1:1", ratio: "1:1" },
+  { label: "16:9", ratio: "16:9" },
+  { label: "9:16", ratio: "9:16" },
+  { label: "4:5", ratio: "4:5" },
+  { label: "3:4", ratio: "3:4" },
+];
+
+
 export default function EditPage() {
   const searchParams = useSearchParams();
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -140,6 +162,12 @@ export default function EditPage() {
   const [structureRef, setStructureRef] = useState<string | null>(null);
   const [styleRef, setStyleRef] = useState<string | null>(null);
   const [originalImageSize, setOriginalImageSize] = useState<{ width: number; height: number } | null>(null);
+  
+  // 新增统一参数选项
+  const [model, setModel] = useState("flash");
+  const [resolution, setResolution] = useState("1K");
+  const [aspectRatio, setAspectRatio] = useState("1:1");
+
   // 自动检测原图尺寸并计算比例
   const detectImageAspectRatio = useCallback((imageUrl: string): string => {
     if (originalImageSize) {
@@ -234,7 +262,12 @@ export default function EditPage() {
     if (!sourceImage) return;
     if (isApplying) return;
 
-    const cost = 2;
+    const getCost = (m: string) => {
+      if (m === "flash") return 1;
+      if (m === "image2") return 50;
+      return 3;
+    };
+    const cost = getCost(model);
     if (credits < cost) return;
 
     setIsApplying(true);
@@ -289,7 +322,9 @@ export default function EditPage() {
             prompt: inpaintDescription,
             structureRef,
             styleRef,
-            aspectRatio: detectImageAspectRatio(sourceImage),
+            model,
+            imageSize: resolution,
+            aspectRatio,
           }),
         };
 
@@ -425,11 +460,63 @@ export default function EditPage() {
               />
             </div>
             
-            {/* 自动适配原图比例 */}
-            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
-                <span className="text-indigo-400">✓</span>
-                <span>自动适配原图比例</span>
+            {/* 模型选择 */}
+            <div>
+              <label className="text-xs text-zinc-400 mb-1 block">模型</label>
+              <div className="grid grid-cols-3 gap-2">
+                {MODEL_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
+                      model === option.value
+                        ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                    }`}
+                    onClick={() => setModel(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* 分辨率选择 */}
+            <div>
+              <label className="text-xs text-zinc-400 mb-1 block">分辨率</label>
+              <div className="grid grid-cols-2 gap-2">
+                {RESOLUTION_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
+                      resolution === option.value
+                        ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                    }`}
+                    onClick={() => setResolution(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* 宽高比选择 */}
+            <div>
+              <label className="text-xs text-zinc-400 mb-1 block">宽高比</label>
+              <div className="grid grid-cols-3 gap-2">
+                {SIZE_OPTIONS.map((option) => (
+                  <button
+                    key={option.ratio}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
+                      aspectRatio === option.ratio
+                        ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                    }`}
+                    onClick={() => setAspectRatio(option.ratio)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -678,15 +765,19 @@ export default function EditPage() {
           <div className="p-4 border-t border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
             <div className="flex items-center justify-end mb-3">
               <span className="text-xs text-zinc-600">
-                消耗{" "}
+                消耗{
+                  " "
+                }
                 <span
                   className={cn(
                     "font-medium",
-                    credits > 0 && credits < 2 ? "text-red-400" : "text-zinc-400"
+                    credits > 0 && credits < (model === "image2" ? 50 : model === "flash" ? 1 : 3) ? "text-red-400" : "text-zinc-400"
                   )}
                 >
-                  2
-                </span>{" "}
+                  {model === "image2" ? 50 : model === "flash" ? 1 : 3}
+                </span>{
+                  " "
+                }
                 积分/次
               </span>
             </div>
@@ -700,7 +791,7 @@ export default function EditPage() {
               onClick={handleApply}
               disabled={
                 !sourceImage || 
-                credits < 2 || 
+                credits < (model === "image2" ? 50 : model === "flash" ? 1 : 3) || 
                 isProcessing ||
                 (editMode === "inpaint" && !inpaintDescription.trim())
               }

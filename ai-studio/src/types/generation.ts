@@ -101,7 +101,9 @@ export type GenType =
   | "IMAGE_TO_IMAGE"
   | "VIDEO"
   | "EDIT"
-  | "INPAINT";
+  | "INPAINT"
+  | "ARCHITECTURE"
+  | "AGENT_IMAGE";
 
 export type GenStatus =
   | "PENDING"

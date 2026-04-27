@@ -78,11 +78,13 @@ interface ModelOption {
 const MODEL_OPTIONS: ModelOption[] = [
   { id: 'flash', label: 'Flash', desc: '快速生成', credits: 1 },
   { id: 'pro', label: 'Pro', desc: '高质量生成', credits: 3 },
+  { id: 'image2', label: 'Image2', desc: '超强图像生成', credits: 50 },
 ];
 
 const ARCH_MODEL_OPTIONS = [
   { value: 'flash', label: 'Flash', description: '快速生成' },
   { value: 'pro', label: 'Pro', description: '高质量生成' },
+  { value: 'image2', label: 'Image2', description: '超强图像生成' },
 ];
 
 const ARCH_RESOLUTION_OPTIONS = [
@@ -138,7 +140,18 @@ const PRESETS: { id: GenerationMode; label: string; desc: string; defaults: Part
 
 export default function ArchitecturePage() {
   const router = useRouter();
-  const store = useGenerationStore();
+  const status = useGenerationStore(state => state.status);
+  const progress = useGenerationStore(state => state.progress);
+  const error = useGenerationStore(state => state.error);
+  const startGeneration = useGenerationStore(state => state.startGeneration);
+  const updateProgress = useGenerationStore(state => state.updateProgress);
+  const completeGeneration = useGenerationStore(state => state.completeGeneration);
+  const failGeneration = useGenerationStore(state => state.failGeneration);
+  const currentParams = useGenerationStore(state => state.currentParams);
+  const setStoreParams = useGenerationStore(state => state.setParams);
+  const addToHistory = useGenerationStore(state => state.addToHistory);
+  const isGenerating = status === "generating";
+  
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const structureInputRef = useRef<HTMLInputElement>(null);
   const styleInputRef = useRef<HTMLInputElement>(null);
@@ -170,8 +183,6 @@ export default function ArchitecturePage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [credits, setCredits] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [hasApiKey, setHasApiKey] = useState<boolean>(true);
   const [isCheckingKey, setIsCheckingKey] = useState(true);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -299,8 +310,7 @@ export default function ArchitecturePage() {
 
   const simulateProgress = useCallback(() => {
     let currentProgress = 0;
-    setIsGenerating(true);
-    setProgress(0);
+    startGeneration();
 
     progressIntervalRef.current = setInterval(() => {
       currentProgress += Math.random() * 15 + 5;
@@ -310,15 +320,14 @@ export default function ArchitecturePage() {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
-        setProgress(100);
-        setIsGenerating(false);
+        updateProgress(100);
       } else {
-        setProgress(currentProgress);
+        updateProgress(currentProgress);
       }
     }, 500);
 
     return progressIntervalRef.current;
-  }, []);
+  }, [startGeneration, updateProgress]);
 
   const toggleTag = (tagId: string) => {
     setParams(prev => ({
@@ -332,7 +341,12 @@ export default function ArchitecturePage() {
   const handleGenerate = useCallback(async () => {
     if (!params.prompt || !params.structureRef) return;
 
-    const creditsPerImage = 3;
+    const getCost = (m: string) => {
+      if (m === "flash") return 1;
+      if (m === "image2") return 50;
+      return 3;
+    };
+    const creditsPerImage = getCost(params.model);
     const totalCost = creditsPerImage;
 
     if (credits < totalCost) return;
@@ -380,7 +394,6 @@ export default function ArchitecturePage() {
       const revisedPrompt = data.data?.revisedPrompt;
 
       // Clear generating state since API call succeeded
-      setIsGenerating(false);
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
@@ -413,6 +426,26 @@ export default function ArchitecturePage() {
 
       setResult(newResult);
 
+      // 添加到全局历史记录
+      const storeResult = {
+        id: `${Date.now()}`,
+        url: imageUrl,
+        prompt: params.prompt,
+        params: {
+          ...currentParams,
+          prompt: params.prompt,
+          model: params.model,
+          aspectRatio: params.aspectRatio,
+          imageSize: params.imageSize,
+          mode: "architecture",
+        },
+        createdAt: new Date(),
+        type: "architecture",
+      };
+      completeGeneration(storeResult);
+      addToHistory(storeResult);
+
+      // 本地历史记录
       if (newResult.imageUrl && newResult.params) {
         setHistory(prev => [{
           imageUrl: newResult.imageUrl,
@@ -435,13 +468,13 @@ export default function ArchitecturePage() {
         status: "error",
         error: errorMsg || "生成失败，请重试。",
       });
-      setIsGenerating(false);
+      failGeneration(errorMsg || "生成失败，请重试。");
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
     }
-  }, [params, credits, simulateProgress, result]);
+  }, [params, credits, simulateProgress, result, currentParams, completeGeneration, addToHistory, failGeneration]);
 
   const resetParams = () => {
     setParams({
@@ -902,7 +935,7 @@ export default function ArchitecturePage() {
             <div className="p-4 border-t border-white/[0.06] bg-[#0a0a0a]">
               <div className="flex items-center justify-end mb-3">
                 <span className="text-xs text-zinc-600">
-                  本次消耗 <span className="font-medium text-zinc-400">3</span> 积分
+                  本次消耗 <span className="font-medium text-zinc-400">{params.model === 'image2' ? 50 : params.model === 'flash' ? 1 : 3}</span> 积分
                 </span>
               </div>
               <div className="flex gap-2">

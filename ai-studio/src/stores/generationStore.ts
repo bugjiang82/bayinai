@@ -11,7 +11,13 @@ export interface GenerationParams {
   model?: string;
   style?: string;
   referenceImage?: string | null;
-  mode?: "text-to-image" | "image-to-image" | "video" | "edit";
+  mode?: "text-to-image" | "image-to-image" | "video" | "edit" | "architecture";
+  aspectRatio?: string;
+  imageSize?: string;
+  thinkingLevel?: string;
+  referenceImages?: string[];
+  referenceWeight?: number;
+  transformType?: string;
 }
 
 export interface GenerationResult {
@@ -20,24 +26,42 @@ export interface GenerationResult {
   prompt: string;
   params: GenerationParams;
   createdAt: Date;
+  type?: string;
+  inputUrl?: string;
+  favorited?: boolean;
 }
 
+export type GenerationStatus = "idle" | "generating" | "completed" | "failed";
+
 interface GenerationState {
-  currentParams: GenerationParams;
-  isGenerating: boolean;
+  // 状态管理
+  status: GenerationStatus;
   progress: number;
+  error: string | null;
+  
+  // 数据管理
+  currentParams: GenerationParams;
   results: GenerationResult[];
   history: GenerationResult[];
-
+  
+  // 参数管理
   setParams: (params: Partial<GenerationParams>) => void;
   resetParams: () => void;
+  
+  // 生成流程管理
   startGeneration: () => void;
   updateProgress: (progress: number) => void;
   completeGeneration: (result: GenerationResult) => void;
-  failGeneration: () => void;
+  failGeneration: (error?: string) => void;
+  resetStatus: () => void;
+  
+  // 结果管理
   addResults: (results: GenerationResult[]) => void;
   clearResults: () => void;
   loadHistory: (history: GenerationResult[]) => void;
+  addToHistory: (result: GenerationResult) => void;
+  
+  // 全局重置
   reset: () => void;
 }
 
@@ -53,15 +77,24 @@ const defaultParams: GenerationParams = {
   style: "auto",
   referenceImage: null,
   mode: "text-to-image",
+  aspectRatio: "1:1",
+  imageSize: "1K",
+  thinkingLevel: "minimal",
+  referenceImages: [],
+  referenceWeight: 0.7,
+  transformType: "style-transfer",
 };
 
 export const useGenerationStore = create<GenerationState>((set) => ({
-  currentParams: { ...defaultParams },
-  isGenerating: false,
+  // 初始状态
+  status: "idle",
   progress: 0,
+  error: null,
+  currentParams: { ...defaultParams },
   results: [],
   history: [],
 
+  // 参数管理
   setParams: (params) =>
     set((state) => ({
       currentParams: { ...state.currentParams, ...params },
@@ -72,10 +105,12 @@ export const useGenerationStore = create<GenerationState>((set) => ({
       currentParams: { ...defaultParams },
     }),
 
+  // 生成流程管理
   startGeneration: () =>
     set({
-      isGenerating: true,
+      status: "generating",
       progress: 0,
+      error: null,
     }),
 
   updateProgress: (progress) =>
@@ -83,18 +118,28 @@ export const useGenerationStore = create<GenerationState>((set) => ({
 
   completeGeneration: (result) =>
     set((state) => ({
-      isGenerating: false,
+      status: "completed",
       progress: 100,
+      error: null,
       results: [result, ...state.results],
       history: [result, ...state.history],
     })),
 
-  failGeneration: () =>
+  failGeneration: (error = "生成失败") =>
     set({
-      isGenerating: false,
+      status: "failed",
       progress: 0,
+      error,
     }),
 
+  resetStatus: () =>
+    set({
+      status: "idle",
+      progress: 0,
+      error: null,
+    }),
+
+  // 结果管理
   addResults: (results) =>
     set((state) => ({
       results: [...results, ...state.results],
@@ -106,11 +151,27 @@ export const useGenerationStore = create<GenerationState>((set) => ({
   loadHistory: (history) =>
     set({ history }),
 
+  addToHistory: (result) =>
+    set((state) => ({
+      history: [result, ...state.history],
+    })),
+
+  // 全局重置
   reset: () =>
     set({
-      currentParams: { ...defaultParams },
-      isGenerating: false,
+      status: "idle",
       progress: 0,
+      error: null,
+      currentParams: { ...defaultParams },
       results: [],
     }),
 }));
+
+// 辅助钩子，方便在组件中使用
+export const useGenerationStatus = () => useGenerationStore((state) => state.status);
+export const useIsGenerating = () => useGenerationStore((state) => state.status === "generating");
+export const useGenerationProgress = () => useGenerationStore((state) => state.progress);
+export const useGenerationError = () => useGenerationStore((state) => state.error);
+export const useGenerationResults = () => useGenerationStore((state) => state.results);
+export const useGenerationHistory = () => useGenerationStore((state) => state.history);
+export const useGenerationParams = () => useGenerationStore((state) => state.currentParams);

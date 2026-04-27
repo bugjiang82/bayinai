@@ -20,13 +20,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { prompt } = body;
+    const { prompt, model = "flash", imageSize = "1K", aspectRatio = "1:1" } = body;
 
     if (!prompt) {
       return NextResponse.json(error("请提供提示词"), { status: 400 });
     }
 
-    const cost = 2;
+    const getCost = (m: string) => {
+      if (m === "flash") return 1;
+      if (m === "image2") return 50;
+      return 3;
+    };
+    const cost = getCost(model);
     const user = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!user) {
       throw new Error("用户不存在");
@@ -52,8 +57,8 @@ export async function POST(request: NextRequest) {
         config: {
           responseModalities: ["IMAGE"],
           imageConfig: {
-            aspectRatio: "1:1",
-            imageSize: "1K",
+            aspectRatio: aspectRatio,
+            imageSize: imageSize,
           },
         },
       });

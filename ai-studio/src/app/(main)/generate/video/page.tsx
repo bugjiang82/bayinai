@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import ImageUploader from "@/components/shared/ImageUploader";
 import ProgressBar from "@/components/generate/ProgressBar";
 import DropdownSelector from "@/components/generate/DropdownSelector";
+import { useGenerationStore, useIsGenerating, useGenerationProgress, useGenerationError } from "@/stores/generationStore";
 
 interface VideoResult {
   id: string;
@@ -75,14 +76,23 @@ export default function VideoPage() {
   const [ratio, setRatio] = useState("16:9");
   const [model, setModel] = useState("wan2.2-kf2v-flash");
   const [promptExtend, setPromptExtend] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [videoResult, setVideoResult] = useState<VideoResult | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { data: session } = useSession();
   const [credits, setCredits] = useState<number>(0);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // 使用新的状态管理
+  const status = useGenerationStore(state => state.status);
+  const progress = useGenerationStore(state => state.progress);
+  const error = useGenerationStore(state => state.error);
+  const startGeneration = useGenerationStore(state => state.startGeneration);
+  const updateProgress = useGenerationStore(state => state.updateProgress);
+  const completeGeneration = useGenerationStore(state => state.completeGeneration);
+  const failGeneration = useGenerationStore(state => state.failGeneration);
+  const setParams = useGenerationStore(state => state.setParams);
+  const isGenerating = status === "generating";
+  const errorMessage = error;
 
   useEffect(() => {
     return () => {
@@ -136,10 +146,8 @@ export default function VideoPage() {
     const cost = durationNum * 50;
     if (credits < cost) return;
 
-    setIsGenerating(true);
-    setProgress(0);
+    startGeneration();
     setVideoResult(null);
-    setErrorMessage(null);
 
     // Simulate progress while waiting for API
     let currentProgress = 0;
@@ -152,7 +160,7 @@ export default function VideoPage() {
           progressIntervalRef.current = null;
         }
       }
-      setProgress(currentProgress);
+      updateProgress(currentProgress);
     }, 800);
 
     try {
@@ -234,7 +242,7 @@ export default function VideoPage() {
 
           // Update progress from server
           if (taskProgress !== undefined) {
-            setProgress(taskProgress);
+            updateProgress(taskProgress);
           }
 
           if (status === "SUCCEEDED" && videoUrl) {
@@ -248,17 +256,35 @@ export default function VideoPage() {
               progressIntervalRef.current = null;
             }
 
-            setProgress(100);
-            setVideoResult({
+            updateProgress(100);
+            const newVideoResult: VideoResult = {
               id: taskId,
               url: videoUrl,
               prompt: prompt.trim(),
               duration: parseInt(duration, 10),
               fps: 24,
               resolution,
-            });
+            };
+            setVideoResult(newVideoResult);
             setCredits((prev) => Math.max(0, prev - cost));
-            setIsGenerating(false);
+            
+            // 添加到全局历史记录
+            const storeResult = {
+              id: taskId,
+              url: videoUrl,
+              prompt: prompt.trim(),
+              params: {
+                prompt: prompt.trim(),
+                model,
+                mode: "video" as const,
+                duration: parseInt(duration, 10),
+                resolution,
+                ratio,
+              },
+              createdAt: new Date(),
+              type: "video",
+            };
+            completeGeneration(storeResult);
           } else if (status === "FAILED") {
             // Task failed
             if (pollingRef.current) {
@@ -270,9 +296,7 @@ export default function VideoPage() {
               progressIntervalRef.current = null;
             }
 
-            setErrorMessage("视频生成失败，请重试");
-            setIsGenerating(false);
-            setProgress(0);
+            failGeneration("视频生成失败，请重试");
           }
           // For RUNNING / PENDING, continue polling
         } catch (pollError) {
@@ -285,11 +309,9 @@ export default function VideoPage() {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
-      setErrorMessage(error instanceof Error ? error.message : "视频生成失败");
-      setIsGenerating(false);
-      setProgress(0);
+      failGeneration(error instanceof Error ? error.message : "视频生成失败");
     }
-  }, [prompt, duration, resolution, model, credits, startImage, endImage]);
+  }, [prompt, duration, resolution, model, credits, startImage, endImage, startGeneration, updateProgress, completeGeneration, failGeneration]);
 
   const getEstimatedTime = () => {
     const durationNum = parseInt(duration, 10) || 5;
