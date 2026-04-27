@@ -21,6 +21,7 @@ const PromptNode: React.FC<PromptNodeProps> = ({ id, data, selected, position })
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [hover, setHover] = useState(false);
   const updateNodeInternals = useUpdateNodeInternals();
 
   const handleSubmitPrompt = useCallback(async () => {
@@ -49,127 +50,188 @@ const PromptNode: React.FC<PromptNodeProps> = ({ id, data, selected, position })
     handleSubmitPrompt();
   }, [handleSubmitPrompt]);
 
+  const floatingMenu = (
+    <div
+      className="absolute -top-10 left-1/2 -translate-x-1/2 z-50 glass px-2 py-1.5 rounded-xl flex gap-1 items-center whitespace-nowrap"
+      style={{ animation: 'fadeInUp 0.2s ease-out' }}
+    >
+      <button
+        onClick={(e) => { e.stopPropagation(); setShowFullscreen(true); }}
+        disabled={!inheritImage}
+        className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-cyber-cyan transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        title="全屏查看"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4m4 0l-5-5" />
+        </svg>
+      </button>
+    </div>
+  );
+
   const nodeStyle = {
-    width: 300,
+    width: 288,
     minHeight: 300,
     position: 'relative',
-    borderRadius: '8px',
+    borderRadius: '12px',
     overflow: 'hidden',
-    boxShadow: selected ? '0 0 20px var(--cyber-cyan)' : '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+    boxShadow: isAnalyzing ? '0 0 30px rgba(0,245,255,0.3)' : (hover ? '0 0 20px rgba(0,245,255,0.2)' : '0 8px 32px 0 rgba(0, 0, 0, 0.37)'),
+    transition: 'all 0.3s ease'
   };
 
   return (
-    <div style={nodeStyle} className="gradient-border">
-      <div className="p-4 glass h-full flex flex-col">
-        <Handle type="target" position={Position.Left} />
-        <Handle type="source" position={Position.Right} />
+    <div 
+      style={nodeStyle} 
+      className="glass"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <div className="h-full flex flex-col">
+        <Handle 
+          type="target" 
+          position={Position.Left} 
+          className="!w-5 !h-5 !-left-2.5 !z-50 !bg-cyber-magenta !border-[3px] !border-white !shadow-[0_0_15px_#ff00ff] hover:!scale-150 hover:!shadow-[0_0_25px_#ff00ff] !transition-all !duration-200"
+        />
+        <Handle 
+          type="source" 
+          position={Position.Right} 
+          className="!w-5 !h-5 !-right-2.5 !z-50 !bg-cyber-cyan !border-[3px] !border-white !shadow-[0_0_15px_#00f5ff] hover:!scale-150 hover:!shadow-[0_0_25px_#00f5ff] !transition-all !duration-200 cursor-crosshair"
+        />
 
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium" style={{ color: 'var(--cyber-cyan)' }}>
-            提示词节点
-          </h3>
-        </div>
+        {/* 悬浮菜单 */}
+        {hover && inheritImage && floatingMenu}
 
-        <div className="mb-3">
-          {inheritImage ? (
-            <div className="relative">
-              <img
-                src={inheritImage}
-                alt="Inherited image"
-                className="w-full h-32 object-cover rounded-md cursor-pointer"
-                onClick={() => setShowFullscreen(true)}
-              />
-              <button
-                onClick={() => setShowFullscreen(true)}
-                className="absolute top-2 right-2 p-1 rounded-md bg-black/50 hover:bg-black/70 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 3v4m0 4h4m-4 0l4 4m6-4v-4m0-4h-4m4 0l-4-4m-6 16v-4m0 4h4m-4 0l4-4m6 4v-4m0 4h-4m4 0l-4 4" />
-                </svg>
-              </button>
-            </div>
-          ) : (
-            <div className="w-full h-32 bg-black/50 rounded-md flex items-center justify-center">
-              <p className="text-sm text-gray-400">未继承图像</p>
+        {/* 节点头部 */}
+        <div className="px-4 py-3 bg-gradient-to-r from-cyber-cyan/10 to-transparent border-b border-white/10 flex items-center gap-2">
+          <div className="w-2 h-2 bg-cyber-cyan rounded-full shadow-[0_0_8px_#00f5ff] animate-pulse" />
+          <span className="text-xs font-semibold tracking-wider uppercase text-cyber-cyan">
+            NODE {id.slice(-4).toUpperCase()}
+          </span>
+          {isAnalyzing && (
+            <div className="ml-auto flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-cyber-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 bg-cyber-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 bg-cyber-cyan rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
           )}
         </div>
 
-        <div className="mb-3">
-          <label className="block text-xs text-gray-400 mb-1">分析指令</label>
-          <textarea
-            value={analysisInstruction}
-            onChange={(e) => setAnalysisInstruction(e.target.value)}
-            placeholder="输入分析指令..."
-            className="w-full bg-black/50 text-white text-sm px-3 py-2 rounded border border-white/20 focus:outline-none focus:border-cyber-cyan h-20 resize-none"
-          />
-        </div>
-
-        <div className="mb-3">
-          <button
-            onClick={handleSubmitPrompt}
-            disabled={!inheritImage || isAnalyzing}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-            style={{
-              background: isAnalyzing ? 'rgba(0, 245, 255, 0.5)' : 'var(--cyber-cyan)',
-              color: '#000',
-              opacity: (!inheritImage || isAnalyzing) ? 0.5 : 1
-            }}
+        {/* 节点主体 */}
+        <div className="p-4">
+          {/* 图片区域 */}
+          <div
+            className={`w-full h-32 bg-black/30 rounded-lg overflow-hidden relative border transition-all duration-300 ${inheritImage ? 'border-white/10' : 'border-dashed border-white/20 hover:border-cyber-cyan hover:bg-cyber-cyan/5'}`}
           >
-            {isAnalyzing ? (
-              <>
-                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                <span>分析中...</span>
-              </>
+            {inheritImage ? (
+              <div className="relative">
+                <img
+                  src={inheritImage}
+                  alt="Inherited image"
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
+                  onClick={() => setShowFullscreen(true)}
+                />
+              </div>
             ) : (
-              <span>提取提示词</span>
+              <div className="w-full h-full bg-black/50 rounded-md flex flex-col items-center justify-center">
+                <p className="text-sm text-gray-400">未继承图像</p>
+              </div>
             )}
-          </button>
-        </div>
-
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-gray-400">提示词</label>
-            <div className="flex gap-1">
-              <button
-                onClick={handleCopy}
-                disabled={!editedPrompt}
-                className="p-1 rounded-md hover:bg-white/10 transition-colors disabled:opacity-50"
-              >
-                {copied ? <Check className="w-4 h-4" style={{ color: 'var(--cyber-cyan)' }} /> : <Copy className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={handleRefresh}
-                disabled={!inheritImage || isAnalyzing}
-                className="p-1 rounded-md hover:bg-white/10 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </div>
           </div>
-          <textarea
-            value={editedPrompt}
-            onChange={(e) => setEditedPrompt(e.target.value)}
-            placeholder="提取的提示词将显示在这里..."
-            className="w-full bg-black/50 text-white text-sm px-3 py-2 rounded border border-white/20 focus:outline-none focus:border-cyber-cyan h-40 resize-none"
-          />
+
+          {/* 分析指令 */}
+          <div className="mt-3">
+            <label className="text-[10px] text-white/50 uppercase tracking-wider">分析指令</label>
+            <textarea
+              value={analysisInstruction}
+              onChange={(e) => setAnalysisInstruction(e.target.value)}
+              placeholder="输入分析指令..."
+              className="w-full mt-1 px-3 py-2 bg-black/30 border border-white/10 rounded-md text-white text-sm outline-none resize-none focus:border-cyber-cyan focus:shadow-[0_0_10px_rgba(0,245,255,0.2)] placeholder:text-white/30 h-20"
+            />
+          </div>
+
+          {/* 提取按钮 */}
+          <div className="mt-3">
+            <button
+              onClick={handleSubmitPrompt}
+              disabled={!inheritImage || isAnalyzing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wide rounded-md bg-gradient-to-br from-cyber-cyan/20 to-cyber-cyan/5 border border-cyber-cyan/30 text-cyber-cyan hover:from-cyber-cyan/40 hover:to-cyber-cyan/10 hover:shadow-[0_0_15px_rgba(0,245,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+            >
+              {isAnalyzing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-3 h-3 border-2 border-cyber-cyan/30 border-t-cyber-cyan rounded-full animate-spin" />
+                  分析中
+                </span>
+              ) : '提取提示词'}
+            </button>
+          </div>
+
+          {/* 提示词输出 */}
+          <div className="mt-3 flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[10px] text-white/50 uppercase tracking-wider">提示词</label>
+              <div className="flex gap-1">
+                <button
+                  onClick={handleCopy}
+                  disabled={!editedPrompt}
+                  className="p-1 rounded-md hover:bg-white/10 text-white/60 hover:text-cyber-cyan transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="复制"
+                >
+                  {copied ? (
+                    <svg className="w-4 h-4 text-cyber-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  disabled={!inheritImage || isAnalyzing}
+                  className="p-1 rounded-md hover:bg-white/10 text-white/60 hover:text-cyber-cyan transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="刷新"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={editedPrompt}
+              onChange={(e) => setEditedPrompt(e.target.value)}
+              placeholder="提取的提示词将显示在这里..."
+              className="w-full bg-black/30 border border-white/10 rounded-md text-white text-sm outline-none resize-none focus:border-cyber-cyan focus:shadow-[0_0_10px_rgba(0,245,255,0.2)] placeholder:text-white/30 h-40"
+            />
+          </div>
         </div>
 
+        {/* 图片预览弹窗 */}
         {showFullscreen && inheritImage && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/80" onClick={() => setShowFullscreen(false)} />
-            <div className="relative z-50">
-              <button
-                onClick={() => setShowFullscreen(false)}
-                className="absolute top-4 right-4 p-2 rounded-md bg-black/50 hover:bg-black/70 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-8 bg-black/90 backdrop-blur-sm"
+            onClick={() => setShowFullscreen(false)}
+          >
+            <div className="relative max-w-[95vw] max-h-[95vh]">
               <img
                 src={inheritImage}
-                alt="Fullscreen image"
-                className="max-w-full max-h-[90vh] object-contain"
+                alt="Preview"
+                className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-[0_0_50px_rgba(0,245,255,0.3)]"
+                onClick={(e) => e.stopPropagation()}
               />
+              <button
+                onClick={() => setShowFullscreen(false)}
+                className="absolute -top-12 right-0 p-2 text-white/70 hover:text-cyber-cyan transition-colors"
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <div className="absolute bottom-4 left-0 right-0 text-center">
+                <span className="px-4 py-2 bg-black/70 rounded-full text-sm text-cyber-cyan">
+                  点击任意处关闭预览
+                </span>
+              </div>
             </div>
           </div>
         )}
