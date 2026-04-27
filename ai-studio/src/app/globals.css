@@ -436,8 +436,8 @@ select {
   right: 0;
   bottom: 0;
   background-image: 
-    linear-gradient(rgba(0, 245, 255, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 245, 255, 0.1) 1px, transparent 1px);
+    linear-gradient(rgba(0, 245, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 245, 255, 0.03) 1px, transparent 1px);
   background-size: 50px 50px;
   background-position: -1px -1px;
   pointer-events: none;
@@ -446,7 +446,7 @@ select {
 
 /* --- Glass Effect --- */
 .glass {
-  background: var(--glass-bg);
+  background: rgba(20, 20, 35, 0.8);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
