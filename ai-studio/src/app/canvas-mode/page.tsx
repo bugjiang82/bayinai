@@ -13,6 +13,7 @@ import {
   Panel
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import './canvas.css'
 
 import ImageNode from '@/components/canvas-mode/ImageNode'
 import PromptNode from '@/components/canvas-mode/PromptNode'
@@ -228,7 +229,7 @@ export default function CanvasModePage() {
   }, [setNodes, setEdges])
 
   return (
-    <div ref={reactFlowWrapper} className="w-full h-full">
+    <div ref={reactFlowWrapper} className="w-full h-full canvas-mode">
       <div className="cyber-grid" />
 
       <ReactFlow
