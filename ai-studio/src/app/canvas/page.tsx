@@ -1,471 +1,795 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import {
-  Plus, X, Image, FileText, Video, Music, Box, Upload, ChevronDown,
-  Heart, Share2, Users, Move, RotateCw, ZoomIn, MoreHorizontal,
-  Shield, Folder, Download, Maximize2, Settings, Mic, Send, HelpCircle,
-  Sparkles
-} from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface Node {
   id: string;
-  type: string;
-  position: { x: number; y: number };
-  data: { image: string | null; title: string; prompt: string };
+  type: 'image' | 'prompt' | 'generate';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  imageUrl?: string;
+  prompt?: string;
+  status: 'idle' | 'generating' | 'completed' | 'failed';
+  selected: boolean;
+  hovered: boolean;
+}
+
+interface Connection {
+  id: string;
+  from: string;
+  to: string;
+  fromHandle: 'left' | 'right';
+  toHandle: 'left' | 'right';
+}
+
+interface MenuItem {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+interface ToolbarButton {
+  id: string;
+  icon: string;
+  label: string;
+  active?: boolean;
 }
 
 export default function CanvasPage() {
-  const [nodes, setNodes] = useState<Node[]>([
-    {
-      id: 'node1',
-      type: 'image',
-      position: { x: 400, y: 150 },
-      data: { 
-        image: 'https://neeko-copilot.bytedance.net/api/text_to_image?prompt=colorful%20parrot%20bird%20on%20white%20background%20studio%20lighting&image_size=square', 
-        title: '一只小太阳鹦鹉',
-        prompt: '' 
-      }
-    }
-  ]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [draggedNode, setDraggedNode] = useState<string | null>(null);
+  const [draggingFromHandle, setDraggingFromHandle] = useState<{ nodeId: string; handle: 'left' | 'right' } | null>(null);
+  const [showNodeMenu, setShowNodeMenu] = useState(false);
+  const [nodeMenuPosition, setNodeMenuPosition] = useState({ x: 0, y: 0 });
+  const [showToolbar, setShowToolbar] = useState(true);
+  const [promptInput, setPromptInput] = useState('');
+  const [showPromptDialog, setShowPromptDialog] = useState(false);
+  const [dialogPosition, setDialogPosition] = useState({ x: 0, y: 0 });
+  const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  const [selectedNode, setSelectedNode] = useState<string | null>('node1');
-  const [showNodeMenu, setShowNodeMenu] = useState(true);
-  const [model, setModel] = useState('flash');
-  const [ratio, setRatio] = useState('1:1');
-  const [quality, setQuality] = useState('2K');
-  const [prompt, setPrompt] = useState('');
-  const [showRightPanel, setShowRightPanel] = useState(true);
-  const [zoom, setZoom] = useState(100);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }, [prompt]);
-
-  const handleSend = useCallback(() => {
-    if (prompt.trim()) {
-      console.log('Sending:', { model, ratio, quality, prompt });
-    }
-  }, [model, ratio, quality, prompt]);
-
-  const addNode = useCallback((type: string) => {
-    const newNode: Node = {
-      id: `node${Date.now()}`,
-      type,
-      position: { 
-        x: 200 + Math.random() * 300, 
-        y: 100 + Math.random() * 200 
-      },
-      data: { image: null, title: '', prompt: '' }
-    };
-    setNodes(prev => [...prev, newNode]);
-    setShowNodeMenu(false);
-  }, []);
-
-  const selectNode = useCallback((nodeId: string) => {
-    setSelectedNode(nodeId);
-  }, []);
-
-  const nodeTypes = [
-    { id: 'text', icon: FileText, label: '文本', desc: '脚本、广告词、品牌文案' },
-    { id: 'image', icon: Image, label: '图片', desc: '' },
-    { id: 'video', icon: Video, label: '视频', desc: '' },
-    { id: 'audio', icon: Music, label: '音频', desc: '' },
-    { id: '3d', icon: Box, label: '3D 世界', badge: 'Beta' },
+  const toolbarButtons: ToolbarButton[] = [
+    { id: 'select', icon: '☝️', label: '选择' },
+    { id: 'pan', icon: '✋', label: '平移' },
+    { id: 'zoom-in', icon: '🔍+', label: '放大' },
+    { id: 'zoom-out', icon: '🔍-', label: '缩小' },
+    { id: 'add-image', icon: '🖼️', label: '图片节点' },
+    { id: 'add-prompt', icon: '📝', label: '提示词节点' },
+    { id: 'save', icon: '💾', label: '保存' },
+    { id: 'share', icon: '🔗', label: '分享' },
   ];
 
-  return (
-    <div className="w-full h-screen overflow-hidden bg-[#0a0a0a]">
-      {/* Top Header */}
-      <header className="fixed top-0 left-0 right-0 h-12 bg-[#0a0a0a]/95 backdrop-blur-xl border-b border-white/5 z-50 flex items-center justify-between px-4">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-white font-medium">新手教学</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-sm transition-all">
-            <Heart className="w-4 h-4" />
-            <span>198</span>
-          </button>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-sm transition-all">
-            <Users className="w-4 h-4" />
-            <span>社区</span>
-          </button>
-          <button className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
-            <Share2 className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
+  const nodeMenuItems: MenuItem[] = [
+    { id: 'redraw', label: '重绘', icon: '🔄' },
+    { id: 'enhance', label: 'HD增强', icon: '⬆️' },
+    { id: 'download', label: '下载', icon: '📥' },
+    { id: 'fullscreen', label: '全屏', icon: '🔲' },
+  ];
 
-      {/* Top Toolbar */}
-      <div className="fixed top-12 left-1/2 -translate-x-1/2 z-40">
-        <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10">
-          <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <Move className="w-4 h-4" />
-          </button>
-          <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <RotateCw className="w-4 h-4" />
-          </button>
-          <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <ZoomIn className="w-4 h-4" />
-          </button>
-          <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
-          <div className="w-px h-6 bg-white/10 mx-1" />
-          <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <Shield className="w-4 h-4" />
-          </button>
-          <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <Folder className="w-4 h-4" />
-          </button>
-          <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <Download className="w-4 h-4" />
-          </button>
-          <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <Maximize2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+  const generateMenuItems: MenuItem[] = [
+    { id: 'text', label: '文本生成', icon: '📝' },
+    { id: 'image', label: '图片生成', icon: '🖼️' },
+    { id: 'video', label: '视频生成', icon: '🎬' },
+    { id: 'edit', label: '图片编辑', icon: '✏️' },
+  ];
 
-      {/* Left Sidebar */}
-      <aside className="fixed left-0 top-12 bottom-0 w-52 bg-[#0f0f0f]/80 backdrop-blur-xl border-r border-white/5 z-40 flex flex-col">
-        {/* Toggle Button */}
-        <button 
-          onClick={() => setShowNodeMenu(!showNodeMenu)}
-          className="flex items-center justify-between px-4 py-3 border-b border-white/5 hover:bg-white/5 transition-colors"
-        >
-          <span className="text-gray-300 text-sm font-medium">添加节点</span>
-          <button className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-            <X className="w-4 h-4" />
-          </button>
-        </button>
+  const models = ['Flash', 'Pro', 'Image2'];
+  const qualities = ['Standard', 'HD', 'Ultra HD'];
+  const ratios = ['1:1', '16:9', '9:16', '4:3'];
 
-        {/* Node Menu */}
-        {showNodeMenu && (
-          <div className="p-2 space-y-1">
-            {nodeTypes.map((node) => (
-              <button
-                key={node.id}
-                onClick={() => addNode(node.id)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/10 transition-all group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                  <node.icon className="w-4 h-4 text-gray-400 group-hover:text-white" />
-                </div>
-                <div className="flex-1 text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-300 text-sm">{node.label}</span>
-                    {node.badge && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-400">
-                        {node.badge}
-                      </span>
-                    )}
-                  </div>
-                  {node.desc && (
-                    <span className="text-gray-500 text-xs">{node.desc}</span>
-                  )}
-                </div>
-              </button>
-            ))}
-            
-            <div className="w-full h-px bg-white/5 my-2" />
-            
-            <div className="px-3 py-2">
-              <span className="text-gray-500 text-xs">添加资源</span>
-            </div>
-            
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/10 transition-all group">
-              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                <Upload className="w-4 h-4 text-gray-400 group-hover:text-white" />
-              </div>
-              <span className="text-gray-300 text-sm">上传</span>
-            </button>
-          </div>
-        )}
-      </aside>
+  useEffect(() => {
+    const initialNodes: Node[] = [
+      {
+        id: 'node-1',
+        type: 'image',
+        x: 100,
+        y: 150,
+        width: 200,
+        height: 180,
+        imageUrl: 'https://neeko-copilot.bytedance.net/api/text_to_image?prompt=beautiful%20parrot%20on%20branch%20realistic&image_size=square',
+        status: 'completed',
+        selected: false,
+        hovered: false,
+      },
+      {
+        id: 'node-2',
+        type: 'prompt',
+        x: 400,
+        y: 150,
+        width: 200,
+        height: 120,
+        prompt: '一只美丽的小太阳鹦鹉',
+        status: 'completed',
+        selected: false,
+        hovered: false,
+      },
+      {
+        id: 'node-3',
+        type: 'generate',
+        x: 700,
+        y: 150,
+        width: 200,
+        height: 180,
+        imageUrl: 'https://neeko-copilot.bytedance.net/api/text_to_image?prompt=cute%20sun%20conure%20parrot%20colorful&image_size=square',
+        status: 'completed',
+        selected: false,
+        hovered: false,
+      },
+    ];
+    setNodes(initialNodes);
 
-      {/* Right Panel */}
-      {showRightPanel && (
-        <aside className="fixed right-0 top-12 bottom-0 w-80 bg-[#0f0f0f]/80 backdrop-blur-xl border-l border-white/5 z-40 flex flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-            <div className="flex items-center gap-2">
-              <button className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
-                <Plus className="w-4 h-4" />
-              </button>
-              <button className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-            <button 
-              onClick={() => setShowRightPanel(false)}
-              className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+    const initialConnections: Connection[] = [
+      { id: 'conn-1', from: 'node-1', to: 'node-3', fromHandle: 'right', toHandle: 'left' },
+      { id: 'conn-2', from: 'node-2', to: 'node-3', fromHandle: 'right', toHandle: 'left' },
+    ];
+    setConnections(initialConnections);
+  }, []);
 
-          {/* Content */}
-          <div className="flex-1 p-4 overflow-auto">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-white font-medium">Hi New Tapper!</p>
-                <p className="text-gray-400 text-sm">今天一起创作点什么?</p>
-              </div>
-            </div>
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              <button className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-xs transition-all">
-                还可以更压一点
-              </button>
-              <button className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-xs transition-all">
-                先顺一顺
-              </button>
-              <button className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-xs transition-all">
-                也许该松一点
-              </button>
-            </div>
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-            <div className="bg-white/5 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <img 
-                  src="https://neeko-copilot.bytedance.net/api/text_to_image?prompt=colorful%20parrot%20bird%20small&image_size=square" 
-                  alt="Preview" 
-                  className="w-10 h-10 rounded-lg object-cover"
-                />
-                <div>
-                  <p className="text-gray-300 text-sm">描述操作或用 @ 引用...</p>
-                </div>
-              </div>
-            </div>
-          </div>
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(viewOffset.x, viewOffset.y);
+      ctx.scale(scale, scale);
 
-          {/* Bottom Input */}
-          <div className="p-4 border-t border-white/5">
-            <div className="flex items-center gap-2">
-              <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-                <Settings className="w-4 h-4" />
-              </button>
-              <select className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-white/20">
-                <option>Pro</option>
-                <option>Flash</option>
-                <option>Image2</option>
-              </select>
-              <div className="w-px h-6 bg-white/10" />
-              <select className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-white/20">
-                <option>Ask</option>
-                <option>Create</option>
-              </select>
-              <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-                <Mic className="w-4 h-4" />
-              </button>
-              <button className="p-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white transition-all">
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </aside>
-      )}
+      drawGrid(ctx, canvas.width, canvas.height);
+      connections.forEach(conn => drawConnection(ctx, conn));
+      nodes.forEach(node => drawNode(ctx, node));
 
-      {/* Main Canvas */}
-      <main className={`ml-52 ${showRightPanel ? 'mr-80' : ''} mt-20 w-[calc(100%-13rem)] h-[calc(100%-5rem)] relative`}>
-        {/* Background Grid */}
-        <div 
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage: `
-              linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-            `,
-            backgroundSize: '20px 20px'
-          }}
-        />
+      if (draggingFromHandle) {
+        const fromNode = nodes.find(n => n.id === draggingFromHandle.nodeId);
+        if (fromNode) {
+          const handleX = draggingFromHandle.handle === 'right' ? fromNode.x + fromNode.width : fromNode.x;
+          const handleY = fromNode.y + fromNode.height / 2;
+          drawConnectionLine(ctx, handleX, handleY, mousePos.x - viewOffset.x, mousePos.y - viewOffset.y);
+        }
+      }
+
+      ctx.restore();
+
+      if (showToolbar) {
+        drawToolbar(ctx, canvas.width);
+      }
+
+      if (showNodeMenu) {
+        drawNodeMenu(ctx, nodeMenuPosition.x, nodeMenuPosition.y);
+      }
+
+      if (showPromptDialog && selectedNodeId) {
+        const selectedNode = nodes.find(n => n.id === selectedNodeId);
+        if (selectedNode) {
+          drawPromptDialog(ctx, dialogPosition.x, dialogPosition.y);
+        }
+      }
+
+      requestAnimationFrame(render);
+    };
+
+    render();
+  }, [nodes, connections, selectedNodeId, hoveredNodeId, draggingFromHandle, showNodeMenu, nodeMenuPosition, showToolbar, showPromptDialog, dialogPosition, viewOffset, scale, mousePos]);
+
+  const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.lineWidth = 1;
+    const gridSize = 20;
+    
+    for (let x = 0; x < width / scale + 100; x += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height / scale + 100);
+      ctx.stroke();
+    }
+    
+    for (let y = 0; y < height / scale + 100; y += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width / scale + 100, y);
+      ctx.stroke();
+    }
+  };
+
+  const drawNode = (ctx: CanvasRenderingContext2D, node: Node) => {
+    ctx.save();
+
+    if (node.selected) {
+      ctx.shadowColor = '#6366f1';
+      ctx.shadowBlur = 15;
+    }
+
+    const gradient = ctx.createLinearGradient(node.x, node.y, node.x, node.y + node.height);
+    gradient.addColorStop(0, '#1a1a1a');
+    gradient.addColorStop(1, '#121212');
+    ctx.fillStyle = gradient;
+    ctx.strokeStyle = node.selected ? '#6366f1' : '#333';
+    ctx.lineWidth = node.selected ? 2 : 1;
+    ctx.beginPath();
+    ctx.roundRect(node.x, node.y, node.width, node.height, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px Inter, sans-serif';
+    ctx.fillText(getNodeTypeLabel(node.type), node.x + 12, node.y + 22);
+
+    if (node.type === 'image' || node.type === 'generate') {
+      if (node.imageUrl) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = node.imageUrl;
+        img.onload = () => {
+          ctx.drawImage(img, node.x + 12, node.y + 36, node.width - 24, node.height - 60);
+        };
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(node.x + 12, node.y + 36, node.width - 24, node.height - 60);
+      } else {
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(node.x + 12, node.y + 36, node.width - 24, node.height - 60);
         
-        {/* Canvas Content */}
-        <div className="absolute inset-0 overflow-auto">
-          <div className="min-h-full min-w-full flex items-start justify-center pt-8">
-            {nodes.map((node) => (
-              <div 
-                key={node.id}
-                className={`relative cursor-pointer transition-all ${
-                  selectedNode === node.id ? 'ring-2 ring-indigo-500/50 ring-offset-4 ring-offset-[#0a0a0a]' : ''
-                }`}
-                style={{ position: 'absolute', left: node.position.x, top: node.position.y }}
-                onClick={() => selectNode(node.id)}
-              >
-                {/* Image Node */}
-                <div className="bg-[#1a1a1a] rounded-xl border border-white/10 overflow-hidden">
-                  {/* Node Header */}
-                  <div className="px-3 py-2 border-b border-white/5 flex items-center justify-center">
-                    <span className="text-gray-500 text-xs flex items-center gap-1">
-                      <Image className="w-3 h-3" />
-                      Image
-                    </span>
-                  </div>
-                  
-                  {/* Image Content */}
-                  <div className="relative aspect-square bg-[#0f0f0f] p-4">
-                    {node.data.image ? (
-                      <img 
-                        src={node.data.image} 
-                        alt="Preview" 
-                        className="w-full h-full object-contain rounded-lg"
-                      />
-                    ) : (
-                      <div className="w-full h-full rounded-lg border-2 border-dashed border-white/20 flex flex-col items-center justify-center">
-                        <Plus className="w-8 h-8 text-gray-500 mb-2" />
-                        <span className="text-gray-500 text-xs">点击上传图片</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+        ctx.fillStyle = '#666';
+        ctx.font = '14px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('+ 点击上传', node.x + node.width / 2, node.y + node.height / 2 + 5);
+      }
+    } else if (node.type === 'prompt') {
+      ctx.fillStyle = '#2a2a2a';
+      ctx.fillRect(node.x + 12, node.y + 36, node.width - 24, node.height - 50);
+      
+      ctx.fillStyle = '#888';
+      ctx.font = '12px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const promptText = node.prompt || '输入提示词...';
+      ctx.fillText(promptText.substring(0, 30), node.x + 20, node.y + 44);
+    }
 
-                {/* Left Handle */}
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-10">
-                  <div className="w-6 h-6 rounded-full bg-white/10 border border-white/30 flex items-center justify-center hover:bg-indigo-500 hover:border-indigo-400 transition-all cursor-pointer">
-                    <Plus className="w-3 h-3 text-white/60" />
-                  </div>
-                </div>
+    if (node.hovered) {
+      const handleColor = '#6366f1';
+      const handleSize = 14;
 
-                {/* Right Handle */}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10">
-                  <div className="w-6 h-6 rounded-full bg-white/10 border border-white/30 flex items-center justify-center hover:bg-indigo-500 hover:border-indigo-400 transition-all cursor-pointer">
-                    <Plus className="w-3 h-3 text-white/60" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </main>
+      ctx.fillStyle = '#2a2a2a';
+      ctx.beginPath();
+      ctx.arc(node.x - 7, node.y + node.height / 2, handleSize, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = handleColor;
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('+', node.x - 7, node.y + node.height / 2);
 
-      {/* Bottom Property Panel */}
-      {selectedNode && (
-        <div className="fixed bottom-0 left-52 right-0 bg-[#1a1a1a]/95 backdrop-blur-xl border-t border-white/10 z-50">
-          {showRightPanel && <div className="mr-80">}
-            <div className="p-3">
-              {/* Node Preview & Title */}
-              <div className="flex items-center gap-3 mb-3">
-                <button className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-                  <Folder className="w-4 h-4" />
-                </button>
-                <button className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-                  <Plus className="w-4 h-4" />
-                </button>
-                <input 
-                  type="text"
-                  value={nodes.find(n => n.id === selectedNode)?.data.title || ''}
-                  onChange={(e) => {
-                    setNodes(prev => prev.map(n => 
-                      n.id === selectedNode ? { ...n, data: { ...n.data, title: e.target.value } } : n
-                    ));
-                  }}
-                  placeholder="输入标题..."
-                  className="flex-1 bg-white/5 border border-transparent rounded-lg px-3 py-1.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/50"
-                />
-                <button className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-                  <Maximize2 className="w-4 h-4" />
-                </button>
-              </div>
+      ctx.fillStyle = handleColor;
+      ctx.beginPath();
+      ctx.arc(node.x + node.width + 7, node.y + node.height / 2, handleSize, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText('+', node.x + node.width + 7, node.y + node.height / 2);
+    }
 
-              {/* Model & Settings */}
-              <div className="flex items-center gap-4">
-                {/* Model Select */}
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-purple-400" />
-                  <select 
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-white/20"
-                  >
-                    <option value="flash">TapNow Flash</option>
-                    <option value="pro">TapNow Pro</option>
-                    <option value="image2">TapNow Image2</option>
-                  </select>
-                </div>
+    if (node.status === 'generating') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(node.x, node.y, node.width, node.height);
+      
+      ctx.fillStyle = '#6366f1';
+      ctx.font = '14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('生成中...', node.x + node.width / 2, node.y + node.height / 2);
+    }
 
-                <div className="w-px h-4 bg-white/10" />
+    ctx.restore();
+  };
 
-                {/* Aspect Ratio */}
-                <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="7" height="7" rx="1"/>
-                    <rect x="14" y="3" width="7" height="7" rx="1"/>
-                    <rect x="14" y="14" width="7" height="7" rx="1"/>
-                  </svg>
-                  <select 
-                    value={ratio}
-                    onChange={(e) => setRatio(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-white/20"
-                  >
-                    <option value="1:1">1:1</option>
-                    <option value="16:9">16:9</option>
-                    <option value="9:16">9:16</option>
-                    <option value="4:3">4:3</option>
-                  </select>
-                  <span className="text-gray-500 text-sm">{quality}</span>
-                </div>
+  const getNodeTypeLabel = (type: Node['type']) => {
+    switch (type) {
+      case 'image': return '图片';
+      case 'prompt': return '提示词';
+      case 'generate': return '生成';
+      default: return '节点';
+    }
+  };
 
-                <div className="flex-1" />
+  const drawConnection = (ctx: CanvasRenderingContext2D, conn: Connection) => {
+    const fromNode = nodes.find(n => n.id === conn.from);
+    const toNode = nodes.find(n => n.id === conn.to);
+    
+    if (!fromNode || !toNode) return;
 
-                {/* Action Buttons */}
-                <button className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-                  <Mic className="w-4 h-4" />
-                </button>
-                <button className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all">
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                <button className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white transition-all">
-                  <span className="text-xs font-medium mr-1">2</span>
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                <button className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm font-medium transition-all">
-                  <Send className="w-4 h-4 inline mr-1" />
-                  发送
-                </button>
-              </div>
-            </div>
-          {showRightPanel && </div>}
-        </div>
-      )}
+    const fromX = conn.fromHandle === 'right' ? fromNode.x + fromNode.width : fromNode.x;
+    const fromY = fromNode.y + fromNode.height / 2;
+    const toX = conn.toHandle === 'right' ? toNode.x + toNode.width : toNode.x;
+    const toY = toNode.y + toNode.height / 2;
 
-      {/* Bottom Status Bar */}
-      <div className="fixed bottom-0 left-0 right-0 h-8 bg-[#0a0a0a] border-t border-white/5 flex items-center justify-between px-4 z-40">
-        <div className="flex items-center gap-2">
-          <button className="p-1 rounded text-gray-500 hover:text-gray-300 transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-            </svg>
-          </button>
-          <button className="p-1 rounded text-gray-500 hover:text-gray-300 transition-colors">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10"/>
-              <circle cx="12" cy="12" r="4"/>
-            </svg>
-          </button>
-          <input 
-            type="range"
-            min="25"
-            max="200"
-            value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
-            className="w-24 h-1 bg-white/10 rounded-full appearance-none cursor-pointer"
-          />
-          <span className="text-gray-500 text-xs w-12 text-right">{zoom}%</span>
-        </div>
-        <button className="p-1 rounded text-gray-500 hover:text-gray-300 transition-colors">
-          <HelpCircle className="w-4 h-4" />
-        </button>
-      </div>
+    ctx.save();
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#6366f1';
+    ctx.shadowBlur = 5;
+
+    const midX = (fromX + toX) / 2;
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.quadraticCurveTo(midX, fromY, midX, (fromY + toY) / 2);
+    ctx.quadraticCurveTo(midX, toY, toX, toY);
+    ctx.stroke();
+
+    const arrowSize = 8;
+    const angle = Math.atan2(toY - (fromY + toY) / 2, toX - midX);
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - arrowSize * Math.cos(angle - Math.PI / 6), toY - arrowSize * Math.sin(angle - Math.PI / 6));
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - arrowSize * Math.cos(angle + Math.PI / 6), toY - arrowSize * Math.sin(angle + Math.PI / 6));
+    ctx.stroke();
+
+    ctx.restore();
+  };
+
+  const drawConnectionLine = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number) => {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(99, 102, 241, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+
+    const midX = (x1 + x2) / 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(midX, y1, midX, (y1 + y2) / 2);
+    ctx.quadraticCurveTo(midX, y2, x2, y2);
+    ctx.stroke();
+
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = '#6366f1';
+    ctx.beginPath();
+    ctx.arc(x2, y2, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('+', x2, y2);
+    ctx.restore();
+  };
+
+  const drawToolbar = (ctx: CanvasRenderingContext2D, canvasWidth: number) => {
+    const toolbarHeight = 56;
+    const toolbarY = 16;
+
+    ctx.fillStyle = 'rgba(26, 26, 26, 0.95)';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(16, toolbarY, canvasWidth - 32, toolbarHeight, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.fillText('🎨 Canvas Studio', 28, toolbarY + 36);
+
+    const startX = 200;
+    const buttonWidth = 48;
+    const buttonGap = 8;
+
+    toolbarButtons.forEach((btn, index) => {
+      const btnX = startX + index * (buttonWidth + buttonGap);
+      
+      if (btn.active) {
+        ctx.fillStyle = '#6366f1';
+        ctx.beginPath();
+        ctx.roundRect(btnX, toolbarY + 8, buttonWidth, buttonWidth, 8);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = btn.active ? '#fff' : '#888';
+      ctx.font = '18px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(btn.icon, btnX + buttonWidth / 2, toolbarY + 32);
+    });
+
+    ctx.fillStyle = '#666';
+    ctx.font = '12px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.round(scale * 100)}%`, canvasWidth - 28, toolbarY + 36);
+  };
+
+  const drawNodeMenu = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
+    const menuWidth = 200;
+    const menuHeight = nodeMenuItems.length * 44;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 10;
+    
+    ctx.fillStyle = '#1a1a1a';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, menuWidth, menuHeight, 12);
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
+
+    nodeMenuItems.forEach((item, index) => {
+      const itemY = y + index * 44;
+      
+      ctx.fillStyle = '#666';
+      ctx.font = '13px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(item.icon + '  ' + item.label, x + 16, itemY + 28);
+
+      if (index < nodeMenuItems.length - 1) {
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 12, itemY + 44);
+        ctx.lineTo(x + menuWidth - 12, itemY + 44);
+        ctx.stroke();
+      }
+    });
+
+    ctx.restore();
+  };
+
+  const drawPromptDialog = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
+    const dialogWidth = 800;
+    const dialogHeight = 200;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 20;
+    
+    ctx.fillStyle = '#1a1a1a';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, dialogWidth, dialogHeight, 16);
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x + 16, y + 16, dialogWidth - 32, 80);
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 16, y + 16, dialogWidth - 32, 80);
+
+    ctx.fillStyle = '#888';
+    ctx.font = '14px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(promptInput || '输入提示词...', x + 24, y + 60);
+
+    const dropdownX = x + 16;
+    const dropdownY = y + 112;
+    const dropdownWidth = 140;
+    const dropdownHeight = 36;
+    const dropdownGap = 12;
+
+    const dropdowns = [
+      { label: '模型', options: models, value: 'Flash' },
+      { label: '质量', options: qualities, value: 'HD' },
+      { label: '比例', options: ratios, value: '1:1' },
+    ];
+
+    dropdowns.forEach((dd, index) => {
+      const ddX = dropdownX + index * (dropdownWidth + dropdownGap);
+      
+      ctx.fillStyle = '#2a2a2a';
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(ddX, dropdownY, dropdownWidth, dropdownHeight, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#888';
+      ctx.font = '12px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(dd.value, ddX + 12, dropdownY + 24);
+
+      ctx.fillStyle = '#666';
+      ctx.beginPath();
+      ctx.moveTo(ddX + dropdownWidth - 20, dropdownY + 12);
+      ctx.lineTo(ddX + dropdownWidth - 12, dropdownY + 20);
+      ctx.lineTo(ddX + dropdownWidth - 20, dropdownY + 28);
+      ctx.fill();
+    });
+
+    const pointsX = x + dialogWidth - 180;
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.roundRect(pointsX, dropdownY, 80, dropdownHeight, 8);
+    ctx.fill();
+
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '14px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💰 5 积分', pointsX + 40, dropdownY + 24);
+
+    const sendBtnX = x + dialogWidth - 80;
+    const gradient = ctx.createLinearGradient(sendBtnX, dropdownY, sendBtnX, dropdownY + dropdownHeight);
+    gradient.addColorStop(0, '#6366f1');
+    gradient.addColorStop(1, '#4f46e5');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(sendBtnX, dropdownY, 70, dropdownHeight, 8);
+    ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('发送', sendBtnX + 35, dropdownY + 24);
+
+    ctx.restore();
+  };
+
+  const getNodeAtPosition = useCallback((x: number, y: number) => {
+    const scaledX = (x - viewOffset.x) / scale;
+    const scaledY = (y - viewOffset.y) / scale;
+    
+    return nodes.find(node => 
+      scaledX >= node.x && scaledX <= node.x + node.width &&
+      scaledY >= node.y && scaledY <= node.y + node.height
+    );
+  }, [nodes, viewOffset, scale]);
+
+  const getHandleAtPosition = useCallback((x: number, y: number) => {
+    const scaledX = (x - viewOffset.x) / scale;
+    const scaledY = (y - viewOffset.y) / scale;
+    
+    for (const node of nodes) {
+      const leftHandleX = node.x - 7;
+      const rightHandleX = node.x + node.width + 7;
+      const handleY = node.y + node.height / 2;
+      
+      const leftDist = Math.sqrt((scaledX - leftHandleX) ** 2 + (scaledY - handleY) ** 2);
+      const rightDist = Math.sqrt((scaledX - rightHandleX) ** 2 + (scaledY - handleY) ** 2);
+      
+      if (leftDist <= 14) return { nodeId: node.id, handle: 'left' as const };
+      if (rightDist <= 14) return { nodeId: node.id, handle: 'right' as const };
+    }
+    return null;
+  }, [nodes, viewOffset, scale]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setMousePos({ x, y });
+
+    const handle = getHandleAtPosition(x, y);
+    if (handle && handle.handle === 'right') {
+      setDraggingFromHandle(handle);
+      return;
+    }
+
+    const node = getNodeAtPosition(x, y);
+    
+    if (node) {
+      setDraggedNode(node.id);
+      setSelectedNodeId(node.id);
+      setShowNodeMenu(true);
+      setNodeMenuPosition({ x, y: y - 100 });
+      setShowPromptDialog(true);
+      setDialogPosition({ x: Math.max(16, x - 400), y: y + node.height + 16 });
+    } else {
+      setSelectedNodeId(null);
+      setShowNodeMenu(false);
+      setShowPromptDialog(false);
+      
+      if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+        setIsPanning(true);
+        setPanStart({ x: e.clientX - viewOffset.x, y: e.clientY - viewOffset.y });
+      }
+    }
+  }, [getNodeAtPosition, getHandleAtPosition, viewOffset]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setMousePos({ x, y });
+
+    if (isPanning) {
+      setViewOffset({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y,
+      });
+      return;
+    }
+
+    if (draggedNode) {
+      setNodes(prev => prev.map(node =>
+        node.id === draggedNode
+          ? { ...node, x: (x - viewOffset.x) / scale - node.width / 2, y: (y - viewOffset.y) / scale - node.height / 2 }
+          : node
+      ));
+      if (showPromptDialog) {
+        const selectedNode = nodes.find(n => n.id === draggedNode);
+        if (selectedNode) {
+          setDialogPosition({ 
+            x: Math.max(16, x - 400), 
+            y: (y - viewOffset.y) / scale + selectedNode.height + 16 
+          });
+        }
+      }
+      return;
+    }
+
+    if (draggingFromHandle) {
+      return;
+    }
+
+    const node = getNodeAtPosition(x, y);
+    setHoveredNodeId(node?.id || null);
+    setNodes(prev => prev.map(n => ({ ...n, hovered: n.id === node?.id })));
+  }, [draggedNode, draggingFromHandle, isPanning, panStart, getNodeAtPosition, viewOffset, scale, showPromptDialog, nodes]);
+
+  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (draggingFromHandle) {
+      const handle = getHandleAtPosition(x, y);
+      if (handle && handle.handle === 'left' && handle.nodeId !== draggingFromHandle.nodeId) {
+        const newConnection: Connection = {
+          id: `conn-${Date.now()}`,
+          from: draggingFromHandle.nodeId,
+          to: handle.nodeId,
+          fromHandle: draggingFromHandle.handle,
+          toHandle: handle.handle,
+        };
+        setConnections(prev => [...prev, newConnection]);
+      }
+      setDraggingFromHandle(null);
+      return;
+    }
+
+    setDraggedNode(null);
+    setIsPanning(false);
+
+    const handle = getHandleAtPosition(x, y);
+    if (handle && handle.handle === 'right') {
+      setShowNodeMenu(true);
+      setNodeMenuPosition({ x: x + 20, y });
+    }
+  }, [draggingFromHandle, getHandleAtPosition]);
+
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale(prev => Math.max(0.25, Math.min(2, prev * delta)));
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Delete' && selectedNodeId) {
+      setNodes(prev => prev.filter(n => n.id !== selectedNodeId));
+      setConnections(prev => prev.filter(c => c.from !== selectedNodeId && c.to !== selectedNodeId));
+      setSelectedNodeId(null);
+      setShowNodeMenu(false);
+      setShowPromptDialog(false);
+    }
+    
+    if (e.key === 'Escape') {
+      setSelectedNodeId(null);
+      setShowNodeMenu(false);
+      setShowPromptDialog(false);
+    }
+    
+    if (showPromptDialog && e.key === 'Enter' && e.ctrlKey) {
+      alert(`发送提示词: ${promptInput}`);
+    }
+  }, [selectedNodeId, showPromptDialog, promptInput]);
+
+  const handleToolbarClick = useCallback((x: number) => {
+    const startX = 200;
+    const buttonWidth = 48;
+    const buttonGap = 8;
+
+    toolbarButtons.forEach((btn, index) => {
+      const btnX = startX + index * (buttonWidth + buttonGap);
+      if (x >= btnX && x <= btnX + buttonWidth) {
+        switch (btn.id) {
+          case 'zoom-in':
+            setScale(prev => Math.min(2, prev * 1.2));
+            break;
+          case 'zoom-out':
+            setScale(prev => Math.max(0.25, prev / 1.2));
+            break;
+          case 'add-image':
+            const newImageNode: Node = {
+              id: `node-${Date.now()}`,
+              type: 'image',
+              x: 200,
+              y: 200,
+              width: 200,
+              height: 180,
+              status: 'idle',
+              selected: false,
+              hovered: false,
+            };
+            setNodes(prev => [...prev, newImageNode]);
+            break;
+          case 'add-prompt':
+            const newPromptNode: Node = {
+              id: `node-${Date.now()}`,
+              type: 'prompt',
+              x: 200,
+              y: 200,
+              width: 200,
+              height: 120,
+              status: 'idle',
+              selected: false,
+              hovered: false,
+            };
+            setNodes(prev => [...prev, newPromptNode]);
+            break;
+          case 'save':
+            alert('项目已保存');
+            break;
+          case 'share':
+            alert('分享链接已复制');
+            break;
+        }
+      }
+    });
+  }, []);
+
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    
+    if (x >= 16 && x <= canvasRef.current.width - 16 && e.clientY >= 16 && e.clientY <= 72) {
+      handleToolbarClick(x);
+    }
+  }, [handleToolbarClick]);
+
+  return (
+    <div className="w-screen h-screen bg-[#0a0a0a] overflow-hidden">
+      <canvas
+        ref={canvasRef}
+        width={window.innerWidth}
+        height={window.innerHeight}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
+        onClick={handleCanvasClick}
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        className="cursor-crosshair"
+      />
+      <style>{`
+        canvas:focus { outline: none; }
+      `}</style>
     </div>
   );
 }
