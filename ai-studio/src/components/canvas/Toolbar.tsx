@@ -1,15 +1,18 @@
+import React from 'react';
+import { Plus, Save, Trash2, FolderOpen, LogOut, User, Share2, Star, Info, Settings } from 'lucide-react';
+
 interface ToolbarProps {
-  onAddNode: () => void
-  onClear: () => void
-  onSave: () => void
-  onNew: () => void
-  onOpenProjects: () => void
-  onLogout: () => void
-  saveStatus: string
-  user: any
+  onAddNode: () => void;
+  onClear: () => void;
+  onSave: () => void;
+  onNew: () => void;
+  onOpenProjects: () => void;
+  onLogout: () => void;
+  saveStatus: string;
+  user: any;
 }
 
-const Toolbar = ({
+const Toolbar: React.FC<ToolbarProps> = ({
   onAddNode,
   onClear,
   onSave,
@@ -18,101 +21,82 @@ const Toolbar = ({
   onLogout,
   saveStatus,
   user
-}: ToolbarProps) => {
+}) => {
   return (
-    <div className="glass px-6 py-3 rounded-xl flex gap-4 items-center">
-      <button
-        onClick={onNew}
-        className="
-          px-5 py-2.5 text-sm font-semibold rounded-xl
-          bg-white/5 border-2 border-white/20 text-white
-          hover:bg-cyber-yellow/20 hover:border-cyber-yellow/50 hover:text-cyber-yellow
-          transition-all duration-300
-          min-w-[80px]
-        "
-      >
-        新建
-      </button>
-      <button
-        onClick={onAddNode}
-        className="
-          px-6 py-3 text-base font-semibold rounded-xl
-          bg-gradient-to-br from-cyber-cyan/20 to-cyber-cyan/5
-          border-2 border-cyber-cyan/40 text-cyber-cyan
-          hover:from-cyber-cyan/40 hover:to-cyber-cyan/10
-          hover:border-cyber-cyan hover:shadow-[0_0_20px_rgba(0,245,255,0.4)]
-          hover:scale-105
-          transition-all duration-300
-          min-w-[120px]
-        "
-      >
-        + 添加节点
-      </button>
-      <button
-        onClick={onSave}
-        className="
-          px-5 py-2.5 text-sm font-semibold rounded-xl
-          bg-white/5 border-2 border-white/20 text-white
-          hover:bg-cyber-cyan/20 hover:border-cyber-cyan/50
-          transition-all duration-300
-          min-w-[80px]
-        "
-      >
-        保存
-      </button>
-      <button
-        onClick={onClear}
-        className="
-          px-5 py-2.5 text-sm font-semibold rounded-xl
-          bg-white/5 border-2 border-white/20 text-white
-          hover:bg-cyber-magenta/20 hover:border-cyber-magenta/50
-          transition-all duration-300
-          min-w-[80px]
-        "
-      >
-        清空
-      </button>
-
-      <button
-        onClick={onOpenProjects}
-        className="
-          px-5 py-2.5 text-sm font-semibold rounded-xl
-          bg-white/5 border-2 border-white/20 text-white
-          hover:bg-cyber-yellow/20 hover:border-cyber-yellow/50 hover:text-cyber-yellow
-          transition-all duration-300
-          min-w-[90px]
-        "
-      >
-        项目
-      </button>
-
-      {saveStatus && (
-        <span className={`
-          text-xs px-3 py-1 rounded-full ml-2
-          ${saveStatus === '保存中...' ? 'text-cyber-yellow animate-pulse' : ''}
-          ${saveStatus === '已保存' ? 'text-cyber-cyan' : ''}
-          ${saveStatus === '保存失败' ? 'text-cyber-magenta' : ''}
-          ${saveStatus === '已加载' ? 'text-cyber-cyan' : ''}
-        `}>
-          {saveStatus}
-        </span>
-      )}
-
-      <div className="w-px h-8 bg-white/20 mx-2" />
-      <span className="text-xs text-cyber-cyan font-medium">{user?.username || user?.name || user?.email}</span>
-      <button
-        onClick={onLogout}
-        className="
-          text-xs px-3 py-1.5 rounded-lg
-          bg-white/5 border border-white/20 text-white/60
-          hover:text-cyber-magenta hover:border-cyber-magenta/50 hover:bg-cyber-magenta/10
-          transition-all duration-300
-        "
-      >
-        退出
-      </button>
+    <div className="fixed top-16 left-16 right-0 h-16 bg-black/80 backdrop-blur-md border-b border-gray-800 z-40 flex items-center px-6">
+      <div className="flex items-center space-x-4">
+        <button
+          onClick={onAddNode}
+          className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <Plus size={16} />
+          <span>Add Node</span>
+        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={onNew}
+            className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Trash2 size={16} />
+            <span>New</span>
+          </button>
+          <button
+            onClick={onOpenProjects}
+            className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <FolderOpen size={16} />
+            <span>Projects</span>
+          </button>
+          <button
+            onClick={onSave}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Save size={16} />
+            <span>{saveStatus || 'Save'}</span>
+          </button>
+        </div>
+      </div>
+      <div className="ml-auto flex items-center space-x-4">
+        <button
+          className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <Share2 size={16} />
+          <span>Share</span>
+        </button>
+        <button
+          className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <Star size={16} />
+          <span>Favorite</span>
+        </button>
+        <button
+          className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <Info size={16} />
+          <span>Help</span>
+        </button>
+        <button
+          className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <Settings size={16} />
+          <span>Settings</span>
+        </button>
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
+            <User size={16} className="text-white" />
+          </div>
+          <span className="text-white text-sm">{user?.name || user?.email}</span>
+        </div>
+        <button
+          onClick={onLogout}
+          className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <LogOut size={16} />
+          <span>Logout</span>
+        </button>
+      </div>
     </div>
-  )
-}
+  );
+};
 
-export default Toolbar
+export default Toolbar;
