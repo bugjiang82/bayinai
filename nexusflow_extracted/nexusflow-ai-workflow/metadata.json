@@ -1,0 +1,6 @@
+{
+  "name": "NexusFlow AI Workflow",
+  "description": "Infinite canvas for generating text, images, and videos with connected AI nodes, supporting multimodal inheritance and intelligent prompt extraction.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["AI_POWERED", "WORKFLOW_CANVAS"]
+}
