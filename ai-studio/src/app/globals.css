@@ -83,6 +83,9 @@
 
 /* --- Tailwind v4 Theme Configuration --- */
 @theme inline {
+  --color-cyber-cyan: #00f5ff;
+  --color-cyber-magenta: #ff00ff;
+  --color-cyber-yellow: #ffff00;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
