@@ -4,7 +4,7 @@ import sharp from "sharp";
 import prisma from "@/lib/prisma";
 import type { GenType, GenStatus } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult, GenerateService } from "./GenerateService";
-import { deductCredits } from "../generation.service";
+import { deductCredits } from "../credit.service";
 
 export abstract class BaseGenerateService implements GenerateService {
   abstract execute(params: GenerateTaskParams): Promise<GenerateTaskResult>;

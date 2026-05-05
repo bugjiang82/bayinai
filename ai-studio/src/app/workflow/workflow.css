@@ -1,0 +1,99 @@
+/* 工作流画布样式 */
+
+.canvas-grid {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.workflow-canvas .react-flow__node {
+  border: none !important;
+  background: transparent !important;
+}
+
+/* 默认边样式 - 灰色 */
+.react-flow__edge .react-flow__edge-path {
+  stroke: #6b7280 !important;
+  stroke-width: 1px !important;
+}
+
+/* 选中边样式 - 白色加粗 */
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge-path[data-selected] {
+  stroke: #ffffff !important;
+  stroke-width: 2.5px !important;
+}
+
+/* 连接线样式 */
+.react-flow__connection-path {
+  stroke: #6b7280 !important;
+  stroke-width: 1px !important;
+}
+
+/* 确保选中边的背景和轮廓 */
+.react-flow__edge.selected {
+  stroke: #ffffff !important;
+}
+
+.workflow-canvas .react-flow__controls {
+  background: rgba(19, 20, 28, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+}
+
+.workflow-canvas .react-flow__controls-button {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  fill: rgba(255, 255, 255, 0.5);
+}
+
+.workflow-canvas .react-flow__controls-button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  fill: white;
+}
+
+.workflow-canvas ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.workflow-canvas ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workflow-canvas ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.workflow-canvas ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.nowheel {
+  overflow: hidden;
+}
+
+.nowheel:hover {
+  overflow-y: auto;
+}

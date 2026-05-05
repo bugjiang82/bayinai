@@ -5,7 +5,7 @@ import sharp from "sharp";
 import prisma from "@/lib/prisma";
 import type { GenType, GenStatus } from "@/types/generation";
 import { TaskFactory } from "./tasks";
-import * as creditService from "./credit.service";
+import { deductCredits } from "./credit.service";
 import * as fileService from "./file.service";
 
 const ai = new GoogleGenAI({
@@ -41,6 +41,7 @@ export interface GenerateImageParams {
   referenceImage?: string; // 兼容旧版
   referenceImages?: string[]; // 新版支持多张参考图片
   transformType?: string;
+  cost?: number;
 }
 
 export interface GenerateImageResult {
@@ -72,6 +73,7 @@ export async function generateImage(
     referenceImage,
     referenceImages,
     transformType,
+    cost: costParam,
   } = params;
 
   // 兼容新旧传参方式
@@ -106,7 +108,7 @@ export async function generateImage(
       // 对于不支持的任务类型，使用旧的实现
       // 这里保留旧的实现以保持向后兼容性
       const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
-      const cost = COST_MAP[model] || COST_MAP.flash;
+      const cost = costParam || COST_MAP[model] || COST_MAP.flash;
       const isProModel = modelName.includes("pro");
       const isImage2Model = model === "image2";
 
@@ -305,7 +307,7 @@ export async function generateImage(
                 ? refImg.split(",")[1]
                 : refImg;
               const mimeType = refImg.includes("data:")
-                ? refImg.split(";").split(":")[1] || "image/png"
+                ? refImg.split(";")[0].split(":")[1] || "image/png"
                 : "image/png";
               
               parts.push({
@@ -380,7 +382,7 @@ export async function generateImage(
         }
 
         // 扣除积分（使用统一扣减服务）
-        await creditService.deductCredits(
+        await deductCredits(
           userId,
           cost,
           `图片生成 (${model})`,
@@ -480,11 +482,17 @@ export async function generateVideo(
     ? "/services/aigc/video-generation/video-synthesis"
     : "/services/aigc/image2video/video-synthesis";
 
-  const extractBase64 = (dataUrl: string): string => {
-    if (dataUrl.includes(",")) {
-      return dataUrl.split(",")[1];
+  const getImageUrl = (imageInput: string): string => {
+    // 如果已经是 http URL，直接返回
+    if (imageInput.startsWith("http://") || imageInput.startsWith("https://")) {
+      return imageInput;
     }
-    return dataUrl;
+    // 如果是 base64，添加前缀
+    if (imageInput.startsWith("data:")) {
+      return imageInput;
+    }
+    // 否则假设是纯 base64，添加前缀
+    return `data:image/jpeg;base64,${imageInput}`;
   };
 
   let requestBody: Record<string, unknown>;
@@ -505,8 +513,8 @@ export async function generateVideo(
         },
       };
     } else {
-      const firstFrameData = firstFrame ? `data:image/jpeg;base64,${extractBase64(firstFrame)}` : undefined;
-      const lastFrameData = lastFrame ? `data:image/jpeg;base64,${extractBase64(lastFrame)}` : undefined;
+      const firstFrameData = firstFrame ? getImageUrl(firstFrame) : undefined;
+      const lastFrameData = lastFrame ? getImageUrl(lastFrame) : undefined;
       requestBody = {
         model,
         input: {
@@ -528,8 +536,8 @@ export async function generateVideo(
     if (isTextToVideo) {
       throw new Error("该模型不支持文生视频，请选择图生视频模式");
     }
-    const firstFrameData = firstFrame ? `data:image/jpeg;base64,${extractBase64(firstFrame)}` : undefined;
-    const lastFrameData = lastFrame ? `data:image/jpeg;base64,${extractBase64(lastFrame)}` : undefined;
+    const firstFrameData = firstFrame ? getImageUrl(firstFrame) : undefined;
+    const lastFrameData = lastFrame ? getImageUrl(lastFrame) : undefined;
     requestBody = {
       model,
       input: {
@@ -547,7 +555,20 @@ export async function generateVideo(
     };
   }
 
-  const response = await fetch(`${DASHSCOPE_BASE_URL}${apiEndpoint}`, {
+  console.log("=================== DashScope Request ===================");
+    console.log("API Endpoint:", `${DASHSCOPE_BASE_URL}${apiEndpoint}`);
+    console.log("Model:", model);
+    console.log("Is Wan27:", isWan27);
+    console.log("Is Text to Video:", isTextToVideo);
+    console.log("Request Body:", JSON.stringify(requestBody, (key, value) => {
+      if (key === "url" && typeof value === "string" && value.length > 100) {
+        return value.substring(0, 100) + "...(truncated, total length: " + value.length + ")";
+      }
+      return value;
+    }, 2));
+    console.log("==========================================================");
+
+    const response = await fetch(`${DASHSCOPE_BASE_URL}${apiEndpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -670,7 +691,7 @@ export async function updateVideoResult(
   });
 
   if (cost && cost > 0) {
-    await creditService.deductCredits(
+    await deductCredits(
       userId,
       cost,
       "视频生成",
