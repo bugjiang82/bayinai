@@ -477,10 +477,28 @@ export async function generateVideo(
 
   const isWan27 = model.includes("wan2.7") || model.includes("wan27");
   const isTextToVideo = mode === "text-to-video";
+  const isWan27I2V = !isTextToVideo && isWan27;
   const isTextToVideoWan27 = isTextToVideo && isWan27;
-  const apiEndpoint = isTextToVideoWan27
+  const apiEndpoint = (isTextToVideoWan27 || isWan27I2V)
     ? "/services/aigc/video-generation/video-synthesis"
     : "/services/aigc/image2video/video-synthesis";
+
+  const resolveMediaUrl = (input: string | undefined): string | undefined => {
+    if (!input) return undefined;
+    if (input.startsWith("data:")) return input;
+    if (input.startsWith("http://") || input.startsWith("https://") || input.startsWith("oss://")) return input;
+    if (input.startsWith("/")) {
+      const filePath = path.join(process.cwd(), "public", input);
+      if (fs.existsSync(filePath)) {
+        const buffer = fs.readFileSync(filePath);
+        return `data:image/jpeg;base64,${buffer.toString("base64")}`;
+      }
+    }
+    if (input.includes(",")) {
+      return input;
+    }
+    return `data:image/jpeg;base64,${input}`;
+  };
 
   const getImageUrl = (imageInput: string): string => {
     // 如果已经是 http URL，直接返回
@@ -513,15 +531,15 @@ export async function generateVideo(
         },
       };
     } else {
-      const firstFrameData = firstFrame ? getImageUrl(firstFrame) : undefined;
-      const lastFrameData = lastFrame ? getImageUrl(lastFrame) : undefined;
+      const firstFrameUrl = firstFrame ? resolveMediaUrl(firstFrame) : undefined;
+      const lastFrameUrl = lastFrame ? resolveMediaUrl(lastFrame) : undefined;
       requestBody = {
         model,
         input: {
           prompt,
           media: [
-            { type: "first_frame", url: firstFrameData },
-            ...(lastFrameData ? [{ type: "last_frame", url: lastFrameData }] : []),
+            ...(firstFrameUrl ? [{ type: "reference_image", url: firstFrameUrl }] : []),
+            ...(lastFrameUrl ? [{ type: "last_frame", url: lastFrameUrl }] : []),
           ],
         },
         parameters: {
@@ -682,11 +700,47 @@ export async function updateVideoResult(
     throw new Error("未找到对应的生成记录");
   }
 
+  const outputDir = path.join(process.cwd(), "public", "outputs", userId);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  let localVideoPath: string | null = null;
+  let thumbnailPath: string | null = null;
+
+  try {
+    if (videoUrl && videoUrl.startsWith("http")) {
+      const videoResponse = await fetch(videoUrl);
+      if (videoResponse.ok) {
+        const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+        const videoFilename = `${generation.id}.mp4`;
+        const videoPath = path.join(outputDir, videoFilename);
+        fs.writeFileSync(videoPath, videoBuffer);
+        localVideoPath = `/outputs/${userId}/${videoFilename}`;
+
+        try {
+          const thumbnailFilename = `${generation.id}_thumb.jpg`;
+          thumbnailPath = path.join(outputDir, thumbnailFilename);
+          const ffmpegCommand = `ffmpeg -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf "scale=256:256:force_original_aspect_ratio=decrease,pad=256:256:(ow-iw)/2:(oh-ih)/2" -y "${thumbnailPath}"`;
+          const { execSync } = require("child_process");
+          execSync(ffmpegCommand, { stdio: "pipe" });
+        } catch (thumbError) {
+          console.error("Failed to generate video thumbnail:", thumbError);
+          thumbnailPath = null;
+        }
+      }
+    }
+  } catch (downloadError) {
+    console.error("Failed to download video:", downloadError);
+  }
+
   await prisma.generation.update({
     where: { id: generation.id },
     data: {
       status: "COMPLETED",
-      outputUrl: videoUrl,
+      outputUrl: localVideoPath || videoUrl,
+      thumbnailUrl: thumbnailPath ? `/outputs/${userId}/${path.basename(thumbnailPath)}` : null,
+      favorited: true,
     },
   });
 
@@ -743,23 +797,32 @@ export async function getHistory(
   ]);
 
   return {
-    list: list.map((item) => ({
-      id: item.id,
-      type: item.type,
-      status: item.status,
-      prompt: item.prompt,
-      outputUrl: item.outputUrl,
-      thumbnailUrl: item.thumbnailUrl,
-      width: item.width,
-      height: item.height,
-      cost: item.cost,
-      params: item.params,
-      inputUrl: item.inputUrl,
-      createdAt: item.createdAt.toISOString(),
-      completedAt: item.completedAt?.toISOString(),
-      favorited: (item as any).favorited ?? false,
-      favoritedAt: (item as any).favoritedAt?.toISOString() ?? null,
-    })),
+    list: list.map((item) => {
+      let parsedParams: Record<string, any> = {};
+      if (item.params) {
+        try {
+          parsedParams = typeof item.params === 'string' ? JSON.parse(item.params) : item.params;
+        } catch {}
+      }
+      return {
+        id: item.id,
+        type: item.type,
+        status: item.status,
+        prompt: item.prompt,
+        outputUrl: item.outputUrl,
+        thumbnailUrl: item.thumbnailUrl,
+        width: item.width,
+        height: item.height,
+        cost: item.cost,
+        model: parsedParams.model || "flash",
+        imageSize: parsedParams.imageSize || "1K",
+        aspectRatio: parsedParams.aspectRatio || "",
+        createdAt: item.createdAt.toISOString(),
+        completedAt: item.completedAt?.toISOString(),
+        favorited: (item as any).favorited ?? false,
+        favoritedAt: (item as any).favoritedAt?.toISOString() ?? null,
+      };
+    }),
     total,
     page,
     pageSize,

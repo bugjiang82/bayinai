@@ -36,7 +36,7 @@ export class AgentImageTask extends BaseGenerateService {
       model = "pro", // 代理任务默认使用 pro 模型
       aspectRatio = "1:1",
       imageSize = "1K",
-      thinkingLevel = ThinkingLevel.DETAILED, // 代理任务默认使用更详细的思考
+      thinkingLevel = ThinkingLevel.MINIMAL, // 代理任务默认使用更详细的思考
       agentId,
       agentType,
       context = [],

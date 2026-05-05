@@ -58,6 +58,18 @@ const nodeTypes = {
 const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
 
+function isValidImageSource(src: string | null | undefined): boolean {
+  if (!src) return false;
+  if (typeof src !== 'string') return false;
+  if (src.trim() === "") return false;
+  if (src.includes("placeholder")) return false;
+  if (src.includes("undefined")) return false;
+  if (src.includes("null")) return false;
+  if (src.toLowerCase().includes("http") && !src.startsWith("http")) return false;
+  return true;
+}
+
+
 const WorkflowCanvas: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -110,8 +122,12 @@ const WorkflowCanvas: React.FC = () => {
           const response = await fetch(`/api/generate/history?type=${types}&pageSize=50`);
           const result = await response.json();
           if (result.code === 0) {
-            setHistoryItems(result.data.list || []);
-            setHistoryTotal(result.data.total || 0);
+            const validItems = (result.data.list || []).filter((item: any) => {
+              const imageUrl = item.thumbnailUrl || item.outputUrl;
+              return isValidImageSource(imageUrl);
+            });
+            setHistoryItems(validItems);
+            setHistoryTotal(validItems.length);
           }
         } catch (err) {
           console.error("获取历史失败:", err);
@@ -263,8 +279,8 @@ const WorkflowCanvas: React.FC = () => {
     setIsDragging(false);
   }, []);
 
-  const onSelectionChange = useCallback(({ nodes }: { nodes: string[] }) => {
-    setIsMultiSelect(nodes.length > 1);
+  const onSelectionChange = useCallback((params: { nodes: Node[] }) => {
+    setIsMultiSelect(params.nodes.length > 1);
   }, []);
 
   const addNode = (type: NodeType, x: number, y: number, sourceNodeId?: string, sourceHandle?: string, initialData?: { prompt?: string, label?: string }) => {
@@ -881,12 +897,10 @@ const WorkflowCanvas: React.FC = () => {
                         className="relative aspect-square bg-white/5 rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition-all"
                       >
                         <img
-                          src={item.thumbnailUrl || item.outputUrl || '/placeholder.png'}
+                          src={item.thumbnailUrl || item.outputUrl}
                           alt=""
                           className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/placeholder.png';
-                          }}
+                          
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 hover:opacity-100 transition-opacity flex items-end p-2">
                           <span className="text-[10px] text-white truncate">

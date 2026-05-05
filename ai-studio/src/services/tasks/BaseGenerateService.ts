@@ -50,26 +50,19 @@ export abstract class BaseGenerateService implements GenerateService {
   }
 
   protected async deductUserCredits(userId: string, generationId: string, cost: number, remark: string): Promise<boolean> {
-    const deductionResult = await deductCredits({
-      userId,
-      amount: cost,
-      type: "GENERATE",
-      refId: generationId,
-      remark,
-    });
-
-    if (!deductionResult.success) {
+    try {
+      await deductCredits(userId, cost, remark, generationId);
+      return true;
+    } catch (error) {
       await prisma.generation.update({
         where: { id: generationId },
         data: {
           status: "FAILED" as GenStatus,
-          errorMsg: deductionResult.error || "积分扣减失败",
+          errorMsg: error instanceof Error ? error.message : "积分扣减失败",
         },
       });
-      throw new Error(deductionResult.error || "积分扣减失败");
+      throw error;
     }
-
-    return true;
   }
 
   protected async updateGenerationStatus(generationId: string, status: GenStatus, data?: Partial<any>): Promise<any> {

@@ -26,6 +26,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import ImageUploader from "@/components/shared/ImageUploader";
 import ProgressBar from "@/components/generate/ProgressBar";
+import DropdownSelector from "@/components/generate/DropdownSelector";
 import SelectionTool from "@/components/generate/SelectionTool";
 import KonvaCanvas from "@/components/generate/KonvaCanvas";
 import { Toolbox } from "@/components/generate/Toolbox";
@@ -67,25 +68,24 @@ const STYLE_OPTIONS = [
   "印象派",
 ];
 
-const MODEL_OPTIONS = [
+const INPAINT_MODEL_OPTIONS = [
   { value: "flash", label: "Flash", description: "快速生成" },
-  { value: "pro", label: "Pro", description: "高质量输出" },
-  { value: "image2", label: "Image2", description: "超强图像生成" },
+  { value: "pro", label: "Pro", description: "高质量" },
 ];
 
-const RESOLUTION_OPTIONS = [
-  { value: "512", label: "512", description: "标准" },
-  { value: "1K", label: "1K", description: "1K 质量" },
-  { value: "2K", label: "2K", description: "2K 质量" },
-  { value: "4K", label: "4K", description: "4K 高清" },
+const INPAINT_SIZE_OPTIONS = [
+  { value: "1K", label: "1K", description: "标准" },
+  { value: "2K", label: "2K", description: "高清" },
+  { value: "4K", label: "4K", description: "超高清" },
 ];
 
-const SIZE_OPTIONS = [
-  { label: "1:1", ratio: "1:1" },
-  { label: "16:9", ratio: "16:9" },
-  { label: "9:16", ratio: "9:16" },
-  { label: "4:5", ratio: "4:5" },
-  { label: "3:4", ratio: "3:4" },
+const INPAINT_RATIO_OPTIONS = [
+  { value: "1:1", label: "1:1", description: "方形" },
+  { value: "16:9", label: "16:9", description: "横屏" },
+  { value: "9:16", label: "9:16", description: "竖屏" },
+  { value: "21:9", label: "21:9", description: "超宽屏" },
+  { value: "4:3", label: "4:3", description: "标准" },
+  { value: "3:4", label: "3:4", description: "竖版" },
 ];
 
 
@@ -264,7 +264,6 @@ export default function EditPage() {
 
     const getCost = (m: string) => {
       if (m === "flash") return 1;
-      if (m === "image2") return 50;
       return 3;
     };
     const cost = getCost(model);
@@ -461,64 +460,28 @@ export default function EditPage() {
             </div>
             
             {/* 模型选择 */}
-            <div>
-              <label className="text-xs text-zinc-400 mb-1 block">模型</label>
-              <div className="grid grid-cols-3 gap-2">
-                {MODEL_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
-                      model === option.value
-                        ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                    }`}
-                    onClick={() => setModel(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <DropdownSelector
+              label="大模型"
+              value={model}
+              options={INPAINT_MODEL_OPTIONS}
+              onChange={setModel}
+            />
             
-            {/* 分辨率选择 */}
-            <div>
-              <label className="text-xs text-zinc-400 mb-1 block">分辨率</label>
-              <div className="grid grid-cols-2 gap-2">
-                {RESOLUTION_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
-                      resolution === option.value
-                        ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                    }`}
-                    onClick={() => setResolution(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* 图片质量选择 */}
+            <DropdownSelector
+              label="图片质量"
+              value={resolution}
+              options={INPAINT_SIZE_OPTIONS}
+              onChange={setResolution}
+            />
             
-            {/* 宽高比选择 */}
-            <div>
-              <label className="text-xs text-zinc-400 mb-1 block">宽高比</label>
-              <div className="grid grid-cols-3 gap-2">
-                {SIZE_OPTIONS.map((option) => (
-                  <button
-                    key={option.ratio}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
-                      aspectRatio === option.ratio
-                        ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                        : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
-                    }`}
-                    onClick={() => setAspectRatio(option.ratio)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* 图片比例选择 */}
+            <DropdownSelector
+              label="图片比例"
+              value={aspectRatio}
+              options={INPAINT_RATIO_OPTIONS}
+              onChange={setAspectRatio}
+            />
           </div>
         );
 
@@ -771,10 +734,10 @@ export default function EditPage() {
                 <span
                   className={cn(
                     "font-medium",
-                    credits > 0 && credits < (model === "image2" ? 50 : model === "flash" ? 1 : 3) ? "text-red-400" : "text-zinc-400"
+                    credits > 0 && credits < (model === "flash" ? 1 : 3) ? "text-red-400" : "text-zinc-400"
                   )}
                 >
-                  {model === "image2" ? 50 : model === "flash" ? 1 : 3}
+                  {model === "flash" ? 1 : 3}
                 </span>{
                   " "
                 }
@@ -791,7 +754,7 @@ export default function EditPage() {
               onClick={handleApply}
               disabled={
                 !sourceImage || 
-                credits < (model === "image2" ? 50 : model === "flash" ? 1 : 3) || 
+                credits < (model === "flash" ? 1 : 3) || 
                 isProcessing ||
                 (editMode === "inpaint" && !inpaintDescription.trim())
               }

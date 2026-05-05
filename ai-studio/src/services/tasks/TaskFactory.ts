@@ -6,7 +6,7 @@ import { ArchitectureTask } from "./ArchitectureTask";
 import { AgentImageTask } from "./AgentImageTask";
 
 export class TaskFactory {
-  private static taskMap: Record<GenType, () => GenerateService> = {
+  private static taskMap: Partial<Record<GenType, () => GenerateService>> = {
     TEXT_TO_IMAGE: () => new TextToImageTask(),
     INPAINT: () => new InpaintTask(),
     ARCHITECTURE: () => new ArchitectureTask(),

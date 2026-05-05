@@ -36,7 +36,7 @@ export class ArchitectureTask extends BaseGenerateService {
       model = "pro", // 建筑设计默认使用 pro 模型
       aspectRatio = "16:9", // 建筑设计默认使用宽屏比例
       imageSize = "2K", // 建筑设计默认使用更高分辨率
-      thinkingLevel = ThinkingLevel.DETAILED, // 建筑设计默认使用更详细的思考
+      thinkingLevel = ThinkingLevel.MINIMAL, // 建筑设计默认使用更详细的思考
       style = "modern",
       view = "exterior", // exterior, interior, aerial
       lighting = "daytime",

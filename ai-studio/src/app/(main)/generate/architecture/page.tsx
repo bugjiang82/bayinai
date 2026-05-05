@@ -56,7 +56,7 @@ interface ImageGenerationParams {
   customNegativePrompt: string;
   aspectRatio: string; // Now using string to match SizeOption.ratio
   imageSize: ImageSize;
-  model: 'flash' | 'pro';
+  model: 'flash' | 'pro' | 'image2';
   guidanceScale: number;
   mode: GenerationMode;
   structureRef?: string; // base64
@@ -69,7 +69,7 @@ interface ImageGenerationParams {
 }
 
 interface ModelOption {
-  id: 'flash' | 'pro';
+  id: 'flash' | 'pro' | 'image2';
   label: string;
   desc: string;
   credits: number;
@@ -437,7 +437,7 @@ export default function ArchitecturePage() {
           model: params.model,
           aspectRatio: params.aspectRatio,
           imageSize: params.imageSize,
-          mode: "architecture",
+          mode: "architecture" as const,
         },
         createdAt: new Date(),
         type: "architecture",
@@ -816,7 +816,7 @@ export default function ArchitecturePage() {
                 label="AI 模型"
                 value={params.model}
                 options={ARCH_MODEL_OPTIONS}
-                onChange={(val) => setParams({ ...params, model: val as 'flash' | 'pro' })}
+                onChange={(val) => setParams({ ...params, model: val as 'flash' | 'pro' | 'image2' })}
               />
 
               {/* 5. 宽高比设置选项 */}

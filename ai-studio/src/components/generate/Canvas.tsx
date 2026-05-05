@@ -16,6 +16,9 @@ import {
   ChevronUp,
   Loader2,
   Trash2,
+  Play,
+  Pause,
+  Maximize2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,6 +36,8 @@ interface CanvasImage {
   url: string;
   prompt?: string;
   favorited?: boolean;
+  type?: "image" | "video";
+  duration?: number;
 }
 
 interface HistoryItem {
@@ -71,8 +76,180 @@ interface ImageItemProps {
   onFavorite: (e: React.MouseEvent) => void;
   onUseAsReference: (e: React.MouseEvent) => void;
   onEdit: (e: React.MouseEvent) => void;
+  onFullscreen: () => void;
   isFavorite: boolean;
   className?: string;
+}
+
+function isValidImageSource(src: string | null | undefined): boolean {
+  if (!src) return false;
+  if (typeof src !== 'string') return false;
+  if (src.trim() === "") return false;
+  if (src.includes("placeholder")) return false;
+  if (src.includes("undefined")) return false;
+  if (src.includes("null")) return false;
+  if (src.toLowerCase().includes("http") && !src.startsWith("http")) return false;
+  return true;
+}
+
+interface HistoryImageProps {
+  item: HistoryItem;
+  onLoadError: (id: string) => void;
+}
+
+function HistoryImage({ item, onLoadError }: HistoryImageProps) {
+  const [hasError, setHasError] = useState(false);
+
+  const handleError = useCallback(() => {
+    if (!hasError) {
+      setHasError(true);
+      onLoadError(item.id);
+    }
+  }, [item.id, onLoadError, hasError]);
+
+  const imageSrc = item.thumb && item.thumb !== item.url ? item.thumb : null;
+
+  if (!imageSrc || !isValidImageSource(imageSrc) || hasError) {
+    return null;
+  }
+
+  if (imageSrc.startsWith("/outputs/")) {
+    return (
+      <img
+        src={imageSrc}
+        alt={item.prompt || ""}
+        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        loading="lazy"
+        onError={handleError}
+      />
+    );
+  }
+
+  return (
+    <Image
+      src={imageSrc}
+      alt={item.prompt || ""}
+      fill
+      className="object-cover transition-transform duration-300 group-hover:scale-105"
+      sizes="15vw"
+      loading="lazy"
+      unoptimized
+      onError={handleError}
+    />
+  );
+}
+
+function VideoPlayer({ 
+  videoUrl, 
+  onClose, 
+  showControls = true,
+  onEnded 
+}: { 
+  videoUrl: string; 
+  onClose?: () => void; 
+  showControls?: boolean;
+  onEnded?: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleTimeUpdate = () => {
+      setProgress((video.currentTime / video.duration) * 100);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      video.currentTime = 0;
+      onEnded?.();
+    };
+
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("ended", handleEnded);
+
+    return () => {
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("ended", handleEnded);
+    };
+  }, [onEnded]);
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isPlaying) {
+      video.pause();
+    } else {
+      video.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    video.currentTime = percent * duration;
+  };
+
+  return (
+    <div className="relative w-full h-full bg-black">
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        poster={`${videoUrl}?t=1`}
+        muted
+      >
+        <source src={videoUrl} type="video/mp4" />
+      </video>
+
+      {showControls && (
+        <>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 z-20 h-10 w-10 flex items-center justify-center rounded-full bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors backdrop-blur-sm cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+            <div
+              className="h-1 bg-zinc-700 rounded-full cursor-pointer mb-3"
+              onClick={handleProgressClick}
+            >
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-center">
+              <button
+                onClick={togglePlay}
+                className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+              >
+                {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function ImageItem({
@@ -82,9 +259,72 @@ function ImageItem({
   onFavorite,
   onUseAsReference,
   onEdit,
+  onFullscreen,
   isFavorite,
   className,
 }: ImageItemProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const hasPlayed = useRef(false);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || image.type !== "video") return;
+
+    const handleTimeUpdate = () => {
+      setProgress((video.currentTime / video.duration) * 100);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration);
+      if (!hasPlayed.current) {
+        hasPlayed.current = true;
+        video.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      video.currentTime = 0;
+    };
+
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("ended", handleEnded);
+
+    return () => {
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("ended", handleEnded);
+    };
+  }, [image.type]);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isPlaying) {
+      video.pause();
+    } else {
+      video.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const video = videoRef.current;
+    if (!video) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    video.currentTime = percent * duration;
+  };
+
   return (
     <div
       className={cn(
@@ -93,7 +333,48 @@ function ImageItem({
       )}
       onClick={onImageClick}
     >
-      {className?.includes("max-h-[") ? (
+      {image.type === "video" ? (
+        <div className="relative w-full aspect-video">
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            poster={`${image.url}?t=1`}
+            muted
+            loop={false}
+          >
+            <source src={image.url} type="video/mp4" />
+          </video>
+
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={togglePlay}
+              className="w-16 h-16 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all hover:scale-110"
+            >
+              {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8" />}
+            </button>
+          </div>
+
+          <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
+            <div
+              className="h-1 bg-zinc-700 rounded-full cursor-pointer"
+              onClick={handleProgressClick}
+            >
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-center mt-2">
+              <button
+                onClick={togglePlay}
+                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+              >
+                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : className?.includes("max-h-[") ? (
         <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-black/20 rounded-lg">
           <Image
             src={image.url}
@@ -128,62 +409,74 @@ function ImageItem({
         </div>
       )}
 
-      {/* Hover overlay */}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 opacity-0 group-hover:opacity-100 z-10 pointer-events-none">
-        <div className="absolute bottom-0 left-0 right-0 p-3 flex items-center justify-between pointer-events-auto">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 rounded-full bg-white/10 hover:bg-white/20 text-white"
-            onClick={onDownload}
+      <div className="absolute top-2 right-2 z-20">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onFullscreen();
+          }}
+          className="h-8 w-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white/80 hover:text-white transition-colors cursor-pointer"
+          title="全屏预览"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-20">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDownload(e);
+            }}
+            className="h-8 w-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
             title="下载"
           >
             <Download className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onFavorite(e);
+            }}
             className={cn(
-              "h-8 w-8 p-0 rounded-full bg-white/10 hover:bg-white/20 text-white",
+              "h-8 w-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer",
               isFavorite && "text-red-400"
             )}
-            onClick={onFavorite}
             title={isFavorite ? "取消收藏" : "点赞/收藏"}
           >
-            <Heart
-              className={cn(
-                "w-4 h-4",
-                isFavorite && "fill-current"
-              )}
-            />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 rounded-full bg-white/10 hover:bg-white/20 text-white"
-            onClick={onUseAsReference}
+            <Heart className={cn("w-4 h-4", isFavorite && "fill-current")} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onUseAsReference(e);
+            }}
+            className="h-8 w-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
             title="图生图"
           >
             <ImagePlus className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 rounded-full bg-white/10 hover:bg-white/20 text-white"
-            onClick={onEdit}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(e);
+            }}
+            className="h-8 w-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
             title="局部重绘"
           >
             <Pencil className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 rounded-full bg-white/10 hover:bg-white/20 text-white"
-            onClick={onImageClick}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onImageClick();
+            }}
+            className="h-8 w-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
             title="预览"
           >
             <ZoomIn className="w-4 h-4" />
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -211,7 +504,19 @@ export default function Canvas({
   const historyBottomRef = useRef<HTMLDivElement>(null);
   const [itemToDelete, setItemToDelete] = useState<HistoryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [failedHistoryItemIds, setFailedHistoryItemIds] = useState<Set<string>>(new Set());
+  const [fullscreenImage, setFullscreenImage] = useState<CanvasImage | null>(null);
   const router = useRouter();
+
+  const handleImageLoadError = useCallback((itemId: string) => {
+    setFailedHistoryItemIds(prev => new Set([...prev, itemId]));
+  }, []);
+
+  const filteredHistory = history.filter(item => {
+    if (failedHistoryItemIds.has(item.id)) return false;
+    const imageSrc = item.thumb && item.thumb !== item.url ? item.thumb : null;
+    return isValidImageSource(imageSrc);
+  });
 
   useEffect(() => {
     const favoritedIds = history
@@ -246,6 +551,14 @@ export default function Canvas({
     [onImageClick]
   );
 
+  const handleFullscreen = useCallback((image: CanvasImage) => {
+    setFullscreenImage(image);
+  }, []);
+
+  const handleCloseFullscreen = useCallback(() => {
+    setFullscreenImage(null);
+  }, []);
+
   const handleDownload = useCallback(
     async (image: CanvasImage, e: React.MouseEvent) => {
       e.stopPropagation();
@@ -255,7 +568,8 @@ export default function Canvas({
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `ai-studio-${image.id}.png`;
+        const extension = image.type === "video" ? "mp4" : "png";
+        a.download = `ai-studio-${image.id}.${extension}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -328,6 +642,9 @@ export default function Canvas({
   const handleEdit = useCallback(
     (image: CanvasImage, e: React.MouseEvent) => {
       e.stopPropagation();
+      if (image.type === "video") {
+        return;
+      }
       const editUrl = `/generate/edit?image=${encodeURIComponent(image.url)}&prompt=${encodeURIComponent(image.prompt || "")}`;
       router.push(editUrl);
     },
@@ -354,7 +671,7 @@ export default function Canvas({
     return () => observer.disconnect();
   }, [hasMoreHistory, loadingHistory, onLoadMoreHistory]);
 
-  if (!isGenerating && images.length === 0 && history.length === 0) {
+  if (!isGenerating && images.length === 0 && filteredHistory.length === 0) {
     return (
       <div
         className={cn(
@@ -424,9 +741,7 @@ export default function Canvas({
           className
         )}
       >
-        {/* Main scrollable area */}
         <div className="flex-1 overflow-y-auto p-4">
-          {/* Generated images */}
           {images.length > 0 && (
             <div className={cn(
               "mb-4",
@@ -443,6 +758,7 @@ export default function Canvas({
                   onFavorite={(e) => handleFavorite(image, e)}
                   onUseAsReference={(e) => handleUseAsReference(image, e)}
                   onEdit={(e) => handleEdit(image, e)}
+                  onFullscreen={() => handleFullscreen(image)}
                   isFavorite={image.favorited ?? favorites.has(image.id)}
                   className={singleImageMode && images.length === 1 ? "w-full max-h-[60vh]" : ""}
                 />
@@ -450,10 +766,8 @@ export default function Canvas({
             </div>
           )}
 
-          {/* History section - integrated into main scroll */}
-          {history.length > 0 && (
+          {filteredHistory.length > 0 && (
             <div className="border-t border-white/[0.06] pt-4">
-              {/* History header with toggle */}
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-medium text-zinc-500">历史记录</h3>
                 <div className="flex items-center gap-2">
@@ -476,11 +790,14 @@ export default function Canvas({
                 </div>
               </div>
 
-              {/* History grid - compact thumbnails */}
               {historyExpanded && (
                 <div className="grid grid-cols-6 gap-2">
-                  {history.map((item) => (
-                    <div
+                  {filteredHistory.map((item) => {
+                    const imageSrc = item.thumb && item.thumb !== item.url ? item.thumb : null;
+                    if (!isValidImageSource(imageSrc)) return null;
+
+                    return (
+                      <div
                         key={item.id}
                         className={cn(
                           "group relative aspect-square rounded-md overflow-hidden border cursor-pointer transition-all duration-200",
@@ -490,55 +807,41 @@ export default function Canvas({
                         )}
                         onClick={() => onHistoryItemClick?.(item)}
                       >
-                        {item.thumb.startsWith("/outputs/") ? (
-                          <img
-                            src={item.thumb}
-                            alt={item.prompt || ""}
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <Image
-                            src={item.thumb}
-                            alt={item.prompt || ""}
-                            fill
-                            className="object-cover transition-transform duration-300 group-hover:scale-105"
-                            sizes="15vw"
-                            loading="lazy"
-                            unoptimized
-                          />
-                        )}
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition-all flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
-                        <div className="flex justify-end">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setItemToDelete(item);
-                            }}
-                            className="p-1 rounded bg-red-500/80 hover:bg-red-500 text-white transition-colors"
-                            title="删除"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                        <div className="text-[9px] text-white space-y-0.5">
-                          <div className="truncate">
-                            {item.model === "pro" || item.model === "gemini-3-pro-image-preview"
-                              ? "Pro 大模型"
-                              : "Flash 大模型"}
+                        <HistoryImage
+                          item={item}
+                          onLoadError={handleImageLoadError}
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition-all flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
+                          <div className="flex justify-end">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setItemToDelete(item);
+                              }}
+                              className="p-1 rounded bg-red-500/80 hover:bg-red-500 text-white transition-colors cursor-pointer"
+                              title="删除"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           </div>
-                          {item.imageSize && (
-                            <div className="text-zinc-300">{item.imageSize} 质量</div>
-                          )}
-                          <div className="text-zinc-300">{item.aspectRatio || "未知"} 比例</div>
-                          {item.createdAt && (
-                            <div className="text-zinc-400">{item.createdAt}</div>
-                          )}
+                          <div className="text-[9px] text-white space-y-0.5">
+                            <div className="truncate">
+                              {item.model === "pro" || item.model === "gemini-3-pro-image-preview"
+                                ? "Pro 大模型"
+                                : "Flash 大模型"}
+                            </div>
+                            {item.imageSize && (
+                              <div className="text-zinc-300">{item.imageSize} 质量</div>
+                            )}
+                            <div className="text-zinc-300">{item.aspectRatio || "未知"} 比例</div>
+                            {item.createdAt && (
+                              <div className="text-zinc-400">{item.createdAt}</div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                  {/* Load more trigger */}
+                    );
+                  })}
                   {hasMoreHistory && (
                     <div ref={historyBottomRef} className="flex items-center justify-center aspect-square">
                       {loadingHistory && (
@@ -551,8 +854,7 @@ export default function Canvas({
             </div>
           )}
 
-          {/* Show loading state when history is empty */}
-          {history.length === 0 && !loadingHistory && (
+          {filteredHistory.length === 0 && !loadingHistory && (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <div className="text-zinc-600 mb-2">
                 <ImageIcon className="w-12 h-12 mx-auto opacity-50" />
@@ -564,7 +866,6 @@ export default function Canvas({
         </div>
       </div>
 
-      {/* Image preview dialog - centered on screen */}
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && handleClosePreview()}>
         <DialogContent className="max-w-[85vw] max-h-[85vh] w-auto h-auto p-0 overflow-hidden bg-[#0a0a0a] border-white/[0.08] rounded-2xl z-50 flex flex-col">
           <DialogTitle className="sr-only">图片预览</DialogTitle>
@@ -573,7 +874,6 @@ export default function Canvas({
           </DialogDescription>
           {selectedImage && (
             <div className="relative flex flex-col max-h-[85vh]">
-              {/* Close button */}
               <button
                 onClick={handleClosePreview}
                 className="absolute top-3 right-3 z-20 h-8 w-8 flex items-center justify-center rounded-full bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors backdrop-blur-sm cursor-pointer"
@@ -581,21 +881,23 @@ export default function Canvas({
                 <X className="w-4 h-4" />
               </button>
 
-              {/* Image area - centered both horizontally and vertically */}
               <div className="flex items-center justify-center bg-black/40 min-h-[200px] max-h-[70vh] p-4 relative">
                 <div className="relative w-auto h-auto max-w-full max-h-[65vh]">
-                  <Image
-                    src={selectedImage.url}
-                    alt={selectedImage.prompt || "生成结果"}
-                    width={1920}
-                    height={1920}
-                    className="max-w-full max-h-[65vh] w-auto h-auto object-contain rounded-lg"
-                    unoptimized
-                  />
+                  {selectedImage.type === "video" ? (
+                    <VideoPlayer videoUrl={selectedImage.url} />
+                  ) : (
+                    <Image
+                      src={selectedImage.url}
+                      alt={selectedImage.prompt || "生成结果"}
+                      width={1920}
+                      height={1920}
+                      className="max-w-full max-h-[65vh] w-auto h-auto object-contain rounded-lg"
+                      unoptimized
+                    />
+                  )}
                 </div>
               </div>
 
-              {/* Bottom toolbar */}
               <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.06] shrink-0">
                 <p className="text-sm text-zinc-400 line-clamp-1 flex-1 mr-4">
                   {selectedImage.prompt}
@@ -640,7 +942,71 @@ export default function Canvas({
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation dialog */}
+      {fullscreenImage && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center">
+          <button
+            onClick={handleCloseFullscreen}
+            className="absolute top-4 right-4 z-10 h-10 w-10 flex items-center justify-center rounded-full bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors backdrop-blur-sm cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="w-full h-full flex items-center justify-center p-8">
+            {fullscreenImage.type === "video" ? (
+              <div className="w-full max-w-5xl aspect-video">
+                <VideoPlayer
+                  videoUrl={fullscreenImage.url}
+                  onClose={handleCloseFullscreen}
+                />
+              </div>
+            ) : (
+              <div className="w-full max-w-6xl flex">
+                <div className="flex-1 flex items-center justify-center">
+                  <Image
+                    src={fullscreenImage.url}
+                    alt={fullscreenImage.prompt || ""}
+                    width={1920}
+                    height={1920}
+                    className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
+                    unoptimized
+                  />
+                </div>
+                <div className="w-72 bg-zinc-900/50 backdrop-blur-sm p-6 flex flex-col">
+                  <h3 className="text-sm font-medium text-zinc-300 mb-4">图片信息</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-1">提示词</label>
+                      <p className="text-sm text-zinc-400">{fullscreenImage.prompt || "-"}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-1">尺寸</label>
+                      <p className="text-sm text-zinc-400">-</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-1">创建时间</label>
+                      <p className="text-sm text-zinc-400">-</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 block mb-1">模型</label>
+                      <p className="text-sm text-zinc-400">-</p>
+                    </div>
+                  </div>
+                  <div className="mt-auto">
+                    <Button
+                      className="w-full h-10 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white"
+                      onClick={(e) => handleDownload(fullscreenImage, e)}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      下载
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
         <DialogContent className="max-w-md bg-[#0a0a0a] border-white/[0.08] rounded-xl p-6">
           <DialogTitle className="text-lg font-semibold text-white mb-2">确认删除</DialogTitle>
