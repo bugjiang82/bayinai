@@ -30,6 +30,7 @@ import SelectionTool from "@/components/generate/SelectionTool";
 import KonvaCanvas from "@/components/generate/KonvaCanvas";
 import { Toolbox } from "@/components/generate/Toolbox";
 import ComparisonSlider from "@/components/generate/ComparisonSlider";
+import DropdownSelector from "@/components/generate/DropdownSelector";
 import { useEditStore } from "@/store/editStore";
 
 type EditMode = "style-transfer" | "inpaint";
@@ -54,6 +55,24 @@ const EDIT_MODES: EditModeOption[] = [
     icon: Paintbrush,
     desc: "选择区域重新绘制",
   },
+];
+
+const INPAINT_MODEL_OPTIONS = [
+  { value: "flash", label: "Flash", description: "快速生成" },
+  { value: "pro", label: "Pro", description: "高质量" },
+];
+
+const INPAINT_SIZE_OPTIONS = [
+  { value: "1K", label: "1K", description: "标准" },
+  { value: "2K", label: "2K", description: "高清" },
+];
+
+const INPAINT_RATIO_OPTIONS = [
+  { value: "1:1", label: "1:1", description: "方形" },
+  { value: "16:9", label: "16:9", description: "横屏" },
+  { value: "9:16", label: "9:16", description: "竖屏" },
+  { value: "4:3", label: "4:3", description: "标准" },
+  { value: "3:4", label: "3:4", description: "竖版" },
 ];
 
 const STYLE_OPTIONS = [
@@ -136,21 +155,12 @@ export default function EditPage() {
   // Inpaint params
   const [inpaintDescription, setInpaintDescription] = useState("");
   const [maskImage, setMaskImage] = useState<string | null>(null);
-  // 新增 nano-banana 控制参数
   const [structureRef, setStructureRef] = useState<string | null>(null);
   const [styleRef, setStyleRef] = useState<string | null>(null);
   const [originalImageSize, setOriginalImageSize] = useState<{ width: number; height: number } | null>(null);
-  // 自动检测原图尺寸并计算比例
-  const detectImageAspectRatio = useCallback((imageUrl: string): string => {
-    if (originalImageSize) {
-      const ratio = originalImageSize.width / originalImageSize.height;
-      if (Math.abs(ratio - 1) < 0.1) return "1:1";
-      if (ratio > 1.2) return "16:9";
-      if (ratio < 0.85) return "9:16";
-      return "1:1";
-    }
-    return "1:1";
-  }, [originalImageSize]);
+  const [inpaintModel, setInpaintModel] = useState("flash");
+  const [inpaintSize, setInpaintSize] = useState("1K");
+  const [inpaintRatio, setInpaintRatio] = useState("1:1");
 
   useEffect(() => {
     return () => {
@@ -224,6 +234,9 @@ export default function EditPage() {
     setStructureRef(null);
     setStyleRef(null);
     setOriginalImageSize(null);
+    setInpaintModel("flash");
+    setInpaintSize("1K");
+    setInpaintRatio("1:1");
     applyAttemptsRef.current = 0;
     setCurrentImage(null);
     clearShapes();
@@ -287,9 +300,11 @@ export default function EditPage() {
             originalImage: sourceImage,
             maskImage: maskImage,
             prompt: inpaintDescription,
+            model: inpaintModel,
+            imageSize: inpaintSize,
+            aspectRatio: inpaintRatio,
             structureRef,
             styleRef,
-            aspectRatio: detectImageAspectRatio(sourceImage),
           }),
         };
 
@@ -363,7 +378,7 @@ export default function EditPage() {
       }
       abortControllerRef.current = null;
     }
-  }, [sourceImage, credits, editMode, inpaintDescription, structureRef, styleRef, detectImageAspectRatio, generateMask, isApplying]);
+  }, [sourceImage, credits, editMode, inpaintDescription, inpaintModel, inpaintSize, inpaintRatio, structureRef, styleRef, generateMask, isApplying]);
 
   const renderModeParams = () => {
     switch (editMode) {
@@ -414,7 +429,7 @@ export default function EditPage() {
                 • 矩形/圆形工具：拖拽创建选区
               </p>
             </div>
-            
+
             <div>
               <label className="text-xs text-zinc-400">重绘描述</label>
               <Textarea
@@ -424,14 +439,27 @@ export default function EditPage() {
                 className="min-h-[60px] resize-none bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600 mt-1"
               />
             </div>
-            
-            {/* 自动适配原图比例 */}
-            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
-                <span className="text-indigo-400">✓</span>
-                <span>自动适配原图比例</span>
-              </div>
-            </div>
+
+            <DropdownSelector
+              label="大模型"
+              value={inpaintModel}
+              options={INPAINT_MODEL_OPTIONS}
+              onChange={setInpaintModel}
+            />
+
+            <DropdownSelector
+              label="图片质量"
+              value={inpaintSize}
+              options={INPAINT_SIZE_OPTIONS}
+              onChange={setInpaintSize}
+            />
+
+            <DropdownSelector
+              label="图片比例"
+              value={inpaintRatio}
+              options={INPAINT_RATIO_OPTIONS}
+              onChange={setInpaintRatio}
+            />
           </div>
         );
 

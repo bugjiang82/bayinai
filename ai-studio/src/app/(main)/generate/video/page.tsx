@@ -47,7 +47,7 @@ const MODEL_OPTIONS = {
   ],
   "image-to-video": [
     { value: "wan2.2-kf2v-flash", label: "万相 2.2", description: "快速生成" },
-    { value: "wan2.7-i2v", label: "万相 2.7", description: "高质量" },
+    { value: "wan2.7-r2v", label: "万相 2.7", description: "高质量" },
   ],
 };
 

@@ -149,28 +149,16 @@ export default function UnifiedImagePage() {
           console.log("History API response:", json);
           if (json.code === 0 && json.data?.list) {
             const newItems = json.data.list.map((item: any) => {
-              let modelVal = "flash";
-              let imageSize = "1K";
-              let aspectRatio = "";
-              if (item.params) {
-                try {
-                  const params = typeof item.params === 'string' ? JSON.parse(item.params) : item.params;
-                  modelVal = params.model || "flash";
-                  imageSize = params.imageSize || "1K";
-                  aspectRatio = params.aspectRatio || "";
-                } catch {}
-              }
               return {
                 id: item.id,
                 url: item.outputUrl,
                 thumb: item.thumbnailUrl || item.outputUrl,
                 prompt: item.prompt,
-                model: modelVal,
-                imageSize,
-                aspectRatio,
+                model: item.model || "flash",
+                imageSize: item.imageSize || "1K",
+                aspectRatio: item.aspectRatio || "",
                 createdAt: item.createdAt ? formatTime(item.createdAt) : "",
                 type: item.type,
-                inputUrl: item.inputUrl,
                 favorited: item.favorited ?? false,
               };
             });
@@ -216,28 +204,16 @@ export default function UnifiedImagePage() {
         const json = await res.json();
         if (json.code === 0 && json.data?.list) {
           const newItems = json.data.list.map((item: any) => {
-            let modelVal = "flash";
-            let imageSize = "1K";
-            let aspectRatio = "";
-            if (item.params) {
-              try {
-                const params = typeof item.params === 'string' ? JSON.parse(item.params) : item.params;
-                modelVal = params.model || "flash";
-                imageSize = params.imageSize || "1K";
-                aspectRatio = params.aspectRatio || "";
-              } catch {}
-            }
             return {
               id: item.id,
               url: item.outputUrl,
               thumb: item.thumbnailUrl || item.outputUrl,
               prompt: item.prompt,
-              model: modelVal,
-              imageSize,
-              aspectRatio,
+              model: item.model || "flash",
+              imageSize: item.imageSize || "1K",
+              aspectRatio: item.aspectRatio || "",
               createdAt: item.createdAt ? formatTime(item.createdAt) : "",
               type: item.type,
-              inputUrl: item.inputUrl,
             };
           });
           setHistory(prev => [...prev, ...newItems]);

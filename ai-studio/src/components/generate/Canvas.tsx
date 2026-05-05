@@ -45,7 +45,6 @@ interface HistoryItem {
   aspectRatio?: string;
   createdAt?: string;
   type?: string;
-  inputUrl?: string;
 }
 
 interface CanvasProps {
@@ -490,23 +489,29 @@ export default function Canvas({
                         )}
                         onClick={() => onHistoryItemClick?.(item)}
                       >
-                        {item.thumb.startsWith("/outputs/") ? (
-                          <img
-                            src={item.thumb}
-                            alt={item.prompt || ""}
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            loading="lazy"
-                          />
+                        {item.thumb && item.thumb !== item.url ? (
+                          item.thumb.startsWith("/outputs/") ? (
+                            <img
+                              src={item.thumb}
+                              alt={item.prompt || ""}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <Image
+                              src={item.thumb}
+                              alt={item.prompt || ""}
+                              fill
+                              className="object-cover transition-transform duration-300 group-hover:scale-105"
+                              sizes="15vw"
+                              loading="lazy"
+                              unoptimized
+                            />
+                          )
                         ) : (
-                          <Image
-                            src={item.thumb}
-                            alt={item.prompt || ""}
-                            fill
-                            className="object-cover transition-transform duration-300 group-hover:scale-105"
-                            sizes="15vw"
-                            loading="lazy"
-                            unoptimized
-                          />
+                          <div className="w-full h-full bg-[#0f0f0f] flex items-center justify-center">
+                            <ImageIcon className="w-6 h-6 text-zinc-700" />
+                          </div>
                         )}
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition-all flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
                         <div className="flex justify-end">
