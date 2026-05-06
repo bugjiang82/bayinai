@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import NextImage from "next/image";
-import { Search, Download, Trash2, Heart, Image, Video, Filter, Loader2, ImageIcon, AlertTriangle } from "lucide-react";
+import { Search, Download, Trash2, Heart, Image, Video, Filter, Loader2, ImageIcon, AlertTriangle, Play } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ interface GalleryItem {
   createdAt: string;
   model: string;
   isFavorite: boolean;
+  outputUrl?: string;
 }
 
 interface CacheEntry {
@@ -209,6 +210,7 @@ export default function GalleryPage() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item: GalleryItem | null }>({ open: false, item: null });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [videoPreview, setVideoPreview] = useState<{ open: boolean; item: GalleryItem | null }>({ open: false, item: null });
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -468,24 +470,27 @@ export default function GalleryPage() {
   };
 
   const handleDownload = async (item: GalleryItem) => {
-    const imageUrl = item.thumbnail;
-    if (!imageUrl || imageUrl === "#") return;
+    const isVideo = item.type === "video";
+    const downloadUrl = isVideo ? (item.outputUrl || item.thumbnail) : (item.outputUrl || item.thumbnail);
+    if (!downloadUrl || downloadUrl === "#") return;
+
+    const extension = isVideo ? "mp4" : "png";
 
     try {
-      const response = await fetch(imageUrl);
+      const response = await fetch(downloadUrl);
       if (!response.ok) throw new Error("下载失败");
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${item.id}.png`;
+      a.download = `${item.id}.${extension}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch {
-      window.open(imageUrl, "_blank");
+      window.open(downloadUrl, "_blank");
     }
   };
 
@@ -570,12 +575,39 @@ export default function GalleryPage() {
     </Dialog>
   );
 
+// ─── Video Preview Dialog ────────────────────────────────────────────────
+
+  const VideoPreviewDialog = () => (
+    <Dialog open={videoPreview.open} onOpenChange={(open) => !open && setVideoPreview({ ...videoPreview, open })}>
+      <DialogContent className="sm:max-w-[800px] p-0 overflow-hidden">
+        <DialogTitle className="sr-only">视频预览</DialogTitle>
+        {videoPreview.item && (
+          <div className="relative bg-black">
+            <video
+              src={videoPreview.item.outputUrl || videoPreview.item.thumbnail}
+              controls
+              autoPlay
+              className="w-full max-h-[70vh] object-contain"
+            />
+            <div className="p-4 bg-[#0a0a0a] border-t border-white/5">
+              <p className="text-sm text-zinc-300 line-clamp-2">{videoPreview.item.prompt}</p>
+              <p className="text-xs text-zinc-500 mt-1">
+                {videoPreview.item.model} · {formatDate(videoPreview.item.createdAt)}
+              </p>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+
   // ─── Empty state ─────────────────────────────────────────────────────────
 
   if (!loading && items.length === 0) {
     return (
       <div className="space-y-6">
         <DeleteConfirmDialog />
+        <VideoPreviewDialog />
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">我的作品</h1>
@@ -616,6 +648,7 @@ export default function GalleryPage() {
   return (
     <>
       <DeleteConfirmDialog />
+      <VideoPreviewDialog />
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -734,6 +767,17 @@ export default function GalleryPage() {
 
                   {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-300 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                    {item.type === "video" && (
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        className="h-9 w-9 rounded-full bg-white/20 backdrop-blur-sm border-0 hover:bg-white/30"
+                        onClick={(e) => { e.stopPropagation(); setVideoPreview({ open: true, item }); }}
+                        title="播放"
+                      >
+                        <Play className="h-4 w-4 text-white fill-white" />
+                      </Button>
+                    )}
                     <Button
                       size="icon"
                       variant="secondary"

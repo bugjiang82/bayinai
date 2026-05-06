@@ -141,7 +141,9 @@ export async function GET(request: NextRequest) {
         in: ['TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE', 'INPAINT', 'ARCHITECTURE'],
       };
     } else if (typeFilter === 'video') {
-      where.type = 'TEXT_TO_VIDEO';
+      where.type = {
+        in: ['VIDEO', 'TEXT_TO_VIDEO'],
+      };
     }
 
     // 时间范围过滤
@@ -175,7 +177,7 @@ export async function GET(request: NextRequest) {
     const data = {
       list: list.map((g: any) => ({
         id: g.id,
-        type: (['TEXT_TO_VIDEO'].includes(g.type) ? 'video' : 'image') as 'image' | 'video',
+        type: (['VIDEO', 'TEXT_TO_VIDEO'].includes(g.type) ? 'video' : 'image') as 'image' | 'video',
         prompt: g.prompt,
         outputUrl: g.outputUrl,
         thumbnailUrl: g.thumbnailUrl,

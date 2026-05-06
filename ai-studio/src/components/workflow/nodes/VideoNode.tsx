@@ -6,25 +6,58 @@ import { BaseNode } from './BaseNode';
 import { NodeData } from '../types';
 import { generateVideo, checkVideoStatus } from '../services/aiService';
 import { Video, Film, PlayCircle, RefreshCw, Layers, Clock, Zap } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 
-// 模型积分消耗配置
-const MODEL_COST_MAP: Record<string, { base: number; type: "fixed" | "per-second" }> = {
-  "veo-3.1-lite-generate-preview": { base: 50, type: "per-second" },
-  "wan2.2-kf2v-flash": { base: 50, type: "per-second" },
+// 模型配置
+const MODEL_CONFIG: Record<string, {
+  label: string;
+  costPerSecond: number;
+  resolutions: string[];
+  durations: string[];
+  supportImageToVideo: boolean;
+}> = {
+  "wan2.7-r2v": {
+    label: "万相 2.7",
+    costPerSecond: 50,
+    resolutions: ['720P', '1080P'],
+    durations: ['5s', '10s', '15s'],
+    supportImageToVideo: true,
+  },
+  "wan2.7-t2v": {
+    label: "万相 2.7",
+    costPerSecond: 50,
+    resolutions: ['720P', '1080P'],
+    durations: ['5s', '10s', '15s'],
+    supportImageToVideo: false,
+  },
+  "wan2.2-kf2v-flash": {
+    label: "万相 2.2",
+    costPerSecond: 50,
+    resolutions: ['480P', '720P', '1080P'],
+    durations: ['3s', '5s', '10s'],
+    supportImageToVideo: true,
+  },
+  "veo-3.1-lite-generate-preview": {
+    label: "Veo 3.1",
+    costPerSecond: 50,
+    resolutions: ['720P'],
+    durations: ['5s', '10s'],
+    supportImageToVideo: false,
+  },
 };
 
 // 计算积分消耗
 const calculateCost = (data: NodeData): number => {
-  const modelConfig = MODEL_COST_MAP[data.config.model] || { base: 1, type: "fixed" };
-  
-  if (modelConfig.type === "per-second" && data.type === "video") {
+  const modelKey = data.config.model || "wan2.2-kf2v-flash";
+  const config = MODEL_CONFIG[modelKey] || MODEL_CONFIG["wan2.2-kf2v-flash"];
+
+  if (data.type === "video") {
     const duration = Number(data.config.duration?.replace("s", "") || 5);
-    return duration * modelConfig.base;
+    return duration * config.costPerSecond;
   }
-  
-  return modelConfig.base;
+
+  return config.costPerSecond;
 };
 
 export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
@@ -230,6 +263,25 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
 
   const nodeWidth = getDynamicWidth();
 
+  const currentModel = data.config.model || "wan2.2-kf2v-flash";
+  const currentConfig = MODEL_CONFIG[currentModel] || MODEL_CONFIG["wan2.2-kf2v-flash"];
+  const currentResolutions = currentConfig.resolutions;
+  const currentDurations = currentConfig.durations;
+
+  const handleModelChange = (model: string) => {
+    const newConfig = MODEL_CONFIG[model] || MODEL_CONFIG["wan2.2-kf2v-flash"];
+    let updates: Partial<NodeData['config']> = { model };
+
+    if (!newConfig.resolutions.includes(data.config.wanxResolution || "720P")) {
+      updates.wanxResolution = newConfig.resolutions[0] as '480P' | '720P' | '1080P';
+    }
+    if (!newConfig.durations.includes(data.config.duration || "5s")) {
+      updates.duration = newConfig.durations[0] as '3s' | '5s' | '10s' | '15s';
+    }
+
+    updateConfig(updates);
+  };
+
   return (
     <BaseNode
       {...props}
@@ -239,18 +291,18 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
           <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all text-slate-400 hover:text-white group">
             <Layers size={16} className="text-slate-500" />
             <span className="text-sm font-bold uppercase tracking-tight">
-              {data.config.wanxResolution || '720P'} · {data.config.duration || '5s'}
+              {currentConfig.label} · {data.config.wanxResolution || '720P'} · {data.config.duration || '5s'}
             </span>
           </button>
 
           <div className="absolute bottom-full right-0 mb-4 w-[280px] bg-[#1a1c24] border border-white/10 rounded-3xl shadow-2xl scale-0 group-hover/config:scale-100 transition-all origin-bottom-right z-[500] overflow-hidden backdrop-blur-xl text-left p-5 space-y-5">
             <div className="space-y-3">
-              <div className="text-sm font-bold text-slate-500 pl-1 uppercase tracking-wider">Resolution</div>
+              <div className="text-sm font-bold text-slate-500 pl-1 uppercase tracking-wider">分辨率</div>
               <div className="flex bg-white/5 rounded-2xl p-1 border border-white/5">
-                {['480P', '720P', '1080P'].map((res) => (
+                {currentResolutions.map((res) => (
                   <button
                     key={res}
-                    onClick={() => updateConfig({ wanxResolution: res as any })}
+                    onClick={() => updateConfig({ wanxResolution: res as '480P' | '720P' | '1080P' })}
                     className={cn(
                       "flex-1 py-2 text-[10px] font-black uppercase transition-all rounded-xl",
                       (data.config.wanxResolution === res || (!data.config.wanxResolution && res === "720P"))
@@ -265,12 +317,12 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
             </div>
 
             <div className="space-y-3">
-              <div className="text-sm font-bold text-slate-500 pl-1 uppercase tracking-wider">Duration</div>
+              <div className="text-sm font-bold text-slate-500 pl-1 uppercase tracking-wider">时长</div>
               <div className="flex bg-white/5 rounded-2xl p-1 border border-white/5">
-                {['3s', '5s', '10s'].map((dur) => (
+                {currentDurations.map((dur) => (
                   <button
                     key={dur}
-                    onClick={() => updateConfig({ duration: dur as any })}
+                    onClick={() => updateConfig({ duration: dur as '3s' | '5s' | '10s' | '15s' })}
                     className={cn(
                       "flex-1 py-2 text-[10px] font-black uppercase transition-all rounded-xl",
                       (data.config.duration === dur || (!data.config.duration && dur === "5s"))

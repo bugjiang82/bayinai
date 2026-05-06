@@ -52,11 +52,21 @@ const MODEL_OPTIONS = {
   ],
 };
 
-const RESOLUTION_OPTIONS = [
-  { value: "480P", label: "480P", description: "854×480" },
-  { value: "720P", label: "720P", description: "1280×720" },
-  { value: "1080P", label: "1080P", description: "1920×1080" },
-];
+const RESOLUTION_OPTIONS = {
+  "wan2.7-r2v": [
+    { value: "720P", label: "720P", description: "1280×720" },
+    { value: "1080P", label: "1080P", description: "1920×1080" },
+  ],
+  "wan2.7-t2v": [
+    { value: "720P", label: "720P", description: "1280×720" },
+    { value: "1080P", label: "1080P", description: "1920×1080" },
+  ],
+  default: [
+    { value: "480P", label: "480P", description: "854×480" },
+    { value: "720P", label: "720P", description: "1280×720" },
+    { value: "1080P", label: "1080P", description: "1920×1080" },
+  ],
+};
 
 const RATIO_OPTIONS = [
   { value: "16:9", label: "16:9", description: "横屏" },
@@ -81,6 +91,8 @@ export default function VideoPage() {
   const [credits, setCredits] = useState<number>(0);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const MAX_POLLING_TIME = 10 * 60 * 1000; // 10 分钟
   
   // 使用新的状态管理
   const status = useGenerationStore(state => state.status);
@@ -116,6 +128,14 @@ export default function VideoPage() {
     }
   }, [session]);
 
+  useEffect(() => {
+    const availableResolutions = getResolutionOptions();
+    const resolutionValues = availableResolutions.map(r => r.value);
+    if (!resolutionValues.includes(resolution)) {
+      setResolution(availableResolutions[0].value);
+    }
+  }, [model, resolution]);
+
   const handleStartUpload = useCallback((file: File) => {
     setStartImage(URL.createObjectURL(file));
   }, []);
@@ -148,6 +168,7 @@ export default function VideoPage() {
 
     startGeneration();
     setVideoResult(null);
+    startTimeRef.current = Date.now(); // 记录开始时间
 
     // Simulate progress while waiting for API
     let currentProgress = 0;
@@ -231,6 +252,22 @@ export default function VideoPage() {
 
       // Poll for video status
       pollingRef.current = setInterval(async () => {
+        // Check for timeout first
+        const elapsed = Date.now() - startTimeRef.current;
+        if (elapsed > MAX_POLLING_TIME) {
+          console.error("Polling timed out after", elapsed, "ms");
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+          }
+          failGeneration("视频生成超时，请重试");
+          return;
+        }
+
         try {
           const statusRes = await fetch(`/api/generate/video?taskId=${taskId}`);
           if (!statusRes.ok) {
@@ -238,7 +275,9 @@ export default function VideoPage() {
           }
 
           const statusData = await statusRes.json();
+          console.log("\n======= Poll statusData =======", statusData);
           const { status, progress: taskProgress, videoUrl } = statusData.data;
+          console.log("Status:", status, "Progress:", taskProgress, "Video URL:", videoUrl);
 
           // Update progress from server
           if (taskProgress !== undefined) {
@@ -298,7 +337,7 @@ export default function VideoPage() {
 
             failGeneration("视频生成失败，请重试");
           }
-          // For RUNNING / PENDING, continue polling
+          // For RUNNING / PENDING / UNKNOWN, continue polling
         } catch (pollError) {
           console.error("Polling error:", pollError);
         }
@@ -316,8 +355,12 @@ export default function VideoPage() {
   const getEstimatedTime = () => {
     const durationNum = parseInt(duration, 10) || 5;
     const baseTime = durationNum * 4;
-    const resMultiplier = resolution === "1080P" ? 1.5 : resolution === "480P" ? 0.7 : 1;
+    const resMultiplier = resolution === "1080P" ? 1.5 : 1;
     return Math.round(baseTime * resMultiplier);
+  };
+
+  const getResolutionOptions = () => {
+    return RESOLUTION_OPTIONS[model as keyof typeof RESOLUTION_OPTIONS] || RESOLUTION_OPTIONS.default;
   };
 
   return (
@@ -571,7 +614,7 @@ export default function VideoPage() {
             <DropdownSelector
               label="分辨率"
               value={resolution}
-              options={RESOLUTION_OPTIONS}
+              options={getResolutionOptions()}
               onChange={setResolution}
             />
 

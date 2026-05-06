@@ -119,15 +119,12 @@ const WorkflowCanvas: React.FC = () => {
           const types = historyTab === 'image'
             ? 'TEXT_TO_IMAGE&type=IMAGE_TO_IMAGE&type=EDIT&type=INPAINT'
             : 'VIDEO';
-          const response = await fetch(`/api/generate/history?type=${types}&pageSize=50`);
+          const response = await fetch(`/api/generate/history?type=${types}&pageSize=100`);
           const result = await response.json();
           if (result.code === 0) {
-            const validItems = (result.data.list || []).filter((item: any) => {
-              const imageUrl = item.thumbnailUrl || item.outputUrl;
-              return isValidImageSource(imageUrl);
-            });
-            setHistoryItems(validItems);
-            setHistoryTotal(validItems.length);
+            const allItems = result.data.list || [];
+            setHistoryItems(allItems);
+            setHistoryTotal(result.data.total || allItems.length);
           }
         } catch (err) {
           console.error("获取历史失败:", err);

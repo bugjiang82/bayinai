@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps, useReactFlow, Node } from '@xyflow/react';
 import { useDragging, useMultiSelect } from '../WorkflowCanvas';
@@ -20,7 +20,6 @@ import {
   Mic,
   X
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { NodeData } from '../types';
 
@@ -72,19 +71,32 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const [isPickingParent, setIsPickingParent] = useState(false);
   const [showMentions, setShowMentions] = useState<{ x: number; y: number; index: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const isDragging = useDragging();
   const isMultiSelected = useMultiSelect();
+  const referencedNodesRef = useRef<Node<NodeData>[]>([]);
   
   // 计算积分消耗
   const cost = useMemo(() => calculateCost(data), [data.config.model, data.config.duration, data.type]);
 
-  // 引用节点计算 - 使用 useMemo 避免每次渲染都重新计算
+  // 引用节点计算 - 拖拽时跳过计算以提升性能
   const parentIds = (data.referencedParentIds || []) as string[];
   const referencedNodes = useMemo(() => {
-    return parentIds
+    if (isDragging) {
+      return referencedNodesRef.current;
+    }
+    const result = parentIds
       .map(parentId => getNodes().find(n => n.id === parentId))
       .filter((n): n is Node<NodeData> => !!n && (!!n.data.output || !!n.data.sourceImage));
-  }, [parentIds, getNodes]);
+    referencedNodesRef.current = result;
+    return result;
+  }, [isDragging, parentIds, getNodes]);
 
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -194,6 +206,28 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
     }));
   };
 
+  // 打开全屏时重置位置和缩放
+  useEffect(() => {
+    if (isFullscreen) {
+      setPreviewScale(1);
+      setOffset({ x: 0, y: 0 });
+      setImageDimensions({ width: 0, height: 0 });
+    }
+  }, [isFullscreen]);
+
+  // 检查是否可以拖拽（图片尺寸超过视口尺寸时才能拖拽）
+  const canDrag = useMemo(() => {
+    if (!viewportRef.current || imageDimensions.width === 0 || imageDimensions.height === 0) {
+      return false;
+    }
+    const viewportWidth = viewportRef.current.clientWidth;
+    const viewportHeight = viewportRef.current.clientHeight;
+    const scaledImageWidth = imageDimensions.width * previewScale;
+    const scaledImageHeight = imageDimensions.height * previewScale;
+    
+    return scaledImageWidth > viewportWidth || scaledImageHeight > viewportHeight;
+  }, [imageDimensions, previewScale]);
+
   return (
     <div 
       className={cn(
@@ -220,9 +254,18 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
             <Download size={14} />
           </button>
           <button 
-            onClick={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 nodrag nopan" 
-            title="Fullscreen"
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              console.log("Fullscreen button clicked (top toolbar)");
+              console.log("Fullscreen clicked, entire data:", data);
+              console.log("Fullscreen clicked, data.output:", data.output); 
+              console.log("Fullscreen clicked, data.sourceImage:", data.sourceImage);
+              const hasImage = data.output || data.sourceImage;
+              console.log("Has image data:", hasImage);
+              setIsFullscreen(true); 
+            }}
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 cursor-pointer z-[9999] relative" 
+            title="全屏预览"
           >
             <Maximize2 size={14} />
           </button>
@@ -343,7 +386,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2 pr-2">
-              {data.output && (
+              {(data.output || data.sourceImage) && (
                 <>
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleDownload(); }}
@@ -353,7 +396,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                     <Download size={18} />
                   </button>
                   <button 
-                    onClick={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
+                    onClick={(e) => { e.stopPropagation(); console.log("Fullscreen clicked, data.output:", data.output); console.log("Fullscreen clicked, data.sourceImage:", data.sourceImage); setIsFullscreen(true); }}
                     className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors nodrag nopan"
                     title="Fullscreen preview"
                   >
@@ -401,7 +444,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
               rows={1}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
               className="w-full bg-transparent text-xl text-slate-200 focus:outline-none active:outline-none transition-all resize-none placeholder:text-slate-600 font-medium leading-relaxed min-h-[56px]"
-              placeholder="Describe what you want to generate. Use @ to reference nodes."
+              placeholder="描述您想要生成的内容。使用 @ 引用节点。"
               value={data.prompt}
               onChange={handlePromptChange}
             />
@@ -422,6 +465,8 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                       { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash Image' },
                       { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite' },
                       { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2' },
+                      { id: 'wan2.7-r2v', name: '万相 2.7' },
+                      { id: 'wan2.7-t2v', name: '万相 2.7' },
                       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
                     ].find(m => m.id === data.config.model)?.name || (data.type === 'video' ? 'Veo 3.1 Lite' : (data.type === 'image' ? 'Gemini 2.5 Flash Image' : 'Gemini 3 Flash'))}
                   </span>
@@ -436,6 +481,8 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                       { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image', type: ['image'] },
                       { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash Image', type: ['image'] },
                       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', type: ['text'] },
+                      { id: 'wan2.7-r2v', name: '万相 2.7 (图生视频)', type: ['video'] },
+                      { id: 'wan2.7-t2v', name: '万相 2.7 (文生视频)', type: ['video'] },
                       { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite', type: ['video'] },
                       { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2 (首尾帧)', type: ['video'] },
                     ].filter(m => m.type.includes(data.type)).map(m => (
@@ -491,83 +538,109 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
         </div>
       )}
 
-      <AnimatePresence>
-        {isFullscreen && data.output && createPortal(
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-[10000] bg-[#0a0a0a] flex"
-            onClick={(e) => e.stopPropagation()}
+      {isFullscreen && (data.output || data.sourceImage) && createPortal(
+          <div
+            className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center"
+            onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
           >
-            <div className="flex-1 flex items-center justify-center p-8 bg-black/40">
-              <motion.img 
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.1, duration: 0.4 }}
-                src={data.output as string} 
-                className="max-w-full max-h-full object-contain shadow-[0_32px_64px_rgba(0,0,0,0.8)] rounded-sm"
-                alt="Preview"
-              />
-            </div>
-
-            <motion.div 
-              initial={{ x: 400 }}
-              animate={{ x: 0 }}
-              exit={{ x: 400 }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="w-[400px] border-l border-white/10 flex flex-col p-8 gap-8 bg-[#121212] shadow-2xl relative"
+            <div
+              className="relative bg-[#121212] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+              style={{ width: '90vw', height: '90vh' }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.2em]">Prompt</h2>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
-                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 text-slate-500 hover:text-white transition-all active:scale-90 cursor-pointer"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div className="bg-white/5 rounded-xl p-6 min-h-[200px] border border-white/5">
-                <p className="text-slate-300 leading-relaxed font-medium">
-                  {data.prompt || "No prompt provided"}
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-6">
-                <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.2em]">Information</h2>
-                <div className="space-y-4 bg-white/5 rounded-xl p-6 border border-white/5">
-                  {[
-                    { label: "Model", value: data.config.model || "Gemini 2.5 Flash Image" },
-                    { label: "Quality", value: data.config.quality === 'hd' ? "2K" : "1K" },
-                    { label: "Aspect Ratio", value: data.config.aspectRatio || "1:1" },
-                    { label: "File Size", value: "~ 512 KB" },
-                    { label: "Date", value: new Date().toLocaleDateString() },
-                    { label: "Creator", value: "NexusFlow Team" }
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
-                      <span className="text-slate-500 text-sm">{item.label}:</span>
-                      <span className="text-slate-300 font-bold text-sm tracking-tight">{item.value}</span>
-                    </div>
-                  ))}
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <h2 className="text-sm font-bold text-white">图片预览</h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPreviewScale(1); setOffset({ x: 0, y: 0 }); }}
+                    className="px-3 py-1.5 text-xs font-bold bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
+                  >
+                    1:1
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPreviewScale(prev => Math.max(0.25, prev - 0.1)); }}
+                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+                    title="缩小"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="11" cy="11" r="8"/>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      <line x1="8" y1="11" x2="14" y2="11"/>
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPreviewScale(prev => Math.min(5, prev + 0.1)); }}
+                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+                    title="放大"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="11" cy="11" r="8"/>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      <line x1="11" y1="8" x2="11" y2="14"/>
+                      <line x1="8" y1="11" x2="14" y2="11"/>
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
+                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+                  >
+                    <X size={24} />
+                  </button>
                 </div>
               </div>
-
-              <div className="mt-auto">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleDownload(); }}
-                  className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 cursor-pointer"
-                >
-                  <Download size={20} />
-                  <span>Download</span>
-                </button>
+              <div 
+                ref={viewportRef}
+                className="relative bg-black/40 overflow-hidden"
+                style={{ height: 'calc(100% - 60px)' }}
+                onWheel={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                  setPreviewScale(prev => Math.max(0.25, Math.min(5, prev + delta)));
+                }}
+                onMouseDown={(e) => {
+                  if (e.button !== 0) return;
+                  if (!canDrag) return;
+                  e.preventDefault();
+                  setIsDraggingImage(true);
+                  setDragStart({ x: e.clientX, y: e.clientY });
+                }}
+                onMouseMove={(e) => {
+                  if (!isDraggingImage) return;
+                  if (!canDrag) {
+                    setIsDraggingImage(false);
+                    return;
+                  }
+                  const dx = e.clientX - dragStart.x;
+                  const dy = e.clientY - dragStart.y;
+                  setOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+                  setDragStart({ x: e.clientX, y: e.clientY });
+                }}
+                onMouseUp={() => setIsDraggingImage(false)}
+                onMouseLeave={() => setIsDraggingImage(false)}
+              >
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <img
+                    ref={imageRef}
+                    src={(data.sourceImage || data.output) as string}
+                    className="max-w-none max-h-none transition-transform"
+                    style={{ 
+                      transform: `translate(${offset.x}px, ${offset.y}px) scale(${previewScale})`,
+                      transformOrigin: 'center center'
+                    }}
+                    draggable={false}
+                    alt="Preview"
+                    onLoad={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+                    }}
+                  />
+                </div>
               </div>
-            </motion.div>
-          </motion.div>,
+            </div>
+          </div>,
           document.body
         )}
-      </AnimatePresence>
     </div>
   );
 };

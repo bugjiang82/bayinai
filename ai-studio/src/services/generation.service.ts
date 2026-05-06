@@ -539,11 +539,12 @@ export async function generateVideo(
           prompt,
           media: [
             ...(firstFrameUrl ? [{ type: "reference_image", url: firstFrameUrl }] : []),
-            ...(lastFrameUrl ? [{ type: "last_frame", url: lastFrameUrl }] : []),
+            ...(lastFrameUrl ? [{ type: "reference_image", url: lastFrameUrl }] : []),
           ],
         },
         parameters: {
           resolution,
+          ratio,
           duration,
           prompt_extend: promptExtend,
           watermark: false,
@@ -603,6 +604,10 @@ export async function generateVideo(
   }
 
   const result = await response.json();
+  console.log("\n========== DashScope POST Response ==========");
+  console.log(JSON.stringify(result, null, 2));
+  console.log("==============================================\n");
+  
   const taskId = result.output?.task_id || result.request_id;
 
   if (!taskId) {
@@ -613,7 +618,7 @@ export async function generateVideo(
   await prisma.generation.create({
     data: {
       userId,
-      type: "TEXT_TO_VIDEO" as GenType,
+      type: "VIDEO" as GenType,
       status: "PROCESSING",
       prompt,
       params: JSON.stringify({
@@ -641,6 +646,10 @@ export async function getVideoStatus(
     throw new Error("DashScope API Key 未配置");
   }
 
+  console.log("\n================= getVideoStatus =================");
+  console.log("Task ID:", taskId);
+  console.log("API URL:", `${DASHSCOPE_BASE_URL}/tasks/${taskId}`);
+
   const response = await fetch(
     `${DASHSCOPE_BASE_URL}/tasks/${taskId}`,
     {
@@ -651,30 +660,66 @@ export async function getVideoStatus(
     }
   );
 
+  console.log("Response status:", response.status);
+
   if (!response.ok) {
     const errorText = await response.text();
+    console.error("Error response:", errorText);
     throw new Error(
       `DashScope 状态查询失败: ${response.status} - ${errorText}`
     );
   }
 
   const result = await response.json();
+  console.log("Full response:", JSON.stringify(result, null, 2));
+
   const output = result.output || {};
   const taskStatus = output.task_status || result.output?.task_status || "UNKNOWN";
+  const errorCode = output.code || result.code;
+  const errorMessage = output.message || result.message;
 
-  let progress = 0;
-  if (taskStatus === "SUCCEEDED") {
-    progress = 100;
-  } else if (taskStatus === "FAILED") {
-    progress = 0;
-  } else if (taskStatus === "RUNNING" || taskStatus === "PENDING") {
-    progress = 50; // DashScope 异步任务不提供精确进度
+  console.log("Task status:", taskStatus);
+  console.log("Error code:", errorCode);
+  console.log("Error message:", errorMessage);
+
+  // 如果有明确的错误，返回 FAILED
+  if (errorCode || errorMessage) {
+    console.log("Detected error, returning FAILED");
+    return { status: "FAILED", progress: 0 };
+  }
+
+  // 状态映射
+  let status: string;
+  let progress: number;
+  
+  switch (taskStatus) {
+    case "PENDING":
+    case "RUNNING":
+      status = taskStatus;
+      progress = 50;
+      break;
+    case "SUCCEEDED":
+      status = taskStatus;
+      progress = 100;
+      break;
+    case "FAILED":
+    case "CANCELED":
+      status = "FAILED";
+      progress = 0;
+      break;
+    default:
+      status = taskStatus;
+      progress = 20;
   }
 
   const videoUrl = output.video_url || output.videoUrl;
+  console.log("Video URL:", videoUrl);
+
+  console.log("Returning:", { status, progress, videoUrl });
+  console.log("===================================================\n");
 
   return {
-    status: taskStatus,
+    status,
     progress,
     videoUrl,
   };
