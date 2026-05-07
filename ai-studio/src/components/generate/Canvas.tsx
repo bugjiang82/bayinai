@@ -19,6 +19,10 @@ import {
   Play,
   Pause,
   Maximize2,
+  VolumeX,
+  Volume2,
+  MoreHorizontal,
+  PictureInPicture,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -139,21 +143,33 @@ function HistoryImage({ item, onLoadError }: HistoryImageProps) {
   );
 }
 
-function VideoPlayer({ 
+export function VideoPlayer({ 
   videoUrl, 
   onClose, 
   showControls = true,
-  onEnded 
+  onEnded,
+  prompt = '',
+  createdAt = '',
+  fileName = 'video',
+  autoPlay = false
 }: { 
   videoUrl: string; 
   onClose?: () => void; 
   showControls?: boolean;
   onEnded?: () => void;
+  prompt?: string;
+  createdAt?: string;
+  fileName?: string;
+  autoPlay?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -161,10 +177,14 @@ function VideoPlayer({
 
     const handleTimeUpdate = () => {
       setProgress((video.currentTime / video.duration) * 100);
+      setCurrentTime(video.currentTime);
     };
 
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
+      if (autoPlay) {
+        video.play().catch(() => {});
+      }
     };
 
     const handleEnded = () => {
@@ -182,7 +202,7 @@ function VideoPlayer({
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [onEnded]);
+  }, [onEnded, autoPlay]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -196,6 +216,54 @@ function VideoPlayer({
     setIsPlaying(!isPlaying);
   };
 
+  const toggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = !video.muted;
+    setIsMuted(video.muted);
+  };
+
+  const toggleFullscreen = async () => {
+    const container = videoRef.current?.parentElement;
+    if (!container) return;
+
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await container.requestFullscreen();
+    }
+  };
+
+  const handleDownload = () => {
+    const link = document.createElement('a');
+    link.href = videoUrl;
+    link.download = `${fileName}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowMoreMenu(false);
+  };
+
+  const togglePictureInPicture = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+    } else {
+      await video.requestPictureInPicture();
+    }
+    setShowMoreMenu(false);
+  };
+
+  const setSpeed = (speed: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.playbackRate = speed;
+    setPlaybackRate(speed);
+    setShowMoreMenu(false);
+  };
+
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current;
     if (!video) return;
@@ -205,13 +273,19 @@ function VideoPlayer({
     video.currentTime = percent * duration;
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="relative w-full h-full bg-black">
+    <div className="relative w-full h-full bg-black flex flex-col">
       <video
         ref={videoRef}
-        className="w-full h-full object-contain"
+        className="flex-1 w-full h-full object-contain"
         poster={`${videoUrl}?t=1`}
-        muted
+        muted={isMuted}
       >
         <source src={videoUrl} type="video/mp4" />
       </video>
@@ -227,23 +301,112 @@ function VideoPlayer({
             </button>
           )}
 
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-            <div
-              className="h-1 bg-zinc-700 rounded-full cursor-pointer mb-3"
-              onClick={handleProgressClick}
-            >
-              <div
-                className="h-full bg-indigo-500 rounded-full transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-center">
-              <button
-                onClick={togglePlay}
-                className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-              >
-                {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-              </button>
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent">
+            <div className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <button
+                  onClick={togglePlay}
+                  className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                >
+                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                </button>
+                
+                <div 
+                  className="flex-1 h-1 bg-zinc-700 rounded-full cursor-pointer relative group"
+                  onClick={handleProgressClick}
+                >
+                  <div
+                    className="h-full bg-indigo-500 rounded-full transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                  <div 
+                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                    style={{ left: `calc(${progress}% - 6px)` }}
+                  />
+                </div>
+
+                <span className="text-xs text-zinc-400 min-w-[80px] text-right">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  {prompt && (
+                    <div className="hidden sm:block max-w-xs">
+                      <p className="text-xs text-zinc-500 truncate">{prompt}</p>
+                    </div>
+                  )}
+                  {createdAt && (
+                    <span className="text-xs text-zinc-500">{createdAt}</span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={toggleMute}
+                    className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                    title={isMuted ? '取消静音' : '静音'}
+                  >
+                    {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  </button>
+
+                  <div className="relative">
+                    <button
+                      onClick={toggleFullscreen}
+                      className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                      title="全屏"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowMoreMenu(!showMoreMenu)}
+                      className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                      title="更多"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+
+                    {showMoreMenu && (
+                      <div className="absolute bottom-full right-0 mb-2 w-36 bg-zinc-900 rounded-lg shadow-lg border border-zinc-700 py-2">
+                        <button
+                          onClick={handleDownload}
+                          className="w-full px-4 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          下载
+                        </button>
+                        <div className="border-t border-zinc-700 my-1" />
+                        <div className="px-2 py-1">
+                          <p className="px-2 py-1 text-xs text-zinc-500">播放速度</p>
+                          {[0.5, 1, 1.5, 2].map((speed) => (
+                            <button
+                              key={speed}
+                              onClick={() => setSpeed(speed)}
+                              className={`w-full px-4 py-1.5 text-left text-sm transition-colors ${
+                                playbackRate === speed ? 'text-indigo-400' : 'text-zinc-300 hover:bg-zinc-800'
+                              }`}
+                            >
+                              {speed}x
+                            </button>
+                          ))}
+                        </div>
+                        <div className="border-t border-zinc-700 my-1" />
+                        <button
+                          onClick={togglePictureInPicture}
+                          className="w-full px-4 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+                        >
+                          <PictureInPicture className="w-4 h-4" />
+                          画中画
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </>

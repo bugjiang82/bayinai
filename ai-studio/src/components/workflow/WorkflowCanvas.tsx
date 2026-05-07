@@ -29,6 +29,7 @@ import {
   Type,
   Image as ImageIcon,
   Video as VideoIcon,
+  Film,
   Palette,
   MousePointer2,
   BoxSelect,
@@ -48,7 +49,8 @@ import {
   AlertCircle,
   ArrowLeft,
   Clock,
-  Loader2
+  Loader2,
+  Bot
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -121,6 +123,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
   ]);
   const [assistantInput, setAssistantInput] = useState('');
   const [isAssistantLoading, setIsAssistantLoading] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
 
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(initialProjectId || null);
   const [currentProjectName, setCurrentProjectName] = useState<string>('未命名项目');
@@ -1064,78 +1067,99 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
             </div>
           </Panel>
 
-          <Panel position="top-right" className="h-[calc(100vh-2rem)] w-[320px] pointer-events-none mr-4 mt-4 mb-4">
-            <div className="h-full bg-[#13141c]/90 backdrop-blur-3xl border border-white/10 rounded-[24px] shadow-2xl p-6 flex flex-col pointer-events-auto overflow-hidden">
-               <div className="flex items-center justify-between mb-8">
-                 <div className="flex items-center gap-2">
-                   <div className="w-1 h-4 bg-indigo-500 rounded-full" />
-                   <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">助手</span>
-                 </div>
-                 <div className="flex items-center gap-2">
-                   <button className="text-slate-500 hover:text-white" onClick={() => setMessages([])}><Plus size={14} /></button>
-                   <button className="text-slate-500 hover:text-white"><Layers size={14} /></button>
-                 </div>
-               </div>
-
-               <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-none">
-                 {messages.map((m, idx) => (
-                   <div
-                     key={idx}
-                     className={cn(
-                       "flex flex-col gap-1 max-w-[90%]",
-                       m.role === 'user' ? "ml-auto items-end" : "items-start"
-                     )}
-                   >
-                     <div
-                       className={cn(
-                         "px-4 py-2 rounded-2xl text-xs leading-relaxed shadow-sm",
-                         m.role === 'user'
-                          ? "bg-indigo-600 text-white rounded-tr-none"
-                          : "bg-white/5 text-slate-300 border border-white/5 rounded-tl-none"
-                       )}
-                     >
-                       {m.content}
+          <AnimatePresence>
+            {showAssistant && (
+              <Panel position="top-right" className="h-[calc(100vh-2rem)] w-[320px] pointer-events-none mr-4 mt-4 mb-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="h-full bg-[#13141c]/90 backdrop-blur-3xl border border-white/10 rounded-[24px] shadow-2xl p-6 flex flex-col pointer-events-auto overflow-hidden"
+                >
+                   <div className="flex items-center justify-between mb-8">
+                     <div className="flex items-center gap-2">
+                       <div className="w-1 h-4 bg-indigo-500 rounded-full" />
+                       <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">助手</span>
                      </div>
+                     <button className="text-slate-500 hover:text-white" onClick={() => setShowAssistant(false)}><X size={14} /></button>
                    </div>
-                 ))}
-                 {isAssistantLoading && (
-                   <div className="flex gap-1 ml-1 items-center">
-                      <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                      <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                      <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" />
-                   </div>
-                 )}
-                 {messages.length === 0 && (
-                   <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-12 opacity-50">
-                      <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center">
-                        <Sparkles size={24} className="text-indigo-400" />
-                      </div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-widest">开始新对话</p>
-                   </div>
-                 )}
-               </div>
 
-               <div className="mt-4 pt-4 border-t border-white/5">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="告诉我你想要创作什么..."
-                      value={assistantInput}
-                      onChange={(e) => setAssistantInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
-                    />
-                    <button
-                      onClick={handleSendMessage}
-                      disabled={isAssistantLoading}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-500 hover:text-white transition-colors"
-                    >
-                      <Send size={14} />
-                    </button>
-                  </div>
-               </div>
-            </div>
-          </Panel>
+                   <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-none">
+                     {messages.map((m, idx) => (
+                       <div
+                         key={idx}
+                         className={cn(
+                           "flex flex-col gap-1 max-w-[90%]",
+                           m.role === 'user' ? "ml-auto items-end" : "items-start"
+                         )}
+                       >
+                         <div
+                           className={cn(
+                             "px-4 py-2 rounded-2xl text-xs leading-relaxed shadow-sm",
+                             m.role === 'user'
+                              ? "bg-indigo-600 text-white rounded-tr-none"
+                              : "bg-white/5 text-slate-300 border border-white/5 rounded-tl-none"
+                           )}
+                         >
+                           {m.content}
+                         </div>
+                       </div>
+                     ))}
+                     {isAssistantLoading && (
+                       <div className="flex gap-1 ml-1 items-center">
+                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" />
+                       </div>
+                     )}
+                     {messages.length === 0 && (
+                       <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-12 opacity-50">
+                          <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center">
+                            <Sparkles size={24} className="text-indigo-400" />
+                          </div>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">开始新对话</p>
+                       </div>
+                     )}
+                   </div>
+
+                   <div className="mt-4 pt-4 border-t border-white/5">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="告诉我你想要创作什么..."
+                          value={assistantInput}
+                          onChange={(e) => setAssistantInput(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                        />
+                        <button
+                          onClick={handleSendMessage}
+                          disabled={isAssistantLoading}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-500 hover:text-white transition-colors"
+                        >
+                          <Send size={14} />
+                        </button>
+                      </div>
+                   </div>
+                </motion.div>
+              </Panel>
+            )}
+          </AnimatePresence>
+
+          {!showAssistant && (
+            <Panel position="bottom-right" className="mr-4 mb-4">
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                onClick={() => setShowAssistant(true)}
+                className="w-14 h-14 bg-[#13141c]/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl flex items-center justify-center text-slate-400 hover:text-white hover:border-indigo-500/50 transition-all"
+              >
+                <Bot size={22} />
+              </motion.button>
+            </Panel>
+          )}
         </ReactFlow>
 
         {menu && (
@@ -1292,12 +1316,18 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
                         onClick={() => handleHistoryItemClick(item)}
                         className="relative aspect-square bg-white/5 rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition-all"
                       >
-                        <img
-                          src={item.thumbnailUrl || item.outputUrl}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          
-                        />
+                        {item.type === 'VIDEO' && !item.thumbnailUrl ? (
+                          <div className="w-full h-full flex items-center justify-center bg-black/30">
+                            <Film size={32} className="text-white/50" />
+                          </div>
+                        ) : (
+                          <img
+                            src={item.thumbnailUrl || item.outputUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            
+                          />
+                        )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 hover:opacity-100 transition-opacity flex items-end p-2">
                           <span className="text-[10px] text-white truncate">
                             {item.prompt?.slice(0, 30) || '无描述'}

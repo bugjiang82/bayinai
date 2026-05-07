@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { NodeData } from '../types';
+import { VideoPlayer } from '../../generate/Canvas';
 
 // 模型积分消耗配置
 const MODEL_COST_MAP: Record<string, { base: number; type: "fixed" | "per-second" }> = {
@@ -134,9 +135,11 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const handleDownload = () => {
     const downloadUrl = data.sourceImage || data.output;
     if (!downloadUrl) return;
+    const isVideo = data.type === 'video';
+    const ext = isVideo ? '.mp4' : '.png';
     const link = document.createElement('a');
     link.href = downloadUrl as string;
-    link.download = `${data.label || 'image'}.png`;
+    link.download = `${data.label || 'image'}${ext}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -212,8 +215,11 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   useEffect(() => {
     if (isFullscreen) {
       setPreviewScale(1);
-      setOffset({ x: 0, y: 0 });
       setImageDimensions({ width: 0, height: 0 });
+      if (viewportRef.current) {
+        viewportRef.current.scrollLeft = 0;
+        viewportRef.current.scrollTop = 0;
+      }
     }
   }, [isFullscreen]);
 
@@ -239,18 +245,18 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {selected && !isDragging && (
-        <div className="absolute left-1/2 -translate-x-1/2 -translate-y-[84px] flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-full shadow-xl z-[1001]">
-          <button onClick={onGenerate} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="Redraw">
+      {selected && !isDragging && (data.output || data.sourceImage) && (
+        <div className="absolute left-1/2 -translate-x-1/2 -translate-y-[84px] flex items-center gap-1 p-1 bg-white/5 backdrop-blur-md border border-white/10 rounded-full shadow-xl z-[1001]">
+          <button onClick={onGenerate} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white" title="Redraw">
             <RefreshCw size={14} className={data.isGenerating ? "animate-spin" : ""} />
           </button>
-          <div className="w-px h-4 bg-slate-200 mx-1" />
-          <button className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="Upscale">
+          <div className="w-px h-4 bg-white/10 mx-1" />
+          <button className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white" title="Upscale">
             <Sparkles size={14} />
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); handleDownload(); }}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 nodrag nopan" 
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white nodrag nopan" 
             title="Download"
           >
             <Download size={14} />
@@ -266,15 +272,15 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
               console.log("Has image data:", hasImage);
               setIsFullscreen(true); 
             }}
-            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 cursor-pointer z-[9999] relative" 
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white cursor-pointer z-[9999] relative" 
             title="全屏预览"
           >
             <Maximize2 size={14} />
           </button>
-          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <div className="w-px h-4 bg-white/10 mx-1" />
           <button 
             onClick={() => setNodes(nds => nds.filter(n => n.id !== id))}
-            className="p-2 hover:bg-red-50 rounded-full transition-colors text-red-500" 
+            className="p-2 hover:bg-red-500/10 rounded-full transition-colors text-white/50 hover:text-red-500" 
             title="Delete"
           >
             <Trash2 size={14} />
@@ -557,106 +563,133 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
       )}
 
       {isFullscreen && (data.output || data.sourceImage) && createPortal(
-          <div
-            className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center"
-            onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
-          >
+          data.type === 'video' ? (
             <div
-              className="relative bg-[#121212] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
-              style={{ width: '90vw', height: '90vh' }}
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
             >
-              <div className="flex items-center justify-between p-4 border-b border-white/10">
-                <h2 className="text-sm font-bold text-white">图片预览</h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setPreviewScale(1); setOffset({ x: 0, y: 0 }); }}
-                    className="px-3 py-1.5 text-xs font-bold bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
-                  >
-                    1:1
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setPreviewScale(prev => Math.max(0.25, prev - 0.1)); }}
-                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all"
-                    title="缩小"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="11" cy="11" r="8"/>
-                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                      <line x1="8" y1="11" x2="14" y2="11"/>
-                    </svg>
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setPreviewScale(prev => Math.min(5, prev + 0.1)); }}
-                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all"
-                    title="放大"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="11" cy="11" r="8"/>
-                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                      <line x1="11" y1="8" x2="11" y2="14"/>
-                      <line x1="8" y1="11" x2="14" y2="11"/>
-                    </svg>
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
-                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
-                  >
-                    <X size={24} />
-                  </button>
-                </div>
-              </div>
-              <div 
-                ref={viewportRef}
-                className="relative bg-black/40 overflow-hidden"
-                style={{ height: 'calc(100% - 60px)' }}
-                onWheel={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const delta = e.deltaY > 0 ? -0.1 : 0.1;
-                  setPreviewScale(prev => Math.max(0.25, Math.min(5, prev + delta)));
-                }}
-                onMouseDown={(e) => {
-                  if (e.button !== 0) return;
-                  if (!canDrag) return;
-                  e.preventDefault();
-                  setIsDraggingImage(true);
-                  setDragStart({ x: e.clientX, y: e.clientY });
-                }}
-                onMouseMove={(e) => {
-                  if (!isDraggingImage) return;
-                  if (!canDrag) {
-                    setIsDraggingImage(false);
-                    return;
-                  }
-                  const dx = e.clientX - dragStart.x;
-                  const dy = e.clientY - dragStart.y;
-                  setOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-                  setDragStart({ x: e.clientX, y: e.clientY });
-                }}
-                onMouseUp={() => setIsDraggingImage(false)}
-                onMouseLeave={() => setIsDraggingImage(false)}
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
+                className="absolute top-4 right-4 z-10 h-10 w-10 flex items-center justify-center rounded-full bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors backdrop-blur-sm cursor-pointer"
               >
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <img
-                    ref={imageRef}
-                    src={(data.sourceImage || data.output) as string}
-                    className="max-w-none max-h-none transition-transform"
-                    style={{ 
-                      transform: `translate(${offset.x}px, ${offset.y}px) scale(${previewScale})`,
-                      transformOrigin: 'center center'
-                    }}
-                    draggable={false}
-                    alt="Preview"
-                    onLoad={(e) => {
-                      const img = e.target as HTMLImageElement;
-                      setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-                    }}
+                <X size={20} />
+              </button>
+
+              <div className="w-full h-full flex items-center justify-center p-8">
+                <div className="w-full max-w-5xl aspect-video">
+                  <VideoPlayer 
+                    videoUrl={(data.sourceImage || data.output) as string}
+                    onClose={() => setIsFullscreen(false)}
+                    prompt={data.prompt || ''}
+                    fileName={data.label || 'video'}
+                    autoPlay
                   />
                 </div>
               </div>
             </div>
-          </div>,
+          ) : (
+            <div
+              className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
+            >
+              <div
+                className="relative bg-[#121212] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                style={{ width: '90vw', height: '90vh' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between p-4 border-b border-white/10">
+                  <h2 className="text-sm font-bold text-white">图片预览</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPreviewScale(1); if (viewportRef.current) { viewportRef.current.scrollLeft = 0; viewportRef.current.scrollTop = 0; } }}
+                      className="px-3 py-1.5 text-xs font-bold bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
+                    >
+                      1:1
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPreviewScale(prev => Math.max(0.25, prev - 0.1)); }}
+                      className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+                      title="缩小"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        <line x1="8" y1="11" x2="14" y2="11"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPreviewScale(prev => Math.min(5, prev + 0.1)); }}
+                      className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+                      title="放大"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        <line x1="11" y1="8" x2="11" y2="14"/>
+                        <line x1="8" y1="11" x2="14" y2="11"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
+                      className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
+                </div>
+                <div
+                  ref={viewportRef}
+                  className={cn(
+                    "relative bg-black/40 overflow-auto",
+                    isDraggingImage ? "cursor-grabbing" : "cursor-grab"
+                  )}
+                  style={{ height: 'calc(100% - 60px)' }}
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                    setPreviewScale(prev => Math.max(0.25, Math.min(5, prev + delta)));
+                  }}
+                  onMouseDown={(e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    setIsDraggingImage(true);
+                    setDragStart({ x: e.clientX, y: e.clientY });
+                  }}
+                  onMouseMove={(e) => {
+                    if (!isDraggingImage) return;
+                    const dx = e.clientX - dragStart.x;
+                    const dy = e.clientY - dragStart.y;
+                    if (viewportRef.current) {
+                      viewportRef.current.scrollLeft -= dx;
+                      viewportRef.current.scrollTop -= dy;
+                    }
+                    setDragStart({ x: e.clientX, y: e.clientY });
+                  }}
+                  onMouseUp={() => setIsDraggingImage(false)}
+                  onMouseLeave={() => setIsDraggingImage(false)}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center min-w-full min-h-full">
+                    <img
+                      ref={imageRef}
+                      src={(data.sourceImage || data.output) as string}
+                      className="max-w-none max-h-none"
+                      style={{
+                        transform: `scale(${previewScale})`,
+                        transformOrigin: 'center center'
+                      }}
+                      draggable={false}
+                      alt="Preview"
+                      onLoad={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ),
           document.body
         )}
     </div>

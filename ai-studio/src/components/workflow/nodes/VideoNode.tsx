@@ -5,7 +5,7 @@ import { NodeProps, useReactFlow, Node } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { NodeData } from '../types';
 import { generateVideo, checkVideoStatus } from '../services/aiService';
-import { Video, Film, PlayCircle, RefreshCw, Layers, Clock, Zap } from 'lucide-react';
+import { Video, Film, PlayCircle, RefreshCw, Layers, Clock, Zap, Play, Pause, Square } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 
@@ -64,6 +64,10 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   const { setNodes, getNodes } = useReactFlow<Node<NodeData>>();
   const data = props.data;
   const [progress, setProgress] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
   
   // 计算积分消耗
   const cost = useMemo(() => calculateCost(data), [data.config.model, data.config.duration, data.type]);
@@ -353,14 +357,26 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
         >
           {data.output ? (
             <video
+              ref={videoRef}
               src={data.output}
               className="w-full h-full object-cover"
-              autoPlay
-              loop
               muted
               playsInline
               preload="metadata"
               draggable={false}
+              onTimeUpdate={() => {
+                if (videoRef.current) {
+                  setVideoProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
+                }
+              }}
+              onLoadedMetadata={() => {
+                if (videoRef.current) {
+                  setVideoDuration(videoRef.current.duration);
+                }
+              }}
+              onEnded={() => {
+                setIsPlaying(false);
+              }}
             />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -393,9 +409,74 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
             </div>
           )}
           {data.output && (
-            <div className="absolute inset-0 bg-indigo-600/20 opacity-0 group-hover/video:opacity-100 transition-all flex items-center justify-center">
-              <PlayCircle size={48} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
-            </div>
+            <>
+              <div 
+                className="absolute inset-0 bg-black/50 flex items-center justify-center cursor-pointer"
+                onClick={() => {
+                  if (videoRef.current) {
+                    if (isPlaying) {
+                      videoRef.current.pause();
+                    } else {
+                      videoRef.current.play();
+                    }
+                    setIsPlaying(!isPlaying);
+                  }
+                }}
+              >
+                {!isPlaying && (
+                  <PlayCircle size={48} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
+                )}
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                <div
+                  className="h-0.5 bg-white/20 rounded-full cursor-pointer mb-2"
+                  onClick={(e) => {
+                    if (videoRef.current && videoDuration > 0) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const percent = (e.clientX - rect.left) / rect.width;
+                      videoRef.current.currentTime = percent * videoDuration;
+                    }
+                  }}
+                >
+                  <div
+                    className="h-full bg-indigo-500 rounded-full transition-all"
+                    style={{ width: `${videoProgress}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (videoRef.current) {
+                        if (isPlaying) {
+                          videoRef.current.pause();
+                        } else {
+                          videoRef.current.play();
+                        }
+                        setIsPlaying(!isPlaying);
+                      }
+                    }}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                  >
+                    {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (videoRef.current) {
+                        videoRef.current.pause();
+                        videoRef.current.currentTime = 0;
+                        setIsPlaying(false);
+                      }
+                    }}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                    title="停止"
+                  >
+                    <Square size={12} />
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
