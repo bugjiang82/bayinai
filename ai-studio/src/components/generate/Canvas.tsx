@@ -286,6 +286,8 @@ export function VideoPlayer({
         className="flex-1 w-full h-full object-contain"
         poster={`${videoUrl}?t=1`}
         muted={isMuted}
+        autoPlay={autoPlay}
+        playsInline
       >
         <source src={videoUrl} type="video/mp4" />
       </video>

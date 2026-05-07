@@ -564,24 +564,12 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
 
       {isFullscreen && (data.output || data.sourceImage) && createPortal(
           data.type === 'video' ? (
-            <div
-              className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
-              onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
-            >
-              <button
-                onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
-                className="absolute top-4 right-4 z-10 h-10 w-10 flex items-center justify-center rounded-full bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors backdrop-blur-sm cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-
+            <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center">
               <div className="w-full h-full flex items-center justify-center p-8">
                 <div className="w-full max-w-5xl aspect-video">
                   <VideoPlayer 
                     videoUrl={(data.sourceImage || data.output) as string}
                     onClose={() => setIsFullscreen(false)}
-                    prompt={data.prompt || ''}
-                    fileName={data.label || 'video'}
                     autoPlay
                   />
                 </div>

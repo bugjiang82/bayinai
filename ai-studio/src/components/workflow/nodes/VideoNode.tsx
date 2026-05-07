@@ -9,6 +9,61 @@ import { Video, Film, PlayCircle, RefreshCw, Layers, Clock, Zap, Play, Pause, Sq
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 
+const generateThumbnail = async (videoUrl: string): Promise<string> => {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.src = videoUrl;
+    
+    video.addEventListener('loadedmetadata', () => {
+      video.currentTime = 0;
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        resolve(videoUrl);
+        return;
+      }
+      
+      canvas.width = video.videoWidth || 320;
+      canvas.height = video.videoHeight || 180;
+      
+      video.addEventListener('seeked', () => {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(thumbnailUrl);
+      }, { once: true });
+      
+      video.addEventListener('error', () => {
+        resolve(videoUrl);
+      }, { once: true });
+    });
+    
+    video.addEventListener('error', () => {
+      resolve(videoUrl);
+    }, { once: true });
+  });
+};
+
+const downloadVideo = async (videoUrl: string, fileName: string = 'video') => {
+  try {
+    const response = await fetch(videoUrl);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${fileName}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Failed to download video:', error);
+  }
+};
+
 // 模型配置
 const MODEL_CONFIG: Record<string, {
   label: string;
@@ -182,7 +237,11 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
 
         if (result.status === "SUCCEEDED") {
           setProgress(100);
-          // 短暂延迟后显示视频
+          
+          const thumbnailUrl = await generateThumbnail(result.video_url);
+          
+          downloadVideo(result.video_url, `video_${Date.now()}`);
+          
           setTimeout(() => {
             setNodes((nds) =>
               nds.map((n) =>
@@ -192,7 +251,8 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
                       data: {
                         ...n.data,
                         isGenerating: false,
-                        output: result.video_url,
+                        output: thumbnailUrl,
+                        sourceImage: result.video_url,
                         credits: Math.max(0, n.data.credits - cost),
                       },
                     }
@@ -358,7 +418,7 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
           {data.output ? (
             <video
               ref={videoRef}
-              src={data.output}
+              src={data.sourceImage || data.output}
               className="w-full h-full object-cover"
               muted
               playsInline
