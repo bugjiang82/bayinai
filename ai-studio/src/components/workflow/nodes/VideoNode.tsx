@@ -295,7 +295,7 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
             </span>
           </button>
 
-          <div className="absolute bottom-full right-0 mb-4 w-[280px] bg-[#1a1c24] border border-white/10 rounded-3xl shadow-2xl scale-0 group-hover/config:scale-100 transition-all origin-bottom-right z-[500] overflow-hidden backdrop-blur-xl text-left p-5 space-y-5">
+          <div className="absolute bottom-full right-0 mb-4 w-[280px] bg-[#1a1c24] border border-white/10 rounded-3xl shadow-2xl scale-0 group-hover/config:scale-100 transition-all origin-bottom-right z-[1002] overflow-hidden backdrop-blur-xl text-left p-5 space-y-5">
             <div className="space-y-3">
               <div className="text-sm font-bold text-slate-500 pl-1 uppercase tracking-wider">分辨率</div>
               <div className="flex bg-white/5 rounded-2xl p-1 border border-white/5">

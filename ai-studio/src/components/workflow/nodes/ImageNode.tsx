@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { NodeProps, useReactFlow, Node } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { NodeData } from '../types';
@@ -295,16 +296,16 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   };
 
   const ratiosData = [
-    { label: '1:1', value: '1:1', icon: 'w-[14px] h-[14px]' },
-    { label: '9:16', value: '9:16', icon: 'w-[10px] h-[18px]' },
-    { label: '16:9', value: '16:9', icon: 'w-[18px] h-[10px]' },
-    { label: '3:4', value: '3:4', icon: 'w-[12px] h-[16px]' },
-    { label: '4:3', value: '4:3', icon: 'w-[16px] h-[12px]' },
-    { label: '3:2', value: '3:2', icon: 'w-[18px] h-[12px]' },
-    { label: '2:3', value: '2:3', icon: 'w-[12px] h-[18px]' },
-    { label: '5:4', value: '5:4', icon: 'w-[16px] h-[13px]' },
-    { label: '4:5', value: '4:5', icon: 'w-[13px] h-[16px]' },
-    { label: '21:9', value: '21:9', icon: 'w-[20px] h-[9px]' },
+    { label: '1:1', value: '1:1', icon: 'w-[14px] h-[14px]', iconLarge: 'w-[20px] h-[20px]' },
+    { label: '9:16', value: '9:16', icon: 'w-[10px] h-[18px]', iconLarge: 'w-[14px] h-[24px]' },
+    { label: '16:9', value: '16:9', icon: 'w-[18px] h-[10px]', iconLarge: 'w-[24px] h-[14px]' },
+    { label: '3:4', value: '3:4', icon: 'w-[12px] h-[16px]', iconLarge: 'w-[16px] h-[22px]' },
+    { label: '4:3', value: '4:3', icon: 'w-[16px] h-[12px]', iconLarge: 'w-[22px] h-[16px]' },
+    { label: '3:2', value: '3:2', icon: 'w-[18px] h-[12px]', iconLarge: 'w-[24px] h-[16px]' },
+    { label: '2:3', value: '2:3', icon: 'w-[12px] h-[18px]', iconLarge: 'w-[16px] h-[24px]' },
+    { label: '5:4', value: '5:4', icon: 'w-[16px] h-[13px]', iconLarge: 'w-[22px] h-[18px]' },
+    { label: '4:5', value: '4:5', icon: 'w-[13px] h-[16px]', iconLarge: 'w-[18px] h-[22px]' },
+    { label: '21:9', value: '21:9', icon: 'w-[20px] h-[9px]', iconLarge: 'w-[28px] h-[12px]' },
   ];
 
   const qualityValue = data.config.quality || 'standard';
@@ -373,71 +374,71 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
             </span>
           </button>
 
-          <div className="absolute bottom-full right-0 mb-4 w-[340px] bg-[#1a1c24] border border-white/10 rounded-3xl shadow-2xl scale-0 group-hover/config:scale-100 transition-all origin-bottom-right z-[500] overflow-hidden backdrop-blur-xl text-left">
-            <div className="p-5 space-y-5">
-              <div className="space-y-3">
-                <div className="text-sm font-bold text-slate-500 pl-1">画质</div>
-                <div className="flex bg-white/5 rounded-2xl p-1 border border-white/5">
-                  {(['512p', 'standard', 'hd', '4k'] as const).map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => setQuality(q)}
-                      className={cn(
-                        "flex-1 py-2.5 text-sm font-bold uppercase transition-all rounded-xl",
-                        qualityValue === q
-                          ? "bg-white/10 text-white shadow-xl"
-                          : "text-slate-500 hover:text-slate-300"
-                      )}
-                    >
-                      {q === '512p' ? '512P' : q === 'standard' ? '1K' : q === 'hd' ? '2K' : '4K'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="text-sm font-bold text-slate-500 pl-1">比例</div>
-                <div className="bg-white/5 rounded-2xl p-3 border border-white/5 flex gap-4 items-center">
-                  <button
-                    onClick={() => setAspectRatio(null)}
-                    className={cn(
-                      "w-16 h-16 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all shrink-0",
-                      !data.config.aspectRatio
-                        ? "bg-white/10 text-white border border-white/10 shadow-xl"
-                        : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-                    )}
-                  >
-                    <Maximize2 size={18} />
-                    <span className="text-[10px] font-bold">自适应</span>
-                  </button>
-
-                  <div className="w-px h-10 bg-white/5 shrink-0" />
-
-                  <div className="grid grid-cols-5 gap-2 flex-grow">
-                    {ratiosData.map((r) => (
+          <div className="absolute bottom-full right-0 mb-4 w-[340px] bg-[#1a1c24] border border-white/10 rounded-3xl shadow-2xl scale-0 group-hover/config:scale-100 transition-all origin-bottom-right z-[100] overflow-hidden backdrop-blur-xl text-left">
+              <div className="p-5 space-y-5">
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-slate-500 pl-1">画质</div>
+                  <div className="flex bg-white/5 rounded-2xl p-1 border border-white/5">
+                    {(['512p', 'standard', 'hd', '4k'] as const).map((q) => (
                       <button
-                        key={r.label}
-                        onClick={() => setAspectRatio(r.value)}
+                        key={q}
+                        onClick={() => setQuality(q)}
                         className={cn(
-                          "aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all",
-                          data.config.aspectRatio === r.value
-                            ? "bg-white/10 text-white border border-white/10 shadow-lg"
-                            : "text-slate-600 hover:text-slate-400 hover:bg-white/5"
+                          "flex-1 py-2.5 text-sm font-bold uppercase transition-all rounded-xl",
+                          qualityValue === q
+                            ? "bg-white/10 text-white shadow-xl"
+                            : "text-slate-500 hover:text-slate-300"
                         )}
                       >
-                        <div className={cn(
-                          "border-2 rounded-[1.5px] transition-all",
-                          r.icon,
-                          data.config.aspectRatio === r.value ? "border-white" : "border-current"
-                        )} />
-                        <span className="text-[8px] font-bold">{r.label}</span>
+                        {q === '512p' ? '512P' : q === 'standard' ? '1K' : q === 'hd' ? '2K' : '4K'}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-slate-500 pl-1">比例</div>
+                  <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex gap-4 items-center">
+                    <button
+                      onClick={() => setAspectRatio(null)}
+                      className={cn(
+                        "w-16 h-16 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shrink-0",
+                        !data.config.aspectRatio
+                          ? "bg-white/10 text-white border border-white/10 shadow-xl"
+                          : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                      )}
+                    >
+                      <Maximize2 size={20} />
+                      <span className="text-xs font-bold">自适应</span>
+                    </button>
+
+                    <div className="w-px h-12 bg-white/5 shrink-0" />
+
+                    <div className="grid grid-cols-5 gap-2 flex-grow">
+                      {ratiosData.map((r) => (
+                        <button
+                          key={r.label}
+                          onClick={() => setAspectRatio(r.value)}
+                          className={cn(
+                            "aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all",
+                            data.config.aspectRatio === r.value
+                              ? "bg-white/10 text-white border border-white/10 shadow-lg"
+                              : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                          )}
+                        >
+                          <div className={cn(
+                            "border-2 rounded transition-all",
+                            r.iconLarge,
+                            data.config.aspectRatio === r.value ? "border-white" : "border-current"
+                          )} />
+                          <span className="text-[9px] font-bold">{r.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
         </div>
       )}
     >

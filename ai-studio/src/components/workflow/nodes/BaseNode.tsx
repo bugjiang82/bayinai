@@ -9,6 +9,7 @@ import {
   RefreshCw, 
   Download, 
   Maximize2, 
+  Minimize2,
   ChevronUp,
   Sparkles,
   Send,
@@ -71,6 +72,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const [isPickingParent, setIsPickingParent] = useState(false);
   const [showMentions, setShowMentions] = useState<{ x: number; y: number; index: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [previewScale, setPreviewScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDraggingImage, setIsDraggingImage] = useState(false);
@@ -347,7 +349,10 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
 
       {selected && !data.isUploaded && !isDragging && !isMultiSelected && (
         <div 
-          className="absolute left-1/2 -translate-x-1/2 w-[720px] bg-[#121212] border border-white/10 rounded-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] flex flex-col z-50 overflow-visible"
+          className={cn(
+            "absolute left-1/2 -translate-x-1/2 w-[720px] bg-[#121212] border border-white/10 rounded-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] flex flex-col z-50 overflow-visible transition-all duration-300",
+            isExpanded ? "max-h-[600px]" : "max-h-auto"
+          )}
           style={{ top: 'calc(100% + 4px)' }} 
         >
           <div className="flex items-center justify-between p-3">
@@ -404,18 +409,30 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                   </button>
                 </>
               )}
+              <button 
+                onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                className={cn(
+                  "w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer z-[100] border border-white/10",
+                  isExpanded 
+                    ? "text-indigo-400 hover:text-white border-indigo-500/30" 
+                    : "text-slate-500 hover:text-white"
+                )}
+                title={isExpanded ? "Collapse" : "Expand"}
+              >
+                {isExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+              </button>
             </div>
           </div>
 
           <div className="px-6 py-4 relative border-b border-white/5">
-            {showMentions && referencedNodes.length > 0 && (
+            {showMentions && referencedNodes.length > 0 && createPortal(
               <div 
-                className="absolute z-[100] w-64 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
-                style={{ bottom: '100%', left: 24, marginBottom: 12 }}
+                className="fixed z-[2000] w-64 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+                style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
               >
-                <div className="p-3 border-b border-white/5 text-[10px] uppercase font-black text-slate-500 tracking-wider flex items-center justify-between">
-                  <span>Select reference node</span>
-                  <span className="bg-white/5 px-1.5 py-0.5 rounded text-slate-600">Referenced Nodes</span>
+                <div className="p-3 border-b border-white/5 text-[10px] font-black text-slate-500 tracking-wider flex items-center justify-between">
+                  <span>选择引用节点</span>
+                  <span className="bg-white/5 px-1.5 py-0.5 rounded text-slate-600">引用节点</span>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
                   {referencedNodes.map((node) => (
@@ -429,28 +446,29 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">
-                          @{node.data.label || `node_${node.id.slice(0,4)}`}
+                          @{node.data.label || `节点_${node.id.slice(0,4)}`}
                         </span>
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-black">
-                          {node.type === 'image' ? 'Image Node' : 'Video Node'}
+                        <span className="text-[10px] text-slate-500 tracking-wider font-black">
+                          {node.type === 'image' ? '图片节点' : '视频节点'}
                         </span>
                       </div>
                     </button>
                   ))}
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
             <textarea
-              rows={1}
+              rows={isExpanded ? 15 : 5}
               style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
-              className="w-full bg-transparent text-xl text-slate-200 focus:outline-none active:outline-none transition-all resize-none placeholder:text-slate-600 font-medium leading-relaxed min-h-[56px]"
+              className="w-full bg-transparent text-xl text-slate-200 focus:outline-none active:outline-none transition-all resize-none placeholder:text-slate-600 font-medium leading-relaxed"
               placeholder="描述您想要生成的内容。使用 @ 引用节点。"
               value={data.prompt}
               onChange={handlePromptChange}
             />
           </div>
 
-          <div className="flex items-center justify-between px-4 pb-4 pt-3 relative">
+          <div className="flex items-center justify-between px-4 pb-4 pt-3 bg-[#121212] border-t border-white/5 rounded-b-2xl">
             <div className="flex items-center gap-4">
               <div className="relative group/model">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">
@@ -473,13 +491,13 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                 </div>
                 
                 <div className="absolute bottom-full left-0 mb-2 w-48 bg-[#1a1c24] border border-white/10 rounded-xl shadow-2xl scale-0 group-hover/model:scale-100 transition-all origin-bottom-left z-[100] overflow-hidden backdrop-blur-xl">
-                  <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/5">
-                    Select Model
+                  <div className="px-3 py-2 text-[10px] font-bold text-slate-500 tracking-widest border-b border-white/5">
+                    选择模型
                   </div>
                   <div className="p-1">
                     {[
-                      { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image', type: ['image'] },
-                      { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash Image', type: ['image'] },
+                      { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash 图片', type: ['image'] },
+                      { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash 图片', type: ['image'] },
                       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', type: ['text'] },
                       { id: 'wan2.7-r2v', name: '万相 2.7 (图生视频)', type: ['video'] },
                       { id: 'wan2.7-t2v', name: '万相 2.7 (文生视频)', type: ['video'] },

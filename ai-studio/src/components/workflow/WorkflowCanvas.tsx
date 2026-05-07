@@ -38,9 +38,20 @@ import {
   Send,
   Home,
   History,
-  RefreshCw
+  RefreshCw,
+  Save,
+  FolderOpen,
+  FileText,
+  Trash2,
+  X,
+  Check,
+  AlertCircle,
+  ArrowLeft,
+  Clock,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 const DraggingContext = createContext<boolean>(false);
 const MultiSelectContext = createContext<boolean>(false);
@@ -70,7 +81,12 @@ function isValidImageSource(src: string | null | undefined): boolean {
 }
 
 
-const WorkflowCanvas: React.FC = () => {
+interface WorkflowCanvasProps {
+  initialProjectId?: string | null;
+}
+
+const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => {
+  const router = useRouter();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [menu, setMenu] = useState<{ x: number; y: number; canvasX: number; canvasY: number; sourceNode?: string; sourceHandle?: string } | null>(null);
@@ -89,12 +105,29 @@ const WorkflowCanvas: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
+  
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [saveProjectName, setSaveProjectName] = useState('');
+  const [saveProjectDescription, setSaveProjectDescription] = useState('');
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [loadLoading, setLoadLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([
     { role: 'model', content: '你好！我是八音画布助手。开始创建你的作品吧，可以通过添加节点或直接告诉我你想要什么。' }
   ]);
   const [assistantInput, setAssistantInput] = useState('');
   const [isAssistantLoading, setIsAssistantLoading] = useState(false);
+
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(initialProjectId || null);
+  const [currentProjectName, setCurrentProjectName] = useState<string>('未命名项目');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
     const fetchCredits = async () => {
@@ -110,6 +143,25 @@ const WorkflowCanvas: React.FC = () => {
     };
     fetchCredits();
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as unknown as Element;
+      const menuContainer = document.querySelector('.menu-container-workspace');
+      const menuButton = document.querySelector('.menu-button-workspace');
+      
+      if (showMenu && menuContainer && menuButton && target) {
+        if (!menuContainer.contains(target) && !menuButton.contains(target)) {
+          setShowMenu(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu]);
 
   useEffect(() => {
     if (showHistoryDialog) {
@@ -167,6 +219,262 @@ const WorkflowCanvas: React.FC = () => {
 
     setNodes((nds) => nds.concat(newNode));
     setShowHistoryDialog(false);
+  };
+
+  const showToast = (type: 'success' | 'error', message: string) => {
+    setToastMessage({ type, message });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleSaveProject = async () => {
+    if (!saveProjectName.trim()) {
+      showToast('error', '请输入项目名称');
+      return;
+    }
+
+    setSaveLoading(true);
+    try {
+      const canvasData = {
+        nodes: nodes.map(node => ({
+          ...node,
+          data: {
+            ...node.data,
+          },
+        })),
+        edges: edges.map(edge => ({
+          ...edge,
+        })),
+      };
+
+      const response = await fetch('/api/workflow/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: saveProjectName,
+          description: saveProjectDescription,
+          canvasData,
+          isDraft: false,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.code === 0) {
+        showToast('success', '项目保存成功');
+        setShowSaveDialog(false);
+        setSaveProjectName('');
+        setSaveProjectDescription('');
+        setCurrentProjectId(result.data.project.id);
+        setCurrentProjectName(saveProjectName);
+        setLastSaved(new Date());
+        setHasUnsavedChanges(false);
+      } else {
+        showToast('error', result.message || '保存失败');
+      }
+    } catch (err) {
+      console.error('Save project error:', err);
+      showToast('error', '保存失败，请稍后重试');
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const loadProjects = async () => {
+    setProjectsLoading(true);
+    try {
+      const response = await fetch('/api/workflow/projects');
+      const result = await response.json();
+      if (result.code === 0) {
+        setProjects(result.data.projects);
+      } else {
+        showToast('error', result.message || '获取项目列表失败');
+      }
+    } catch (err) {
+      console.error('Load projects error:', err);
+      showToast('error', '获取项目列表失败');
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showLoadDialog) {
+      loadProjects();
+    }
+  }, [showLoadDialog]);
+
+  const handleLoadProject = async (projectId: string) => {
+    setLoadLoading(true);
+    try {
+      const response = await fetch(`/api/workflow/projects/${projectId}`);
+      const result = await response.json();
+      
+      if (result.code === 0) {
+        const { canvasData, name } = result.data.project;
+        if (canvasData.nodes) {
+          setNodes(canvasData.nodes);
+        }
+        if (canvasData.edges) {
+          setEdges(canvasData.edges);
+        }
+        setCurrentProjectId(projectId);
+        setCurrentProjectName(name || '未命名项目');
+        setHasUnsavedChanges(false);
+        showToast('success', '项目加载成功');
+        setShowLoadDialog(false);
+      } else {
+        showToast('error', result.message || '加载项目失败');
+      }
+    } catch (err) {
+      console.error('Load project error:', err);
+      showToast('error', '加载项目失败');
+    } finally {
+      setLoadLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (initialProjectId) {
+      handleLoadProject(initialProjectId);
+    } else {
+      createNewProject();
+    }
+  }, [initialProjectId]);
+
+  const createNewProject = async () => {
+    try {
+      const response = await fetch('/api/workflow/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: '未命名项目',
+          description: '',
+          canvasData: { nodes: [], edges: [] },
+          isDraft: false,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.code === 0) {
+        setCurrentProjectId(result.data.project.id);
+        setCurrentProjectName('未命名项目');
+        setHasUnsavedChanges(false);
+      }
+    } catch (err) {
+      console.error('Create new project error:', err);
+    }
+  };
+
+  const autoSaveProject = useCallback(async () => {
+    if (!hasUnsavedChanges || isSaving) return;
+    
+    setIsSaving(true);
+    try {
+      const canvasData = {
+        nodes: nodes.map(node => ({ ...node })),
+        edges: edges.map(edge => ({ ...edge })),
+      };
+
+      if (currentProjectId) {
+        await fetch(`/api/workflow/projects/${currentProjectId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: currentProjectName,
+            canvasData,
+            isDraft: false,
+          }),
+        });
+      }
+      
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+    } catch (err) {
+      console.error('Auto-save error:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [hasUnsavedChanges, isSaving, nodes, edges, currentProjectId, currentProjectName]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (hasUnsavedChanges && currentProjectId) {
+        autoSaveProject();
+      }
+    }, 3000);
+
+    return () => clearTimeout(timeoutId);
+  }, [hasUnsavedChanges, currentProjectId, autoSaveProject]);
+
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [nodes, edges]);
+
+  const handleProjectNameChange = (name: string) => {
+    const cleanedName = name
+      .replace(/[<>:"/\\|?*]/g, '')
+      .trim();
+    
+    if (cleanedName.length > 0) {
+      setCurrentProjectName(cleanedName);
+      setHasUnsavedChanges(true);
+    }
+  };
+
+  const handleReturnToWorkspace = async () => {
+    if (hasUnsavedChanges && currentProjectId) {
+      setIsSaving(true);
+      try {
+        const canvasData = {
+          nodes: nodes.map(node => ({ ...node })),
+          edges: edges.map(edge => ({ ...edge })),
+        };
+
+        await fetch(`/api/workflow/projects/${currentProjectId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: currentProjectName,
+            canvasData,
+            isDraft: false,
+          }),
+        });
+        
+        showToast('success', '项目已保存');
+      } catch (err) {
+        console.error('Save before exit error:', err);
+        showToast('error', '保存失败');
+      } finally {
+        setIsSaving(false);
+        router.push('/workflow/workspace');
+      }
+    } else {
+      router.push('/workflow/workspace');
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (!confirm('确定要删除这个项目吗？')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/workflow/projects/${projectId}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+      
+      if (result.code === 0) {
+        showToast('success', '项目已删除');
+        loadProjects();
+      } else {
+        showToast('error', result.message || '删除失败');
+      }
+    } catch (err) {
+      console.error('Delete project error:', err);
+      showToast('error', '删除失败');
+    }
   };
 
   const onConnect: OnConnect = useCallback(
@@ -610,17 +918,26 @@ const WorkflowCanvas: React.FC = () => {
               <button className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all">
                 <Layers size={20} />
               </button>
-              <button className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all">
-                <Sparkles size={20} />
-              </button>
-              <button className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all">
-                <ImageIcon size={20} />
-              </button>
               <button
                 onClick={() => setShowHistoryDialog(true)}
                 className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all"
               >
                 <History size={20} />
+              </button>
+              <div className="w-8 h-px bg-white/5 mx-auto my-1" />
+              <button
+                onClick={() => setShowSaveDialog(true)}
+                className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all"
+                title="保存项目"
+              >
+                <Save size={20} />
+              </button>
+              <button
+                onClick={() => setShowLoadDialog(true)}
+                className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 rounded-2xl transition-all"
+                title="加载项目"
+              >
+                <FolderOpen size={20} />
               </button>
               <div className="mt-auto">
                 <button className="w-12 h-12 bg-white/5 flex items-center justify-center text-slate-100 font-black rounded-2xl">
@@ -631,19 +948,103 @@ const WorkflowCanvas: React.FC = () => {
           </Panel>
 
           <Panel position="top-left" className="pointer-events-none mt-4 ml-4">
-            <button
-              onClick={() => setShowHomeDialog(true)}
-              className="flex items-center gap-3 pointer-events-auto hover:opacity-80 transition-opacity"
-            >
-               <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20">
-                 <Sparkles size={16} className="text-white" />
-               </div>
-               <span className="text-sm font-bold text-white tracking-tight">八音-六维画布工作台</span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="menu-button-workspace flex items-center gap-3 pointer-events-auto hover:opacity-80 transition-opacity"
+              >
+                 <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20">
+                   <Sparkles size={16} className="text-white" />
+                 </div>
+                 <span className="text-sm font-bold text-white tracking-tight">八音-六维画布工作台</span>
+              </button>
+              
+              <AnimatePresence>
+                {showMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    className="menu-container-workspace pointer-events-auto absolute top-full left-0 mt-2 bg-[#13141c]/95 backdrop-blur-3xl border border-white/10 rounded-xl shadow-xl py-2 w-48 z-50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        router.push('/');
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-300 hover:text-white hover:bg-white/15 hover:scale-[1.02] active:scale-[0.98] active:bg-white/20 rounded-lg transition-all duration-150"
+                    >
+                      <Home size={16} />
+                      <span>返回首页</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        handleReturnToWorkspace();
+                      }}
+                      disabled={isSaving}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-300 hover:text-white hover:bg-white/15 hover:scale-[1.02] active:scale-[0.98] active:bg-white/20 rounded-lg transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSaving ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <ArrowLeft size={16} />
+                      )}
+                      <span>返回工作空间</span>
+                    </button>
+                    <div className="border-t border-white/10 my-2" />
+                    <div className="px-4 py-2">
+                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        {currentProjectName}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        {hasUnsavedChanges ? (
+                          <>
+                            <div className="w-2 h-2 rounded-full bg-amber-500" />
+                            <span>未保存</span>
+                          </>
+                        ) : lastSaved ? (
+                          <>
+                            <Clock size={12} />
+                            <span>已保存 {lastSaved.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-2 h-2 rounded-full bg-green-500" />
+                            <span>已保存</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </Panel>
 
           <Panel position="top-center" className="mt-4 pointer-events-none">
             <div className="flex items-center gap-3 bg-[#13141c]/90 backdrop-blur-3xl border border-white/10 rounded-2xl px-4 py-2 shadow-xl pointer-events-auto">
+              <input
+                type="text"
+                value={currentProjectName}
+                onChange={(e) => handleProjectNameChange(e.target.value)}
+                onKeyDown={(e) => {
+                  const target = e.target as HTMLInputElement;
+                  if (e.key === 'Enter') {
+                    target.blur();
+                  } else if (e.key === 'Escape') {
+                    setCurrentProjectName(currentProjectName || '未命名项目');
+                    target.blur();
+                  }
+                }}
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 w-40 lg:w-56 transition-all"
+                placeholder="未命名项目"
+                maxLength={50}
+              />
+              <div className="w-px h-4 bg-white/10" />
               <div className="flex items-center gap-2 text-slate-400">
                 <Sparkles size={14} className="text-amber-500" />
                 <span className="text-sm font-bold text-white">{userCredits}</span>
@@ -740,69 +1141,67 @@ const WorkflowCanvas: React.FC = () => {
         {menu && (
           <div
             style={{ top: menu.y, left: menu.x, transform: 'translateX(-50%)' }}
-            className="fixed z-[1000] bg-[#1a1c24] border border-white/10 rounded-2xl shadow-[0_20px_80px_rgba(0,0,0,0.8)] p-2 w-[240px] backdrop-blur-3xl overflow-hidden"
+            className="fixed z-[1000] bg-[#1a1c24] border border-white/10 rounded-2xl shadow-[0_20px_80px_rgba(0,0,0,0.8)] p-1.5 w-[220px] backdrop-blur-3xl overflow-hidden"
           >
-              <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-60">
+              <div className="px-2.5 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider opacity-70">
                 添加节点
               </div>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 <button
                   onClick={() => addNode('text', menu.canvasX, menu.canvasY, menu.sourceNode, menu.sourceHandle)}
-                  className="w-full flex items-center gap-3 px-3 py-3 hover:bg-white/5 rounded-xl transition-all group text-left"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 hover:bg-white/5 rounded-lg transition-all group text-left"
                 >
-                  <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
-                    <Type size={18} className="text-indigo-400 group-hover:text-white" />
+                  <div className="w-9 h-9 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                    <Type size={16} className="text-slate-400 group-hover:text-white" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-200">文本</span>
-                    <span className="text-[10px] text-slate-500 font-medium tracking-tight">脚本、广告、文案</span>
+                    <span className="text-xs font-medium text-slate-300">文本</span>
+                    <span className="text-[10px] text-slate-500">脚本、广告、文案</span>
                   </div>
                 </button>
 
                 <button
                   onClick={() => addNode('image', menu.canvasX, menu.canvasY, menu.sourceNode, menu.sourceHandle)}
-                  className="w-full flex items-center gap-3 px-3 py-3 hover:bg-white/5 rounded-xl transition-all group text-left"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 hover:bg-white/5 rounded-lg transition-all group text-left"
                 >
-                  <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
-                    <ImageIcon size={18} className="text-slate-400 group-hover:text-white" />
+                  <div className="w-9 h-9 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                    <ImageIcon size={16} className="text-slate-400 group-hover:text-white" />
                   </div>
-                  <span className="text-sm font-bold text-slate-200">图片</span>
+                  <span className="text-xs font-medium text-slate-300">图片</span>
                 </button>
 
                 <button
                   onClick={() => addNode('video', menu.canvasX, menu.canvasY, menu.sourceNode, menu.sourceHandle)}
-                  className="w-full flex items-center gap-3 px-3 py-3 hover:bg-white/5 rounded-xl transition-all group text-left"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 hover:bg-white/5 rounded-lg transition-all group text-left"
                 >
-                  <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
-                    <VideoIcon size={18} className="text-slate-400 group-hover:text-white" />
+                  <div className="w-9 h-9 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                    <VideoIcon size={16} className="text-slate-400 group-hover:text-white" />
                   </div>
-                  <span className="text-sm font-bold text-slate-200">视频</span>
+                  <span className="text-xs font-medium text-slate-300">视频</span>
                 </button>
 
                 <button
                   onClick={() => addNode('image-edit', menu.canvasX, menu.canvasY, menu.sourceNode, menu.sourceHandle)}
-                  className="w-full flex items-center gap-3 px-3 py-3 hover:bg-white/5 rounded-xl transition-all group text-left"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 hover:bg-white/5 rounded-lg transition-all group text-left"
                 >
-                  <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
-                    <Palette size={18} className="text-slate-400 group-hover:text-white" />
+                  <div className="w-9 h-9 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                    <Palette size={16} className="text-slate-400 group-hover:text-white" />
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-200">图片编辑</span>
-                  </div>
+                  <span className="text-xs font-medium text-slate-300">图片编辑</span>
                 </button>
               </div>
 
-              <div className="mt-3 pt-2 border-t border-white/5">
-                <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest opacity-60">
+              <div className="mt-2 pt-1.5 border-t border-white/5">
+                <div className="px-2.5 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider opacity-70">
                   资源
                 </div>
                 <button
-                  className="w-full flex items-center gap-3 px-3 py-3 hover:bg-white/5 rounded-xl transition-all group text-left opacity-40 cursor-not-allowed"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 hover:bg-white/5 rounded-lg transition-all group text-left opacity-40 cursor-not-allowed"
                 >
-                  <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
-                    <Upload size={18} className="text-slate-400 group-hover:text-white" />
+                  <div className="w-9 h-9 bg-white/5 rounded-lg flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                    <Upload size={16} className="text-slate-400 group-hover:text-white" />
                   </div>
-                  <span className="text-sm font-bold text-slate-200">上传内容</span>
+                  <span className="text-xs font-medium text-slate-300">上传内容</span>
                 </button>
               </div>
           </div>
@@ -911,6 +1310,220 @@ const WorkflowCanvas: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {showSaveDialog && (
+          <div
+            className="fixed inset-0 z-[9998]"
+            onClick={() => setShowSaveDialog(false)}
+          >
+            <div
+              className="absolute bg-[#1a1c24] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+              style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '450px' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center">
+                    <Save size={16} className="text-indigo-400" />
+                  </div>
+                  <span className="text-sm font-bold text-white">保存项目</span>
+                </div>
+                <button
+                  onClick={() => setShowSaveDialog(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    项目名称 *
+                  </label>
+                  <input
+                    type="text"
+                    value={saveProjectName}
+                    onChange={(e) => setSaveProjectName(e.target.value)}
+                    placeholder="输入项目名称..."
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    项目描述
+                  </label>
+                  <textarea
+                    value={saveProjectDescription}
+                    onChange={(e) => setSaveProjectDescription(e.target.value)}
+                    placeholder="输入项目描述（可选）..."
+                    rows={3}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <FileText size={12} />
+                    <span>{nodes.length} 个节点, {edges.length} 条连接</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/10">
+                <button
+                  onClick={() => setShowSaveDialog(false)}
+                  className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveProject}
+                  disabled={saveLoading}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {saveLoading ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>保存中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={14} />
+                      <span>保存</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showLoadDialog && (
+          <div
+            className="fixed inset-0 z-[9998]"
+            onClick={() => setShowLoadDialog(false)}
+          >
+            <div
+              className="absolute bg-[#1a1c24] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+              style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '500px', maxHeight: '80vh' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center">
+                    <FolderOpen size={16} className="text-indigo-400" />
+                  </div>
+                  <span className="text-sm font-bold text-white">加载项目</span>
+                </div>
+                <button
+                  onClick={() => setShowLoadDialog(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 120px)' }}>
+                {projectsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <RefreshCw size={24} className="animate-spin text-indigo-500/70" />
+                      <span className="text-xs text-slate-400">加载中...</span>
+                    </div>
+                  </div>
+                ) : projects.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <FolderOpen size={48} className="text-slate-600 mb-3" />
+                    <p className="text-sm text-slate-400">暂无保存的项目</p>
+                    <p className="text-xs text-slate-500 mt-1">点击左侧保存按钮保存当前画布</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {projects.map((project: any) => (
+                      <div
+                        key={project.id}
+                        className="flex items-center justify-between p-4 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group"
+                        onClick={() => handleLoadProject(project.id)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center">
+                            <FileText size={20} className="text-slate-400" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-white">{project.name}</div>
+                            <div className="text-xs text-slate-500">
+                              {project.description || '无描述'}
+                            </div>
+                            <div className="text-xs text-slate-600 mt-1">
+                              创建于 {new Date(project.createdAt).toLocaleDateString('zh-CN')}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteProject(project.id);
+                            }}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                            title="删除项目"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleLoadProject(project.id);
+                            }}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-colors"
+                            title="加载项目"
+                          >
+                            <Check size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/10">
+                <button
+                  onClick={() => setShowLoadDialog(false)}
+                  className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl backdrop-blur-xl bg-[#13141c]/95 border transition-all duration-300 ${
+              toastMessage.type === 'success'
+                ? 'border-green-500/30'
+                : 'border-red-500/30'
+            }`}
+          >
+            {toastMessage.type === 'success' ? (
+              <Check size={16} className="text-green-400" />
+            ) : (
+              <AlertCircle size={16} className="text-red-400" />
+            )}
+            <span className={`text-sm font-medium ${
+              toastMessage.type === 'success' ? 'text-green-300' : 'text-red-300'
+            }`}>
+              {toastMessage.message}
+            </span>
+          </motion.div>
         )}
       </div>
       </MultiSelectContext.Provider>

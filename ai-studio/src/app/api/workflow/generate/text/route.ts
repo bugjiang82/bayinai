@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { success, error } from "@/types/api";
-import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "" 
-});
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,28 +19,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error("请输入提示词"), { status: 400 });
     }
 
-    const contents: any[] = [{ role: "user", parts: [{ text: prompt }] }];
-    
-    if (image_base64) {
-      const base64Data = image_base64.split(",")[1] || image_base64;
-      contents[0].parts.push({
-        inlineData: {
-          mimeType: "image/png",
-          data: base64Data
-        }
-      });
+    if (!OPENROUTER_API_KEY) {
+      return NextResponse.json(error("OpenRouter API Key 未配置"), { status: 500 });
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: contents,
+    const messages: any[] = [{ role: "user", content: prompt }];
+
+    if (image_base64) {
+      messages[0].content = {
+        type: "text",
+        text: prompt
+      };
+    }
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: messages,
+        max_tokens: 1024,
+        temperature: 0.7,
+      }),
     });
 
-    const text = response.text || "未生成内容";
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenRouter API error:", response.status, errorText);
+      return NextResponse.json(error(`API 调用失败: ${response.status}`), { status: 500 });
+    }
+
+    const result = await response.json();
+    const text = result.choices?.[0]?.message?.content || "未生成内容";
 
     return NextResponse.json(success({ text }, "生成成功"));
   } catch (err) {
     const message = err instanceof Error ? err.message : "生成失败";
+    console.error("Text generation error:", err);
     return NextResponse.json(error(message), { status: 500 });
   }
 }
