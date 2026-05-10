@@ -77,6 +77,7 @@ export default function UnifiedImagePage() {
   const [thinkingLevel, setThinkingLevel] = useState("minimal");
   const [images, setImages] = useState<CanvasImage[]>([]);
   const [credits, setCredits] = useState(100);
+  const [creditPolicies, setCreditPolicies] = useState<Record<string, { cost: number; unit: string }>>({});
 
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [referenceWeight, setReferenceWeight] = useState(0.7);
@@ -121,6 +122,21 @@ export default function UnifiedImagePage() {
       }
     };
     fetchCredits();
+  }, []);
+
+  useEffect(() => {
+    const fetchPolicies = async () => {
+      try {
+        const res = await fetch("/api/credits/policies");
+        const json = await res.json();
+        if (json.success && json.data) {
+          setCreditPolicies(json.data);
+        }
+      } catch {
+        // 忽略错误，使用默认积分显示
+      }
+    };
+    fetchPolicies();
   }, []);
 
   useEffect(() => {
@@ -284,16 +300,21 @@ export default function UnifiedImagePage() {
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const getCreditCost = useCallback((m: string) => {
+    const policyKey = mode === "image-to-image" ? `image-to-image-${m}` : `text-to-image-${m}`;
+    if (creditPolicies[policyKey]) {
+      return creditPolicies[policyKey].cost;
+    }
+    if (m === "flash") return 1;
+    if (m === "image2") return 50;
+    return 3;
+  }, [creditPolicies, mode]);
+
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;
     if (mode === "image-to-image" && referenceImages.length === 0) return;
 
-    const getCost = (m: string) => {
-      if (m === "flash") return 1;
-      if (m === "image2") return 50;
-      return 3;
-    };
-    const creditsPerImage = getCost(model);
+    const creditsPerImage = getCreditCost(model);
     const totalCost = creditsPerImage;
     if (credits < totalCost) return;
 
@@ -575,9 +596,9 @@ export default function UnifiedImagePage() {
                 消耗{" "}
                 <span className={cn(
                   "font-medium",
-                  credits > 0 && credits < (model === "image2" ? 50 : model === "flash" ? 1 : 3) ? "text-red-400" : "text-zinc-400"
+                  credits > 0 && credits < getCreditCost(model) ? "text-red-400" : "text-zinc-400"
                 )}>
-                  {model === "image2" ? 50 : model === "flash" ? 1 : 3}
+                  {getCreditCost(model)}
                 </span>{" "}
                 积分/个
               </span>
@@ -593,7 +614,7 @@ export default function UnifiedImagePage() {
               disabled={
                 !prompt.trim() ||
                 (mode === "image-to-image" && referenceImages.length === 0) ||
-                credits < (model === "image2" ? 50 : model === "flash" ? 1 : 3) ||
+                credits < getCreditCost(model) ||
                 isGenerating
               }
             >
@@ -609,7 +630,7 @@ export default function UnifiedImagePage() {
                 请上传参考图片
               </p>
             )}
-            {prompt.trim() && credits < (model === "image2" ? 50 : model === "flash" ? 1 : 3) && (
+            {prompt.trim() && credits < getCreditCost(model) && (
               <p className="text-xs text-red-400/80 text-center mt-2">
                 积分不足，请充值后重试
               </p>

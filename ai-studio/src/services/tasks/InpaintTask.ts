@@ -4,6 +4,7 @@ import path from "path";
 import type { GenType } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult } from "./GenerateService";
 import { BaseGenerateService } from "./BaseGenerateService";
+import { getGenerationCost } from "../creditPolicy.service";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -14,18 +15,9 @@ const MODEL_MAP: Record<string, string> = {
   pro: "gemini-3-pro-image-preview",
 };
 
-const COST_MAP: Record<string, number> = {
-  flash: 2,
-  pro: 5,
-};
-
 export class InpaintTask extends BaseGenerateService {
   getType(): GenType {
     return "INPAINT";
-  }
-
-  getCost(model?: string): number {
-    return COST_MAP[model || "flash"] || COST_MAP.flash;
   }
 
   async execute(params: GenerateTaskParams): Promise<GenerateTaskResult> {
@@ -50,7 +42,7 @@ export class InpaintTask extends BaseGenerateService {
     } = params;
 
     const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
-    const cost = this.getCost(model);
+    const cost = await getGenerationCost("edit", model);
     const isProModel = modelName.includes("pro");
 
     // 创建生成记录
@@ -61,7 +53,7 @@ export class InpaintTask extends BaseGenerateService {
       styleStrength,
       guidanceScale,
       aspectRatio,
-    }, originalImage);
+    }, originalImage, cost);
 
     try {
       // 构建专业的 Inpainting Prompt

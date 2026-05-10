@@ -58,6 +58,7 @@ model User {
   ownedTeams    Team[]           @relation("TeamOwner")
   teamMembers   TeamMember[]
   templates     Template[]
+  canvasProjects CanvasProject[]
 
   @@index([email])
   @@index([phone])
@@ -218,4 +219,20 @@ model CanvasProject {
   @@index([userId])
   @@index([isDraft])
   @@index([createdAt])
+}
+
+model CreditPolicy {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  cost        Int      @default(1)
+  unit        String   @default("次")
+  category    String   @default("image")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@index([category])
 }

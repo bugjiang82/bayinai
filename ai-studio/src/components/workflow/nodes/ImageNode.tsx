@@ -10,26 +10,46 @@ import { ImageIcon, Layout, Zap, Monitor, Smartphone, Square, RefreshCw, Upload,
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
-// 模型积分消耗配置
-const MODEL_COST_MAP: Record<string, { base: number; type: "fixed" | "per-second" }> = {
-  "gemini-2.5-flash-image": { base: 1, type: "fixed" },
-  "gemini-3.1-flash-image-preview": { base: 1, type: "fixed" },
-};
-
-// 计算积分消耗
-const calculateCost = (data: NodeData): number => {
-  const modelConfig = MODEL_COST_MAP[data.config.model] || { base: 1, type: "fixed" };
-  return modelConfig.base;
-};
+type CreditPolicies = Record<string, { cost: number; unit: string }>;
 
 export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   const { setNodes, getNodes } = useReactFlow<Node<NodeData>>();
   const data = props.data;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState(0);
-  
-  // 计算积分消耗
-  const cost = useMemo(() => calculateCost(data), [data.config.model, data.type]);
+  const [creditPolicies, setCreditPolicies] = useState<CreditPolicies>({});
+
+  useEffect(() => {
+    const fetchPolicies = async () => {
+      try {
+        const res = await fetch("/api/credits/policies");
+        const json = await res.json();
+        if (json.success && json.data) {
+          setCreditPolicies(json.data);
+        }
+      } catch {
+        // 忽略错误，使用默认积分
+      }
+    };
+    fetchPolicies();
+  }, []);
+
+  const getCost = useMemo(() => {
+    return (model: string): number => {
+      const policyKey = `text-to-image-${model}`;
+      if (creditPolicies[policyKey]) {
+        return creditPolicies[policyKey].cost;
+      }
+      const defaultCosts: Record<string, number> = {
+        flash: 1,
+        pro: 3,
+        image2: 50,
+      };
+      return defaultCosts[model] || 1;
+    };
+  }, [creditPolicies]);
+
+  const cost = useMemo(() => getCost(data.config.model || 'flash'), [data.config.model, getCost]);
 
   const handleGenerate = async () => {
     if (data.isGenerating || data.credits < cost) return;
@@ -77,7 +97,6 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
         aspectRatio: data.config.aspectRatio,
         quality: data.config.quality,
         baseImages: baseImages,
-        cost: cost,
       });
       
       console.log("图片URL:", url);

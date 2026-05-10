@@ -5,13 +5,18 @@ import prisma from "@/lib/prisma";
 import type { GenType, GenStatus } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult, GenerateService } from "./GenerateService";
 import { deductCredits } from "../credit.service";
+import { getCostByModelAndType } from "../creditPolicy.service";
 
 export abstract class BaseGenerateService implements GenerateService {
   abstract execute(params: GenerateTaskParams): Promise<GenerateTaskResult>;
   abstract getType(): GenType;
-  abstract getCost(model?: string): number;
 
-  protected async createGenerationRecord(userId: string, prompt: string, params: Record<string, any>, inputUrl?: string): Promise<any> {
+  getCost(model?: string): number {
+    return getCostByModelAndType(this.getType() as any, model);
+  }
+
+  protected async createGenerationRecord(userId: string, prompt: string, params: Record<string, any>, inputUrl?: string, cost?: number): Promise<any> {
+    const generationCost = cost ?? params.cost ?? this.getCost(params.model);
     return await prisma.generation.create({
       data: {
         userId,
@@ -20,7 +25,7 @@ export abstract class BaseGenerateService implements GenerateService {
         prompt,
         params: JSON.stringify(params),
         inputUrl: inputUrl?.substring(0, 255) || null,
-        cost: this.getCost(params.model),
+        cost: generationCost,
       },
     });
   }

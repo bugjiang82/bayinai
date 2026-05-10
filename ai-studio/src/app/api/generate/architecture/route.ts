@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
 import { success, error } from "@/types/api";
+import { getGenerationCost, invalidatePolicyCache } from "@/services/creditPolicy.service";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       throw new Error("用户不存在");
     }
-    const cost = 3;
+    const cost = await getGenerationCost("architecture", model);
     if (user.credits < cost) {
       throw new Error("积分不足");
     }

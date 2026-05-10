@@ -7,6 +7,7 @@ import type { GenType, GenStatus } from "@/types/generation";
 import { TaskFactory } from "./tasks";
 import { deductCredits } from "./credit.service";
 import * as fileService from "./file.service";
+import { getGenerationCost, DEFAULT_POLICIES } from "./creditPolicy.service";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -108,7 +109,8 @@ export async function generateImage(
       // 对于不支持的任务类型，使用旧的实现
       // 这里保留旧的实现以保持向后兼容性
       const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
-      const cost = costParam || COST_MAP[model] || COST_MAP.flash;
+      const costType = genType === "IMAGE_TO_IMAGE" ? "image-to-image" : "text-to-image";
+      const cost = await getGenerationCost(costType, model);
       const isProModel = modelName.includes("pro");
       const isImage2Model = model === "image2";
 

@@ -25,29 +25,44 @@ import { cn } from '../lib/utils';
 import { NodeData } from '../types';
 import { VideoPlayer } from '../../generate/Canvas';
 
-// 模型积分消耗配置
+// 模型积分消耗配置（仅用于默认值，实际积分从后台获取）
 const MODEL_COST_MAP: Record<string, { base: number; type: "fixed" | "per-second" }> = {
   // 图片模型
-  "gemini-2.5-flash-image": { base: 1, type: "fixed" },
-  "gemini-3.1-flash-image-preview": { base: 1, type: "fixed" },
-  
+  "flash": { base: 1, type: "fixed" },
+  "pro": { base: 3, type: "fixed" },
+  "image2": { base: 50, type: "fixed" },
+
   // 文本模型
   "gemini-3-flash-preview": { base: 1, type: "fixed" },
-  
+
   // 视频模型
   "veo-3.1-lite-generate-preview": { base: 50, type: "per-second" },
   "wan2.2-kf2v-flash": { base: 50, type: "per-second" },
 };
 
+type CreditPolicies = Record<string, { cost: number; unit: string }>;
+
 // 计算积分消耗
-const calculateCost = (data: NodeData): number => {
-  const modelConfig = MODEL_COST_MAP[data.config.model] || { base: 1, type: "fixed" };
-  
+const calculateCost = (data: NodeData, creditPolicies: CreditPolicies = {}): number => {
+  const modelId = data.config.model || 'flash';
+
+  const policyKey = data.type === 'video'
+    ? `video-per-second`
+    : data.type === 'image' || data.type === 'image-edit'
+      ? `text-to-image-${modelId}`
+      : `text-to-image-${modelId}`;
+
+  if (creditPolicies[policyKey]) {
+    return creditPolicies[policyKey].cost;
+  }
+
+  const modelConfig = MODEL_COST_MAP[modelId] || { base: 1, type: "fixed" };
+
   if (modelConfig.type === "per-second" && data.type === "video") {
     const duration = Number(data.config.duration?.replace("s", "") || 5);
     return duration * modelConfig.base;
   }
-  
+
   return modelConfig.base;
 };
 
@@ -58,11 +73,11 @@ interface BaseNodeProps extends NodeProps<Node<NodeData>> {
   topContent?: React.ReactNode;
 }
 
-export const BaseNode: React.FC<BaseNodeProps> = ({ 
-  id, 
-  data, 
-  selected, 
-  children, 
+export const BaseNode: React.FC<BaseNodeProps> = ({
+  id,
+  data,
+  selected,
+  children,
   onGenerate,
   renderConfig,
   topContent
@@ -79,14 +94,30 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [creditPolicies, setCreditPolicies] = useState<CreditPolicies>({});
   const viewportRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const isDragging = useDragging();
   const isMultiSelected = useMultiSelect();
   const referencedNodesRef = useRef<Node<NodeData>[]>([]);
-  
+
+  useEffect(() => {
+    const fetchPolicies = async () => {
+      try {
+        const res = await fetch("/api/credits/policies");
+        const json = await res.json();
+        if (json.success && json.data) {
+          setCreditPolicies(json.data);
+        }
+      } catch {
+        // 忽略错误，使用默认积分
+      }
+    };
+    fetchPolicies();
+  }, []);
+
   // 计算积分消耗
-  const cost = useMemo(() => calculateCost(data), [data.config.model, data.config.duration, data.type]);
+  const cost = useMemo(() => calculateCost(data, creditPolicies), [data.config.model, data.config.duration, data.type, creditPolicies]);
 
   // 引用节点计算 - 拖拽时跳过计算以提升性能
   const parentIds = (data.referencedParentIds || []) as string[];
@@ -484,43 +515,76 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                     <div className="w-3 h-0.5 bg-slate-500 group-hover:bg-indigo-400 transition-colors" />
                   </div>
                   <span className="text-sm font-bold text-slate-300">
-                    {[
-                      { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image' },
-                      { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash Image' },
-                      { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite' },
-                      { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2' },
-                      { id: 'wan2.7-r2v', name: '万相 2.7' },
-                      { id: 'wan2.7-t2v', name: '万相 2.7' },
-                      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
-                    ].find(m => m.id === data.config.model)?.name || (data.type === 'video' ? 'Veo 3.1 Lite' : (data.type === 'image' ? 'Gemini 2.5 Flash Image' : 'Gemini 3 Flash'))}
+                    {data.type === 'video' ? (
+                      [
+                        { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite' },
+                        { id: 'wan2.7-t2v', name: '万相 2.7 (文生视频)' },
+                        { id: 'wan2.7-r2v', name: '万相 2.7 (图生视频)' },
+                        { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2' },
+                      ].find(m => m.id === data.config.model)?.name || 'Veo 3.1 Lite'
+                    ) : data.type === 'text' ? (
+                      'Gemini 3 Flash'
+                    ) : (
+                      [
+                        { id: 'flash', name: 'Flash' },
+                        { id: 'pro', name: 'Pro' },
+                        { id: 'image2', name: 'Image2' },
+                      ].find(m => m.id === data.config.model)?.name || 'Flash'
+                    )}
                   </span>
                 </div>
-                
+
                 <div className="absolute bottom-full left-0 mb-2 w-48 bg-[#1a1c24] border border-white/10 rounded-xl shadow-2xl scale-0 group-hover/model:scale-100 transition-all origin-bottom-left z-[100] overflow-hidden backdrop-blur-xl">
                   <div className="px-3 py-2 text-[10px] font-bold text-slate-500 tracking-widest border-b border-white/5">
                     选择模型
                   </div>
                   <div className="p-1">
-                    {[
-                      { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash 图片', type: ['image'] },
-                      { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash 图片', type: ['image'] },
-                      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', type: ['text'] },
-                      { id: 'wan2.7-r2v', name: '万相 2.7 (图生视频)', type: ['video'] },
-                      { id: 'wan2.7-t2v', name: '万相 2.7 (文生视频)', type: ['video'] },
-                      { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite', type: ['video'] },
-                      { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2 (首尾帧)', type: ['video'] },
-                    ].filter(m => m.type.includes(data.type)).map(m => (
+                    {data.type === 'video' ? (
+                      [
+                        { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite', type: ['video'] },
+                        { id: 'wan2.7-t2v', name: '万相 2.7 (文生视频)', type: ['video'] },
+                        { id: 'wan2.7-r2v', name: '万相 2.7 (图生视频)', type: ['video'] },
+                        { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2 (首尾帧)', type: ['video'] },
+                      ].map(m => (
+                        <button
+                          key={m.id}
+                          onClick={() => updateNodeData({ config: { ...data.config, model: m.id } })}
+                          className={cn(
+                            "w-full px-3 py-2 text-sm text-left rounded-lg transition-all",
+                            data.config.model === m.id ? "bg-indigo-600/20 text-indigo-400" : "text-slate-400 hover:bg-white/5 hover:text-white"
+                          )}
+                        >
+                          {m.name}
+                        </button>
+                      ))
+                    ) : data.type === 'text' ? (
                       <button
-                        key={m.id}
-                        onClick={() => updateNodeData({ config: { ...data.config, model: m.id } })}
+                        onClick={() => updateNodeData({ config: { ...data.config, model: 'gemini-3-flash-preview' } })}
                         className={cn(
                           "w-full px-3 py-2 text-sm text-left rounded-lg transition-all",
-                          data.config.model === m.id ? "bg-indigo-600/20 text-indigo-400" : "text-slate-400 hover:bg-white/5 hover:text-white"
+                          data.config.model === 'gemini-3-flash-preview' ? "bg-indigo-600/20 text-indigo-400" : "text-slate-400 hover:bg-white/5 hover:text-white"
                         )}
                       >
-                        {m.name}
+                        Gemini 3 Flash
                       </button>
-                    ))}
+                    ) : (
+                      [
+                        { id: 'flash', name: 'Flash - 快速生成' },
+                        { id: 'pro', name: 'Pro - 高质量输出' },
+                        { id: 'image2', name: 'Image2 - 超强图像生成' },
+                      ].map(m => (
+                        <button
+                          key={m.id}
+                          onClick={() => updateNodeData({ config: { ...data.config, model: m.id } })}
+                          className={cn(
+                            "w-full px-3 py-2 text-sm text-left rounded-lg transition-all",
+                            data.config.model === m.id ? "bg-indigo-600/20 text-indigo-400" : "text-slate-400 hover:bg-white/5 hover:text-white"
+                          )}
+                        >
+                          {m.name}
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>

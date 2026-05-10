@@ -2,6 +2,7 @@ import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import type { GenType } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult } from "./GenerateService";
 import { BaseGenerateService } from "./BaseGenerateService";
+import { getGenerationCost } from "../creditPolicy.service";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -13,19 +14,9 @@ const MODEL_MAP: Record<string, string> = {
   image2: "openai/gpt-5.4-image-2",
 };
 
-const COST_MAP: Record<string, number> = {
-  flash: 3,
-  pro: 8,
-  image2: 60,
-};
-
 export class ArchitectureTask extends BaseGenerateService {
   getType(): GenType {
     return "ARCHITECTURE";
-  }
-
-  getCost(model?: string): number {
-    return COST_MAP[model || "flash"] || COST_MAP.flash;
   }
 
   async execute(params: GenerateTaskParams): Promise<GenerateTaskResult> {
@@ -45,7 +36,7 @@ export class ArchitectureTask extends BaseGenerateService {
     } = params;
 
     const modelName = MODEL_MAP[model] || MODEL_MAP.pro;
-    const cost = this.getCost(model);
+    const cost = await getGenerationCost("architecture", model);
     const isProModel = modelName.includes("pro");
     const isImage2Model = model === "image2";
 
@@ -58,7 +49,7 @@ export class ArchitectureTask extends BaseGenerateService {
       view,
       lighting,
       materials,
-    });
+    }, undefined, cost);
 
     try {
       // 构建专业的建筑设计 Prompt

@@ -183,6 +183,7 @@ export default function ArchitecturePage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [credits, setCredits] = useState(0);
+  const [creditPolicies, setCreditPolicies] = useState<Record<string, { cost: number; unit: string }>>({});
   const [hasApiKey, setHasApiKey] = useState<boolean>(true);
   const [isCheckingKey, setIsCheckingKey] = useState(true);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -197,6 +198,21 @@ export default function ArchitecturePage() {
       setCredits(sessionCredits);
     }
   }, [session]);
+
+  useEffect(() => {
+    const fetchPolicies = async () => {
+      try {
+        const res = await fetch("/api/credits/policies");
+        const json = await res.json();
+        if (json.success && json.data) {
+          setCreditPolicies(json.data);
+        }
+      } catch {
+        // 忽略错误
+      }
+    };
+    fetchPolicies();
+  }, []);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -338,15 +354,20 @@ export default function ArchitecturePage() {
     }));
   };
 
+  const getCreditCost = useCallback((m: string) => {
+    const policyKey = `architecture-${m}`;
+    if (creditPolicies[policyKey]) {
+      return creditPolicies[policyKey].cost;
+    }
+    if (m === "flash") return 3;
+    if (m === "image2") return 50;
+    return 3;
+  }, [creditPolicies]);
+
   const handleGenerate = useCallback(async () => {
     if (!params.prompt || !params.structureRef) return;
 
-    const getCost = (m: string) => {
-      if (m === "flash") return 1;
-      if (m === "image2") return 50;
-      return 3;
-    };
-    const creditsPerImage = getCost(params.model);
+    const creditsPerImage = getCreditCost(params.model);
     const totalCost = creditsPerImage;
 
     if (credits < totalCost) return;
@@ -935,7 +956,7 @@ export default function ArchitecturePage() {
             <div className="p-4 border-t border-white/[0.06] bg-[#0a0a0a]">
               <div className="flex items-center justify-end mb-3">
                 <span className="text-xs text-zinc-600">
-                  本次消耗 <span className="font-medium text-zinc-400">{params.model === 'image2' ? 50 : params.model === 'flash' ? 1 : 3}</span> 积分
+                  本次消耗 <span className="font-medium text-zinc-400">{getCreditCost(params.model)}</span> 积分
                 </span>
               </div>
               <div className="flex gap-2">

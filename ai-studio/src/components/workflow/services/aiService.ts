@@ -51,23 +51,13 @@ export async function generateImage(prompt: string, config: {
   cost?: number;
 } = {}) {
   try {
-    // 映射模型名称
-    let model = "flash";
-    if (config.model?.includes("3.1") || config.model?.includes("3,1")) {
-      model = "flash"; // 都用flash模型
-    } else if (config.model?.includes("pro")) {
-      model = "pro";
-    } else if (config.model?.includes("image2")) {
-      model = "image2";
-    }
-
     const data = await request("/api/workflow/generate/image", {
       prompt,
       aspect_ratio: config.aspectRatio,
       quality: config.quality === "512p" ? "512P" :
                 config.quality === "hd" ? "2K" :
                 config.quality === "4k" ? "4K" : "1K",
-      model,
+      model: config.model || "flash",
       reference_images: config.baseImages,
       cost: config.cost,
     });

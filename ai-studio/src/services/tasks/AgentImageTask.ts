@@ -2,6 +2,7 @@ import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import type { GenType } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult } from "./GenerateService";
 import { BaseGenerateService } from "./BaseGenerateService";
+import { getGenerationCost } from "../creditPolicy.service";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -13,19 +14,9 @@ const MODEL_MAP: Record<string, string> = {
   image2: "openai/gpt-5.4-image-2",
 };
 
-const COST_MAP: Record<string, number> = {
-  flash: 2,
-  pro: 6,
-  image2: 55,
-};
-
 export class AgentImageTask extends BaseGenerateService {
   getType(): GenType {
     return "AGENT_IMAGE";
-  }
-
-  getCost(model?: string): number {
-    return COST_MAP[model || "flash"] || COST_MAP.flash;
   }
 
   async execute(params: GenerateTaskParams): Promise<GenerateTaskResult> {
@@ -44,7 +35,7 @@ export class AgentImageTask extends BaseGenerateService {
     } = params;
 
     const modelName = MODEL_MAP[model] || MODEL_MAP.pro;
-    const cost = this.getCost(model);
+    const cost = await getGenerationCost("text-to-image", model);
     const isProModel = modelName.includes("pro");
     const isImage2Model = model === "image2";
 
@@ -55,7 +46,7 @@ export class AgentImageTask extends BaseGenerateService {
       imageSize,
       agentId,
       agentType,
-    });
+    }, undefined, cost);
 
     try {
       // 构建代理相关的 Prompt

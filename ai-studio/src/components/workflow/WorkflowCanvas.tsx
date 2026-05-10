@@ -213,7 +213,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         sourceImage: item.outputUrl || item.thumbnailUrl, // 下载/生成用原始图
         isUploaded: true,
         config: {
-          model: item.params?.model || (nodeType === 'image' ? 'gemini-3.1-flash-image-preview' : 'wan2.2-kf2v-flash'),
+          model: item.params?.model || (nodeType === 'image' ? 'flash' : 'wan2.2-kf2v-flash'),
           quality: 'standard',
           aspectRatio: '1:1',
         }
@@ -613,7 +613,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         inheritPrompt,
         referencedParentIds: sourceNodeId ? [sourceNodeId] : [],
         config: {
-          model: type === 'text' ? 'gemini-3-flash-preview' : (type === 'image' || type === 'image-edit') ? 'gemini-3.1-flash-image-preview' : 'veo-3.1-lite-generate-preview',
+          model: type === 'text' ? 'gemini-3-flash-preview' : (type === 'image' || type === 'image-edit') ? 'flash' : 'veo-3.1-lite-generate-preview',
           quality: 'standard',
           aspectRatio: type === 'video' ? '16:9' : '1:1',
           duration: '5s',
@@ -752,7 +752,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
                   aspectRatio: ratio,
                   isUploaded: true,
                   config: {
-                    model: 'gemini-2.5-flash-image',
+                    model: 'flash',
                     quality: 'standard',
                     aspectRatio: '1:1',
                   }

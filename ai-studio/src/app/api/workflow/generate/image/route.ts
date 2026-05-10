@@ -18,18 +18,12 @@ export async function POST(request: NextRequest) {
       quality = "1K",
       model = "flash",
       reference_images,
-      cost,
     } = body;
 
     if (!prompt) {
       return NextResponse.json(error("请输入提示词"), { status: 400 });
     }
 
-    if (!cost || cost < 0) {
-      return NextResponse.json(error("积分参数错误"), { status: 400 });
-    }
-
-    // 映射质量参数到API格式
     const imageSizeMap: Record<string, string> = {
       "512P": "512px",
       "1K": "1K",
@@ -44,7 +38,6 @@ export async function POST(request: NextRequest) {
       imageSize: imageSizeMap[quality] || "1K",
       model: model as "flash" | "pro" | "image2",
       referenceImages: reference_images,
-      cost: cost,
     });
 
     return NextResponse.json(success({
