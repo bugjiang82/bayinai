@@ -6,7 +6,29 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Seeding database...");
 
-  // 清理已有数据（按依赖顺序）
+  // 删除并重建 CreditPolicy 表（确保字段类型正确）
+  try {
+    await prisma.$executeRaw`DROP TABLE IF EXISTS CreditPolicy`;
+    console.log("Dropped existing CreditPolicy table");
+    
+    await prisma.$executeRaw`CREATE TABLE CreditPolicy (
+      id TEXT PRIMARY KEY,
+      key TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      cost INTEGER DEFAULT 1 NOT NULL,
+      unit TEXT DEFAULT '次' NOT NULL,
+      category TEXT DEFAULT 'image' NOT NULL,
+      isActive INTEGER DEFAULT 1 NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    )`;
+    console.log("Recreated CreditPolicy table with correct schema");
+  } catch (e) {
+    console.log("Error recreating CreditPolicy table:", e);
+  }
+
+  // 清理其他已有数据（按依赖顺序）
   await prisma.creditLog.deleteMany();
   await prisma.creditTransfer.deleteMany();
   await prisma.generation.deleteMany();
@@ -316,6 +338,118 @@ async function main() {
     },
   });
   console.log("Created credit log for test user");
+
+  // ==================== 创建积分策略配置 ====================
+  // 注意：不提供 createdAt 和 updatedAt，让 Prisma 使用 @default(now()) 自动处理
+  const creditPolicies = await prisma.creditPolicy.createMany({
+    data: [
+      // 文生图
+      {
+        key: "text-to-image-flash",
+        name: "文生图-Flash",
+        description: "快速文生图模型",
+        cost: 1,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      {
+        key: "text-to-image-pro",
+        name: "文生图-Pro",
+        description: "高质量文生图模型",
+        cost: 3,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      {
+        key: "text-to-image-image2",
+        name: "文生图-Image2",
+        description: "超强图像生成模型",
+        cost: 50,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      // 图生图
+      {
+        key: "image-to-image-flash",
+        name: "图生图-Flash",
+        description: "快速图生图模型",
+        cost: 1,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      {
+        key: "image-to-image-pro",
+        name: "图生图-Pro",
+        description: "高质量图生图模型",
+        cost: 3,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      {
+        key: "image-to-image-image2",
+        name: "图生图-Image2",
+        description: "超强图像生成模型",
+        cost: 50,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      // 进阶设计
+      {
+        key: "advanced-flash",
+        name: "进阶设计-Flash",
+        description: "SU高清渲染/CAD转3D",
+        cost: 3,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      {
+        key: "advanced-pro",
+        name: "进阶设计-Pro",
+        description: "SU高清渲染/CAD转3D",
+        cost: 3,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      // 图片编辑（局部重绘）
+      {
+        key: "edit-flash",
+        name: "图片编辑-Flash",
+        description: "局部重绘",
+        cost: 1,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      {
+        key: "edit-pro",
+        name: "图片编辑-Pro",
+        description: "局部重绘",
+        cost: 3,
+        unit: "次",
+        category: "image",
+        isActive: true,
+      },
+      // 视频生成
+      {
+        key: "video-generation",
+        name: "视频生成",
+        description: "AI视频生成",
+        cost: 50,
+        unit: "秒",
+        category: "video",
+        isActive: true,
+      },
+    ],
+  });
+  console.log(`Created ${creditPolicies.count} credit policies`);
 
   console.log("Seeding completed!");
 }

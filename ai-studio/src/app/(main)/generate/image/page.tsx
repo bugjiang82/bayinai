@@ -512,6 +512,7 @@ export default function UnifiedImagePage() {
                       <div className="aspect-square">
                         <ImageUploader
                           onUpload={handleUpload}
+                          preview={null}
                           compact
                           className="h-full !p-2"
                         />

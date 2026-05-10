@@ -92,7 +92,7 @@ function isValidImageSource(src: string | null | undefined): boolean {
   if (src.includes("placeholder")) return false;
   if (src.includes("undefined")) return false;
   if (src.includes("null")) return false;
-  if (src.toLowerCase().includes("http") && !src.startsWith("http")) return false;
+  // 放宽验证：相对路径也允许
   return true;
 }
 
@@ -111,7 +111,7 @@ function HistoryImage({ item, onLoadError }: HistoryImageProps) {
     }
   }, [item.id, onLoadError, hasError]);
 
-  const imageSrc = item.thumb && item.thumb !== item.url ? item.thumb : null;
+  const imageSrc = item.thumb || item.url;
 
   if (!imageSrc || !isValidImageSource(imageSrc) || hasError) {
     return null;
@@ -679,7 +679,7 @@ export default function Canvas({
 
   const filteredHistory = history.filter(item => {
     if (failedHistoryItemIds.has(item.id)) return false;
-    const imageSrc = item.thumb && item.thumb !== item.url ? item.thumb : null;
+    const imageSrc = item.thumb || item.url;
     return isValidImageSource(imageSrc);
   });
 
@@ -958,7 +958,7 @@ export default function Canvas({
               {historyExpanded && (
                 <div className="grid grid-cols-6 gap-2">
                   {filteredHistory.map((item) => {
-                    const imageSrc = item.thumb && item.thumb !== item.url ? item.thumb : null;
+                    const imageSrc = item.thumb || item.url;
                     if (!isValidImageSource(imageSrc)) return null;
 
                     return (

@@ -30,7 +30,8 @@ export default function ImageUploader({
 }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(externalPreview || null);
+  const hasExternalPreview = externalPreview !== undefined;
+  const [preview, setPreview] = useState<string | null>(hasExternalPreview ? externalPreview : null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,7 +215,7 @@ export default function ImageUploader({
   };
 
   // Preview mode - compact thumbnail style
-  if (preview && compact) {
+  if (preview && compact && !hasExternalPreview) {
     return (
       <div className={cn("relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]", className)}>
         <div className="relative w-full h-24">
@@ -243,7 +244,7 @@ export default function ImageUploader({
   }
 
   // Preview mode - large square style
-  if (preview) {
+  if (preview && !hasExternalPreview) {
     return (
       <div className={cn("relative rounded-xl overflow-hidden border border-white/[0.08] bg-[#0f0f0f]", className)}>
         <div className="relative aspect-square">
