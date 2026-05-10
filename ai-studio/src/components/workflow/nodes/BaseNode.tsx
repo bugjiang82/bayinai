@@ -53,7 +53,12 @@ const calculateCost = (data: NodeData, creditPolicies: CreditPolicies = {}): num
       : `text-to-image-${modelId}`;
 
   if (creditPolicies[policyKey]) {
-    return creditPolicies[policyKey].cost;
+    const creditCost = creditPolicies[policyKey].cost;
+    if (data.type === 'video') {
+      const duration = Number(data.config.duration?.replace("s", "") || 5);
+      return creditCost * duration;
+    }
+    return creditCost;
   }
 
   const modelConfig = MODEL_COST_MAP[modelId] || { base: 1, type: "fixed" };
