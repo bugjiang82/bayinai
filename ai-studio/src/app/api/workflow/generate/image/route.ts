@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
       quality = "1K",
       model = "flash",
       reference_images,
+      n,
+      thinking,
     } = body;
 
     if (!prompt) {
@@ -38,6 +40,9 @@ export async function POST(request: NextRequest) {
       imageSize: imageSizeMap[quality] || "1K",
       model: model as "flash" | "pro" | "image2",
       referenceImages: reference_images,
+      n: model === "image2" ? n : undefined,
+      quality: model === "image2" ? (quality || "low") : undefined,
+      thinking: model === "image2" ? thinking : undefined,
     });
 
     return NextResponse.json(success({

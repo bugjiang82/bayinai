@@ -1,4 +1,5 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
@@ -13,7 +14,6 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
 });
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || "";
 const DASHSCOPE_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1";
 
@@ -43,6 +43,9 @@ export interface GenerateImageParams {
   referenceImages?: string[]; // 新版支持多张参考图片
   transformType?: string;
   cost?: number;
+  n?: number;
+  quality?: "low" | "medium" | "high";
+  thinking?: "off" | "low" | "medium" | "high";
 }
 
 export interface GenerateImageResult {
@@ -103,6 +106,9 @@ export async function generateImage(
         thinkingLevel,
         referenceImages: refImages,
         transformType,
+        n: params.n,
+        quality: params.quality,
+        thinking: params.thinking,
       });
       return result as GenerateImageResult;
     } else {
@@ -163,129 +169,60 @@ export async function generateImage(
         let thumbUrl: string | undefined;
 
         if (isImage2Model) {
-          // Image2 模型使用 OpenRouter API
+          // Image2 模型使用 OpenAI SDK
           try {
-            // 构建消息内容
-            const contentParts: any[] = [];
-
-            // 1. 添加所有参考图片（多图支持）
-            for (const refImg of refImages) {
-              // 处理 URL 路径或 base64 数据
-              let imageBase64: string;
-              
-              if (refImg.startsWith("/outputs/") || refImg.startsWith("http")) {
-                // URL 路径格式：从文件系统读取
-                const filePath = refImg.startsWith("/outputs/")
-                  ? path.join(process.cwd(), "public", refImg)
-                  : refImg;
-                try {
-                  const fileBuffer = fs.existsSync(filePath) ? fs.readFileSync(filePath) : null;
-                  if (fileBuffer) {
-                    const ext = path.extname(filePath).toLowerCase();
-                    const mimeType = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" 
-                                     : ext === ".webp" ? "image/webp" 
-                                     : "image/png";
-                    imageBase64 = `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
-                  } else {
-                    throw new Error(`文件不存在: ${filePath}`);
-                  }
-                } catch {
-                  // 尝试作为 URL 获取
-                  const response = await fetch(refImg);
-                  if (!response.ok) {
-                    throw new Error(`无法读取参考图片: ${response.status}`);
-                  }
-                  const arrayBuffer = await response.arrayBuffer();
-                  const buffer = Buffer.from(arrayBuffer);
-                  imageBase64 = `data:image/png;base64,${buffer.toString("base64")}`;
-                }
-              } else if (refImg.includes(",")) {
-                // 已经是 base64 data URL 格式
-                imageBase64 = refImg;
-              } else {
-                // 纯 base64 字符串
-                imageBase64 = `data:image/png;base64,${refImg}`;
-              }
-
-              contentParts.push({
-                type: "image_url",
-                image_url: {
-                  url: imageBase64,
-                },
-              });
-            }
-
-            // 2. 添加文本提示词（在所有图片之后）
-            contentParts.push({
-              type: "text",
-              text: fullPrompt,
+            const openai = new OpenAI({
+              apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI || "",
+              timeout: 600 * 1000,
+              maxRetries: 2,
             });
 
-            // 构建请求体
-            const requestBody = {
-              model: modelName,
-              messages: [
-                {
-                  role: "user",
-                  content: contentParts,
-                },
-              ],
-              modalities: ["image", "text"],
+            const imageParams: any = {
+              model: "gpt-image-2",
+              prompt: fullPrompt,
+              size: "1024x1024",
+              quality: "low",
+              n: params.n || 1,
             };
 
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(requestBody),
-            });
+            // 如果有参考图片，添加到请求中
+            if (refImages.length > 0) {
+              const firstRefImg = refImages[0];
+              let imageUrl: string;
+              
+              if (firstRefImg.startsWith("/outputs/")) {
+                // 本地文件路径
+                const filePath = path.join(process.cwd(), "public", firstRefImg);
+                if (fs.existsSync(filePath)) {
+                  const fileBuffer = fs.readFileSync(filePath);
+                  imageUrl = `data:image/png;base64,${fileBuffer.toString("base64")}`;
+                } else {
+                  throw new Error(`参考图片不存在: ${filePath}`);
+                }
+              } else if (firstRefImg.includes(",")) {
+                // base64 data URL
+                imageUrl = firstRefImg;
+              } else {
+                // 纯 base64 字符串
+                imageUrl = `data:image/png;base64,${firstRefImg}`;
+              }
 
-            if (!response.ok) {
-              const errorText = await response.text();
-              throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+              imageParams.image_url = {
+                url: imageUrl,
+              };
             }
 
-            const data = await response.json();
-            const message = data.choices?.[0]?.message;
+            const response = await openai.images.generate(imageParams);
 
-            // 解析返回的图片数据
-            if (message?.images) {
-              // 方式1：message.images 数组
-              for (const img of message.images) {
-                const imageUrlObj = img.image_url;
-                if (imageUrlObj?.url) {
-                  const imageData = imageUrlObj.url;
-                  const mimeMatch = imageData.match(/data:image\/([^;]+)/);
-                  const mimeType = mimeMatch ? mimeMatch[1] : "png";
-                  const base64Part = imageData.split(",")[1];
-                  const imageBytes = Buffer.from(base64Part, "base64");
-                  const actualFilename = `${generation.id}.${mimeType}`;
-                  const actualFilepath = path.join(outputDir, actualFilename);
-                  fs.writeFileSync(actualFilepath, imageBytes);
-                  outputBase64 = base64Part;
-                  filename = actualFilename;
-                  filepath = actualFilepath;
-                }
-              }
-            } else if (message?.content) {
-              // 方式2：message.content 数组
-              const contentArray = Array.isArray(message.content) ? message.content : [message.content];
-              for (const contentItem of contentArray) {
-                if (contentItem?.type === "image_url" && contentItem.image_url?.url) {
-                  const imageData = contentItem.image_url.url;
-                  const mimeMatch = imageData.match(/data:image\/([^;]+)/);
-                  const mimeType = mimeMatch ? mimeMatch[1] : "png";
-                  const base64Part = imageData.split(",")[1];
-                  const imageBytes = Buffer.from(base64Part, "base64");
-                  const actualFilename = `${generation.id}.${mimeType}`;
-                  const actualFilepath = path.join(outputDir, actualFilename);
-                  fs.writeFileSync(actualFilepath, imageBytes);
-                  outputBase64 = base64Part;
-                  filename = actualFilename;
-                  filepath = actualFilepath;
-                }
+            for (const img of response.data) {
+              if (img.b64_json) {
+                outputBase64 = img.b64_json;
+                const imageBytes = Buffer.from(outputBase64, "base64");
+                const actualFilename = `${generation.id}.png`;
+                const actualFilepath = path.join(outputDir, actualFilename);
+                fs.writeFileSync(actualFilepath, imageBytes);
+                filename = actualFilename;
+                filepath = actualFilepath;
               }
             }
 
@@ -884,10 +821,9 @@ export interface InpaintParams {
   originalImage: string;
   maskImage: string;
   prompt: string;
-  model?: "flash" | "pro";
+  model?: "flash" | "pro" | "image2";
   imageSize?: string;
   thinkingLevel?: ThinkingLevel;
-  // 新增参数，整合 nano-banana 功能
   structureRef?: string;
   styleRef?: string;
   structureStrength?: number;
@@ -898,15 +834,40 @@ export interface InpaintParams {
   aspectRatio?: string;
   useGoogleSearch?: boolean;
   useImageSearch?: boolean;
+  n?: number;
+  quality?: "low" | "medium" | "high";
+  thinking?: "off" | "low" | "medium" | "high";
+  referenceImages?: string[];
 }
 
 export async function inpaintImage(
   params: InpaintParams
 ): Promise<GenerateImageResult> {
-  // 使用新的任务处理架构
   try {
     const task = TaskFactory.createTask("INPAINT");
-    const result = await task.execute(params);
+    const result = await task.execute({
+      userId: params.userId,
+      originalImage: params.originalImage,
+      maskImage: params.maskImage,
+      prompt: params.prompt,
+      model: params.model,
+      imageSize: params.imageSize,
+      thinkingLevel: params.thinkingLevel,
+      structureRef: params.structureRef,
+      styleRef: params.styleRef,
+      structureStrength: params.structureStrength,
+      styleStrength: params.styleStrength,
+      guidanceScale: params.guidanceScale,
+      negativePrompt: params.negativePrompt,
+      customNegativePrompt: params.customNegativePrompt,
+      aspectRatio: params.aspectRatio,
+      useGoogleSearch: params.useGoogleSearch,
+      useImageSearch: params.useImageSearch,
+      n: params.n,
+      quality: params.quality,
+      thinking: params.thinking,
+      referenceImages: params.referenceImages,
+    });
     return result as GenerateImageResult;
   } catch (error) {
     throw error;

@@ -50,6 +50,20 @@ const THINKING_OPTIONS = [
   { value: "high", label: "精细", description: "更高质量" },
 ];
 
+const IMAGE2_COUNT_OPTIONS = [
+  { value: "1", label: "1张" },
+  { value: "2", label: "2张" },
+  { value: "3", label: "3张" },
+  { value: "4", label: "4张" },
+];
+
+const IMAGE2_THINKING_OPTIONS = [
+  { value: "off", label: "关闭" },
+  { value: "low", label: "低" },
+  { value: "medium", label: "中" },
+  { value: "high", label: "高" },
+];
+
 export default function UnifiedImagePage() {
   const router = useRouter();
   const [mode, setMode] = useState<ImageMode>("image-to-image");
@@ -79,9 +93,17 @@ export default function UnifiedImagePage() {
   const [credits, setCredits] = useState(100);
   const [creditPolicies, setCreditPolicies] = useState<Record<string, { cost: number; unit: string }>>({});
 
-  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [referenceImages, setReferenceImages] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem("unified-image-reference-images");
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
   const [referenceWeight, setReferenceWeight] = useState(0.7);
   const [transformType, setTransformType] = useState<TransformType>("style-transfer");
+  const [image2Count, setImage2Count] = useState(1);
+  const [image2Thinking, setImage2Thinking] = useState("off");
 
   const [history, setHistory] = useState<Array<{
     id: string;
@@ -154,7 +176,13 @@ export default function UnifiedImagePage() {
 
     if (savedPrompt) setPrompt(savedPrompt);
     if (savedNegativePrompt) setNegativePrompt(savedNegativePrompt);
+    
+    localStorage.removeItem("image-upload");
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("unified-image-reference-images", JSON.stringify(referenceImages));
+  }, [referenceImages]);
 
   useEffect(() => {
     async function loadHistory(page = 1) {
@@ -315,7 +343,7 @@ export default function UnifiedImagePage() {
     if (mode === "image-to-image" && referenceImages.length === 0) return;
 
     const creditsPerImage = getCreditCost(model);
-    const totalCost = creditsPerImage;
+    const totalCost = model === "image2" ? creditsPerImage * image2Count : creditsPerImage;
     if (credits < totalCost) return;
 
     simulateProgress();
@@ -324,9 +352,12 @@ export default function UnifiedImagePage() {
       const body: Record<string, unknown> = {
         prompt: prompt.trim(),
         aspectRatio: selectedSize.ratio,
-        imageSize: resolution,
-        thinkingLevel,
+        imageSize: model === "image2" ? undefined : resolution,
+        thinkingLevel: model === "image2" ? undefined : thinkingLevel,
         model,
+        n: model === "image2" ? image2Count : undefined,
+        thinking: model === "image2" ? image2Thinking : undefined,
+        quality: model === "image2" ? "low" : undefined,
       };
 
       if (mode === "image-to-image" && referenceImages.length > 0) {
@@ -514,6 +545,8 @@ export default function UnifiedImagePage() {
                           onUpload={handleUpload}
                           compact
                           className="h-full !p-2"
+                          storageKey=""
+                          disableAutoPreview={true}
                         />
                       </div>
                     )}
@@ -524,6 +557,8 @@ export default function UnifiedImagePage() {
                     <ImageUploader
                       onUpload={handleUpload}
                       compact
+                      storageKey=""
+                      disableAutoPreview={true}
                     />
                     <div className="aspect-square rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02]" />
                     <div className="aspect-square rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02]" />
@@ -570,12 +605,14 @@ export default function UnifiedImagePage() {
             {/* Advanced params */}
             <div className="space-y-4">
               {/* Resolution */}
-              <DropdownSelector
-                label="分辨率"
-                value={resolution}
-                options={RESOLUTION_OPTIONS}
-                onChange={setResolution}
-              />
+              {model !== "image2" && (
+                <DropdownSelector
+                  label="分辨率"
+                  value={resolution}
+                  options={RESOLUTION_OPTIONS}
+                  onChange={setResolution}
+                />
+              )}
 
               {/* Thinking level */}
               {model === "flash" && (
@@ -585,6 +622,24 @@ export default function UnifiedImagePage() {
                   options={THINKING_OPTIONS}
                   onChange={setThinkingLevel}
                 />
+              )}
+
+              {/* Image2 专用参数 */}
+              {model === "image2" && (
+                <>
+                  <DropdownSelector
+                    label="生成数量"
+                    value={image2Count.toString()}
+                    options={IMAGE2_COUNT_OPTIONS}
+                    onChange={(val) => setImage2Count(parseInt(val))}
+                  />
+                  <DropdownSelector
+                    label="思考级别"
+                    value={image2Thinking}
+                    options={IMAGE2_THINKING_OPTIONS}
+                    onChange={(val) => setImage2Thinking(val)}
+                  />
+                </>
               )}
             </div>
           </div>

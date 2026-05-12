@@ -1,4 +1,5 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import OpenAI from "openai";
 import type { GenType } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult } from "./GenerateService";
 import { BaseGenerateService } from "./BaseGenerateService";
@@ -11,7 +12,7 @@ const ai = new GoogleGenAI({
 const MODEL_MAP: Record<string, string> = {
   flash: "gemini-3.1-flash-image-preview",
   pro: "gemini-3-pro-image-preview",
-  image2: "openai/gpt-5.4-image-2",
+  image2: "gpt-image-2",
 };
 
 export class ArchitectureTask extends BaseGenerateService {
@@ -86,90 +87,23 @@ ${negativePrompt}
       let actualMimeType = "image/png";
 
       if (isImage2Model) {
-        // Image2 模型使用 OpenRouter API
-        const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
-        if (!OPENROUTER_API_KEY) {
-          throw new Error("OpenRouter API Key 未配置");
-        }
-
-        const contentParts: any[] = [];
-
-        // 添加参考图片
-        for (const refImg of referenceImages) {
-          let imageBase64: string;
-          
-          if (refImg.includes(",")) {
-            // 已经是 base64 data URL 格式
-            imageBase64 = refImg;
-          } else {
-            // 纯 base64 字符串
-            imageBase64 = `data:image/png;base64,${refImg}`;
-          }
-
-          contentParts.push({
-            type: "image_url",
-            image_url: {
-              url: imageBase64,
-            },
-          });
-        }
-
-        // 添加文本提示词
-        contentParts.push({
-          type: "text",
-          text: finalPrompt,
+        // Image2 模型使用 OpenAI SDK
+        const openai = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI || "",
+          timeout: 600 * 1000,
+          maxRetries: 2,
         });
 
-        const requestBody = {
-          model: modelName,
-          messages: [
-            {
-              role: "user",
-              content: contentParts,
-            },
-          ],
-          modalities: ["image", "text"],
-        };
-
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
+        const response = await openai.images.generate({
+          model: "gpt-image-2",
+          prompt: finalPrompt,
+          size: "1024x1024",
+          quality: "low",
         });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
-        }
-
-        const data = await response.json();
-        const message = data.choices?.[0]?.message;
-
-        // 解析返回的图片数据
-        if (message?.images) {
-          for (const img of message.images) {
-            const imageUrlObj = img.image_url;
-            if (imageUrlObj?.url) {
-              const imageData = imageUrlObj.url;
-              const mimeMatch = imageData.match(/data:image\/([^;]+)/);
-              actualMimeType = mimeMatch ? mimeMatch[1] : "png";
-              const base64Part = imageData.split(",")[1];
-              outputBase64 = base64Part;
-            }
-          }
-        } else if (message?.content) {
-          const contentArray = Array.isArray(message.content) ? message.content : [message.content];
-          for (const contentItem of contentArray) {
-            if (contentItem?.type === "image_url" && contentItem.image_url?.url) {
-              const imageData = contentItem.image_url.url;
-              const mimeMatch = imageData.match(/data:image\/([^;]+)/);
-              actualMimeType = mimeMatch ? mimeMatch[1] : "png";
-              const base64Part = imageData.split(",")[1];
-              outputBase64 = base64Part;
-            }
+        for (const img of response.data) {
+          if (img.b64_json) {
+            outputBase64 = img.b64_json;
           }
         }
 

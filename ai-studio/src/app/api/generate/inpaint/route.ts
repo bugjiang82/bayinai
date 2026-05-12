@@ -19,7 +19,6 @@ export async function POST(request: NextRequest) {
       imageSize = "1K",
       thinkingLevel = "MINIMAL",
       model = "flash",
-      // 新增参数
       structureRef,
       styleRef,
       structureStrength,
@@ -30,6 +29,10 @@ export async function POST(request: NextRequest) {
       aspectRatio,
       useGoogleSearch,
       useImageSearch,
+      n,
+      quality,
+      thinking,
+      referenceImages,
     } = body;
 
     if (!originalImage || !maskImage || !prompt) {
@@ -54,6 +57,10 @@ export async function POST(request: NextRequest) {
       aspectRatio,
       useGoogleSearch,
       useImageSearch,
+      n: model === "image2" ? n : 1,
+      quality: model === "image2" ? (quality || "low") : undefined,
+      thinking: model === "image2" ? thinking : undefined,
+      referenceImages,
     });
 
     return NextResponse.json(success(result, "生成成功"));

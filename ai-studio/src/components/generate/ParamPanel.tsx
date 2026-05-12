@@ -46,6 +46,20 @@ export const THINKING_OPTIONS = [
   { label: "精细（High）", value: "high" },
 ];
 
+export const IMAGE2_COUNT_OPTIONS = [
+  { value: "1", label: "1张" },
+  { value: "2", label: "2张" },
+  { value: "3", label: "3张" },
+  { value: "4", label: "4张" },
+];
+
+export const IMAGE2_THINKING_OPTIONS = [
+  { value: "off", label: "关闭" },
+  { value: "low", label: "低" },
+  { value: "medium", label: "中" },
+  { value: "high", label: "高" },
+];
+
 interface ParamPanelProps {
   prompt: string;
   onPromptChange: (value: string) => void;
@@ -64,6 +78,10 @@ interface ParamPanelProps {
   credits: number;
   className?: string;
   storageKey?: string;
+  image2Count?: number;
+  onImage2CountChange?: (count: number) => void;
+  image2Thinking?: string;
+  onImage2ThinkingChange?: (thinking: string) => void;
 }
 
 export default function ParamPanel({
@@ -84,11 +102,15 @@ export default function ParamPanel({
   credits,
   className,
   storageKey = "text-to-image-prompt",
+  image2Count = 1,
+  onImage2CountChange,
+  image2Thinking = "off",
+  onImage2ThinkingChange,
 }: ParamPanelProps) {
   const [showNegativePrompt, setShowNegativePrompt] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const creditsPerImage = model === "flash" ? 1 : 3;
+  const creditsPerImage = model === "flash" ? 1 : (model === "image2" ? 60 * image2Count : 3);
   const canGenerate = prompt.trim().length > 0 && credits >= creditsPerImage;
 
   return (
@@ -178,12 +200,14 @@ export default function ParamPanel({
           {showAdvanced && (
             <div className="mt-3 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
               {/* Resolution */}
-              <DropdownSelector
-                label="分辨率"
-                value={resolution}
-                options={RESOLUTION_OPTIONS}
-                onChange={onResolutionChange}
-              />
+              {model !== "image2" && (
+                <DropdownSelector
+                  label="分辨率"
+                  value={resolution}
+                  options={RESOLUTION_OPTIONS}
+                  onChange={onResolutionChange}
+                />
+              )}
 
               {/* Thinking level (only for flash model) */}
               {model === "flash" && (
@@ -193,6 +217,24 @@ export default function ParamPanel({
                   options={THINKING_OPTIONS}
                   onChange={onThinkingLevelChange}
                 />
+              )}
+
+              {/* Image2 专用参数 */}
+              {model === "image2" && (
+                <>
+                  <DropdownSelector
+                    label="生成数量"
+                    value={image2Count.toString()}
+                    options={IMAGE2_COUNT_OPTIONS}
+                    onChange={(val) => onImage2CountChange?.(parseInt(val))}
+                  />
+                  <DropdownSelector
+                    label="思考级别"
+                    value={image2Thinking}
+                    options={IMAGE2_THINKING_OPTIONS}
+                    onChange={(val) => onImage2ThinkingChange?.(val)}
+                  />
+                </>
               )}
             </div>
           )}

@@ -45,9 +45,13 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
         pro: 3,
         image2: 50,
       };
-      return defaultCosts[model] || 1;
+      const modelCost = defaultCosts[model] || 1;
+      if (model === "image2" && data.config.n) {
+        return modelCost * data.config.n;
+      }
+      return modelCost;
     };
-  }, [creditPolicies]);
+  }, [creditPolicies, data.config.n]);
 
   const cost = useMemo(() => getCost(data.config.model || 'flash'), [data.config.model, getCost]);
 
@@ -314,6 +318,30 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
     );
   };
 
+  const isImage2Model = data.config.model?.includes("image2");
+
+  const setImage2N = (n: number) => {
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === props.id ? {
+          ...n,
+          data: { ...n.data, config: { ...n.data, n } }
+        } : n
+      )
+    );
+  };
+
+  const setImage2Thinking = (thinking: 'off' | 'low' | 'medium' | 'high') => {
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === props.id ? {
+          ...n,
+          data: { ...n.data, config: { ...n.data, thinking } }
+        } : n
+      )
+    );
+  };
+
   const ratiosData = [
     { label: '1:1', value: '1:1', icon: 'w-[14px] h-[14px]', iconLarge: 'w-[20px] h-[20px]' },
     { label: '9:16', value: '9:16', icon: 'w-[10px] h-[18px]', iconLarge: 'w-[14px] h-[24px]' },
@@ -456,6 +484,50 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
                     </div>
                   </div>
                 </div>
+
+                {isImage2Model && (
+                  <>
+                    <div className="space-y-3">
+                      <div className="text-sm font-bold text-slate-500 pl-1">生成数量</div>
+                      <div className="flex bg-white/5 rounded-2xl p-1 border border-white/5">
+                        {([1, 2, 3, 4] as const).map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setImage2N(n)}
+                            className={cn(
+                              "flex-1 py-2.5 text-sm font-bold uppercase transition-all rounded-xl",
+                              (data.config.n || 1) === n
+                                ? "bg-white/10 text-white shadow-xl"
+                                : "text-slate-500 hover:text-slate-300"
+                            )}
+                          >
+                            {n}张
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="text-sm font-bold text-slate-500 pl-1">思考级别</div>
+                      <div className="flex bg-white/5 rounded-2xl p-1 border border-white/5">
+                        {(['off', 'low', 'medium', 'high'] as const).map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => setImage2Thinking(t)}
+                            className={cn(
+                              "flex-1 py-2.5 text-sm font-bold uppercase transition-all rounded-xl",
+                              (data.config.thinking || "off") === t
+                                ? "bg-white/10 text-white shadow-xl"
+                                : "text-slate-500 hover:text-slate-300"
+                            )}
+                          >
+                            {t === 'off' ? '关' : t === 'low' ? '低' : t === 'medium' ? '中' : '高'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
         </div>

@@ -17,6 +17,7 @@ interface ImageUploaderProps {
   preview?: string | null;
   compact?: boolean;
   storageKey?: string;
+  disableAutoPreview?: boolean;
 }
 
 export default function ImageUploader({
@@ -27,6 +28,7 @@ export default function ImageUploader({
   preview: externalPreview,
   compact = false,
   storageKey = "image-upload",
+  disableAutoPreview = false,
 }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -91,7 +93,9 @@ export default function ImageUploader({
       const reader = new FileReader();
       reader.onload = (e) => {
         const previewUrl = e.target?.result as string;
-        setPreview(previewUrl);
+        if (!disableAutoPreview) {
+          setPreview(previewUrl);
+        }
       };
       reader.readAsDataURL(f);
 
@@ -106,11 +110,17 @@ export default function ImageUploader({
         const response = await fetch('/api/upload', {
           method: 'POST',
           body: formData,
+          headers: {
+            Accept: 'application/json',
+          },
+          redirect: 'error',
         });
         
-        if (!response.ok) {
-          // API 调用失败，仍然使用本地预览
-          if (storageKey) {
+        const contentType = response.headers.get('content-type');
+        
+        if (!response.ok || response.status >= 400 || !contentType?.includes('application/json')) {
+          await response.text();
+          if (storageKey && !disableAutoPreview) {
             const reader = new FileReader();
             reader.onload = (e) => {
               const dataUrl = e.target?.result as string;
@@ -119,32 +129,63 @@ export default function ImageUploader({
             reader.readAsDataURL(f);
           }
           onUpload?.(f);
-        } else {
-          const result = await response.json();
-          if (result.success) {
-            // 上传成功，保存到本地存储
-            if (storageKey) {
-              localStorage.setItem(storageKey, result.data.url);
-            }
-            // 更新预览为服务器返回的URL
+          if (disableAutoPreview) {
+            setFile(null);
+            setPreview(null);
+          }
+          return;
+        }
+        
+        let result;
+        try {
+          const text = await response.text();
+          result = JSON.parse(text);
+        } catch {
+          if (storageKey && !disableAutoPreview) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const dataUrl = e.target?.result as string;
+              localStorage.setItem(storageKey, dataUrl);
+            };
+            reader.readAsDataURL(f);
+          }
+          onUpload?.(f);
+          if (disableAutoPreview) {
+            setFile(null);
+            setPreview(null);
+          }
+          return;
+        }
+        
+        if (result.success && result.data?.url) {
+          if (storageKey && !disableAutoPreview) {
+            localStorage.setItem(storageKey, result.data.url);
+          }
+          if (!disableAutoPreview) {
             setPreview(result.data.url);
-            onUpload?.(f);
-          } else {
-            // API 返回失败，仍然使用本地预览
-            if (storageKey) {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                const dataUrl = e.target?.result as string;
-                localStorage.setItem(storageKey, dataUrl);
-              };
-              reader.readAsDataURL(f);
-            }
-            onUpload?.(f);
+          }
+          onUpload?.(f);
+          if (disableAutoPreview) {
+            setFile(null);
+            setPreview(null);
+          }
+        } else {
+          if (storageKey && !disableAutoPreview) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const dataUrl = e.target?.result as string;
+              localStorage.setItem(storageKey, dataUrl);
+            };
+            reader.readAsDataURL(f);
+          }
+          onUpload?.(f);
+          if (disableAutoPreview) {
+            setFile(null);
+            setPreview(null);
           }
         }
       } catch (err) {
-        // 发生错误，仍然使用本地预览
-        if (storageKey) {
+        if (storageKey && !disableAutoPreview) {
           const reader = new FileReader();
           reader.onload = (e) => {
             const dataUrl = e.target?.result as string;
@@ -153,12 +194,16 @@ export default function ImageUploader({
           reader.readAsDataURL(f);
         }
         onUpload?.(f);
+        if (disableAutoPreview) {
+          setFile(null);
+          setPreview(null);
+        }
       } finally {
         setIsUploading(false);
         setUploadProgress(100);
       }
     },
-    [maxSize, onUpload, storageKey, validateFile]
+    [maxSize, onUpload, storageKey, validateFile, disableAutoPreview]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {

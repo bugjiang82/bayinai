@@ -71,6 +71,7 @@ const STYLE_OPTIONS = [
 const INPAINT_MODEL_OPTIONS = [
   { value: "flash", label: "Flash", description: "快速生成" },
   { value: "pro", label: "Pro", description: "高质量" },
+  { value: "image2", label: "Image2", description: "超强图像生成" },
 ];
 
 const INPAINT_SIZE_OPTIONS = [
@@ -167,6 +168,9 @@ export default function EditPage() {
   const [model, setModel] = useState("flash");
   const [resolution, setResolution] = useState("1K");
   const [aspectRatio, setAspectRatio] = useState("1:1");
+  const [image2Count, setImage2Count] = useState(1);
+  const [image2Thinking, setImage2Thinking] = useState("off");
+  const [image2ReferenceImages, setImage2ReferenceImages] = useState<string[]>([]);
 
   // 自动检测原图尺寸并计算比例
   const detectImageAspectRatio = useCallback((imageUrl: string): string => {
@@ -264,9 +268,10 @@ export default function EditPage() {
 
     const getCost = (m: string) => {
       if (m === "flash") return 1;
+      if (m === "image2") return 60;
       return 3;
     };
-    const cost = getCost(model);
+    const cost = getCost(model) * (model === "image2" ? image2Count : 1);
     if (credits < cost) return;
 
     setIsApplying(true);
@@ -324,6 +329,10 @@ export default function EditPage() {
             model,
             imageSize: resolution,
             aspectRatio,
+            n: model === "image2" ? image2Count : 1,
+            quality: model === "image2" ? "low" : undefined,
+            thinking: model === "image2" ? image2Thinking : undefined,
+            referenceImages: model === "image2" ? image2ReferenceImages : undefined,
           }),
         };
 
@@ -482,6 +491,82 @@ export default function EditPage() {
               options={INPAINT_RATIO_OPTIONS}
               onChange={setAspectRatio}
             />
+
+            {/* Image2 多图参考上传 */}
+            {model === "image2" && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-400">生成数量</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setImage2Count(n)}
+                        className={cn(
+                          "flex-1 py-2 rounded-lg text-xs font-medium transition-all",
+                          image2Count === n
+                            ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                            : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                        )}
+                      >
+                        {n}张
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-400">思考级别</label>
+                  <div className="flex gap-2">
+                    {["off", "low", "medium", "high"].map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setImage2Thinking(t)}
+                        className={cn(
+                          "flex-1 py-2 rounded-lg text-xs font-medium transition-all",
+                          image2Thinking === t
+                            ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                            : "bg-white/[0.04] text-zinc-500 border border-white/[0.06] hover:border-white/[0.15] hover:text-zinc-300"
+                        )}
+                      >
+                        {t === "off" ? "关闭" : t === "low" ? "低" : t === "medium" ? "中" : "高"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs text-zinc-400">参考图片（可选）</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {image2ReferenceImages.map((img, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-white/[0.08] group">
+                        <img src={img} alt={`参考 ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                          onClick={() => setImage2ReferenceImages((prev) => prev.filter((_, i) => i !== idx))}
+                        >
+                          <span className="text-white text-sm">移除</span>
+                        </button>
+                      </div>
+                    ))}
+                    {image2ReferenceImages.length < 8 && (
+                      <ImageUploader
+                        onUpload={(file) => {
+                          const reader = new FileReader();
+                          reader.onload = (e) => {
+                            const dataUrl = e.target?.result as string;
+                            setImage2ReferenceImages((prev) => [...prev, dataUrl]);
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                        compact
+                        className="h-full"
+                      />
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         );
 

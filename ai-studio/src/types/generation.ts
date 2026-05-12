@@ -124,3 +124,18 @@ export interface GenerationResult {
   createdAt: string;
   completedAt?: string;
 }
+
+// ==================== Image2 类型定义 ====================
+
+export type Image2ThinkingLevel = "off" | "low" | "medium" | "high";
+
+export interface Image2GenerateParams {
+  n?: number;
+  quality?: "low" | "medium" | "high";
+  thinking?: Image2ThinkingLevel;
+  size?: string;
+}
+
+export interface MultiImageGenerateResult extends GenerationResult {
+  images?: { url?: string; base64?: string }[];
+}

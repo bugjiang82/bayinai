@@ -49,39 +49,52 @@ export async function generateImage(prompt: string, config: {
   baseImages?: string[];
   model?: string;
   cost?: number;
+  n?: number;
+  thinking?: string;
 } = {}) {
   try {
+    let model = "flash";
+    if (config.model?.includes("3.1") || config.model?.includes("3,1")) {
+      model = "flash";
+    } else if (config.model?.includes("pro")) {
+      model = "pro";
+    } else if (config.model?.includes("image2")) {
+      model = "image2";
+    }
+
     const data = await request("/api/workflow/generate/image", {
       prompt,
       aspect_ratio: config.aspectRatio,
-      quality: config.quality === "512p" ? "512P" :
-                config.quality === "hd" ? "2K" :
-                config.quality === "4k" ? "4K" : "1K",
-      model: config.model || "flash",
+      quality: model === "image2" ? "low" : (config.quality === "512p" ? "512P" : config.quality === "hd" ? "2K" : config.quality === "4k" ? "4K" : "1K"),
+      model,
       reference_images: config.baseImages,
       cost: config.cost,
+      n: model === "image2" ? config.n : undefined,
+      thinking: model === "image2" ? config.thinking : undefined,
     });
 
-    console.log("图片数据:", data); // 调试日志
+    if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+      const imageUrls = data.images.map((img: any) => {
+        if (img.base64) {
+          return img.base64.startsWith("data:")
+            ? img.base64
+            : `data:image/png;base64,${img.base64}`;
+        } else if (img.url) {
+          return img.url;
+        }
+        return null;
+      }).filter(Boolean);
+      return imageUrls;
+    }
 
-    // 返回完整的base64数据URL
     let imageUrl = null;
-    
     if (data.base64) {
-      if (data.base64.startsWith("data:")) {
-        imageUrl = data.base64;
-      } else {
-        imageUrl = `data:image/png;base64,${data.base64}`;
-      }
+      imageUrl = data.base64.startsWith("data:")
+        ? data.base64
+        : `data:image/png;base64,${data.base64}`;
     } else if (data.url) {
       imageUrl = data.url;
     }
-
-    if (!imageUrl) {
-      throw new Error("No image data returned from API");
-    }
-
-    console.log("最终图片URL:", imageUrl); // 调试日志
     return imageUrl;
   } catch (error) {
     console.error("Image generation error:", error);

@@ -1,4 +1,7 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import OpenAI from "openai";
+import fs from "fs";
+import path from "path";
 import type { GenType } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult } from "./GenerateService";
 import { BaseGenerateService } from "./BaseGenerateService";
@@ -8,11 +11,37 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
 });
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI || "",
+  timeout: 600 * 1000,
+  maxRetries: 2,
+});
+
 const MODEL_MAP: Record<string, string> = {
   flash: "gemini-3.1-flash-image-preview",
   pro: "gemini-3-pro-image-preview",
-  image2: "openai/gpt-5.4-image-2",
+  image2: "gpt-image-2",
 };
+
+const COST_MAP: Record<string, number> = {
+  flash: 1,
+  pro: 3,
+  image2: 50,
+};
+
+function getImage2Size(aspectRatio: string): string {
+  const sizeMap: Record<string, string> = {
+    "1:1": "1024x1024",
+    "16:9": "1792x1024",
+    "9:16": "1024x1792",
+    "4:3": "1024x1024",
+    "3:4": "1024x1024",
+    "3:2": "1024x1024",
+    "2:3": "1024x1024",
+    "21:9": "1792x1024",
+  };
+  return sizeMap[aspectRatio] || "1024x1024";
+}
 
 export class TextToImageTask extends BaseGenerateService {
   getType(): GenType {
@@ -28,12 +57,16 @@ export class TextToImageTask extends BaseGenerateService {
       aspectRatio = "1:1",
       imageSize = "1K",
       thinkingLevel = ThinkingLevel.MINIMAL,
+      n = 1,
+      quality = "low",
+      thinking = "medium",
     } = params;
 
     const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
-    const cost = await getGenerationCost("text-to-image", model);
     const isProModel = modelName.includes("pro");
     const isImage2Model = model === "image2";
+    const generateCount = isImage2Model ? Math.max(1, Math.min(4, n)) : 1;
+    const cost = await getGenerationCost("text-to-image", model) * generateCount;
 
     // 创建生成记录
     const generation = await this.createGenerationRecord(userId, prompt, {
@@ -53,74 +86,62 @@ export class TextToImageTask extends BaseGenerateService {
       let outputUrl: string | undefined;
       let thumbnailUrl: string | undefined;
       let actualMimeType = "image/png";
+      const outputImages: { base64?: string; url?: string }[] = [];
 
       if (isImage2Model) {
-        // Image2 模型使用 OpenRouter API
-        const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
-        if (!OPENROUTER_API_KEY) {
-          throw new Error("OpenRouter API Key 未配置");
-        }
+        const size = getImage2Size(aspectRatio);
 
-        const requestBody = {
+        const imageParams: any = {
           model: modelName,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: fullPrompt,
-                },
-              ],
-            },
-          ],
-          modalities: ["image", "text"],
+          prompt: fullPrompt,
+          size,
+          quality: quality as "low" | "medium" | "high",
+          n: generateCount,
         };
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        });
+        // 如果有参考图片，添加到请求中
+        if (referenceImages && referenceImages.length > 0) {
+          const firstRefImg = referenceImages[0];
+          let imageUrl: string;
+          
+          if (firstRefImg.startsWith("/outputs/")) {
+            // 本地文件路径
+            const filePath = path.join(process.cwd(), "public", firstRefImg);
+            if (fs.existsSync(filePath)) {
+              const fileBuffer = fs.readFileSync(filePath);
+              imageUrl = `data:image/png;base64,${fileBuffer.toString("base64")}`;
+            } else {
+              throw new Error(`参考图片不存在: ${filePath}`);
+            }
+          } else if (firstRefImg.includes(",")) {
+            // base64 data URL
+            imageUrl = firstRefImg;
+          } else {
+            // 纯 base64 字符串
+            imageUrl = `data:image/png;base64,${firstRefImg}`;
+          }
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+          imageParams.image_url = {
+            url: imageUrl,
+          };
         }
 
-        const data = await response.json();
-        const message = data.choices?.[0]?.message;
+        const response = await openai.images.generate(imageParams);
 
-        // 解析返回的图片数据
-        if (message?.images) {
-          for (const img of message.images) {
-            const imageUrlObj = img.image_url;
-            if (imageUrlObj?.url) {
-              const imageData = imageUrlObj.url;
-              const mimeMatch = imageData.match(/data:image\/([^;]+)/);
-              actualMimeType = mimeMatch ? mimeMatch[1] : "png";
-              const base64Part = imageData.split(",")[1];
-              outputBase64 = base64Part;
-            }
-          }
-        } else if (message?.content) {
-          const contentArray = Array.isArray(message.content) ? message.content : [message.content];
-          for (const contentItem of contentArray) {
-            if (contentItem?.type === "image_url" && contentItem.image_url?.url) {
-              const imageData = contentItem.image_url.url;
-              const mimeMatch = imageData.match(/data:image\/([^;]+)/);
-              actualMimeType = mimeMatch ? mimeMatch[1] : "png";
-              const base64Part = imageData.split(",")[1];
-              outputBase64 = base64Part;
-            }
+        for (const img of response.data) {
+          if (img.b64_json) {
+            outputImages.push({ base64: img.b64_json });
+          } else if (img.url) {
+            outputImages.push({ url: img.url });
           }
         }
 
-        if (!outputBase64) {
+        if (outputImages.length === 0) {
           throw new Error("Image2 未能生成图片");
+        }
+
+        if (outputImages[0].base64) {
+          outputBase64 = outputImages[0].base64;
         }
       } else {
         // Gemini 模型（flash / pro）
