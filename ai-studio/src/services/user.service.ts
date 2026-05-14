@@ -76,3 +76,44 @@ export async function register(data: {
 
   return user;
 }
+
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, password: true },
+  });
+
+  if (!user || !user.password) {
+    throw new Error("用户不存在");
+  }
+
+  const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+
+  if (!isPasswordValid) {
+    throw new Error("当前密码不正确");
+  }
+
+  const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { password: hashedNewPassword },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      avatar: true,
+      role: true,
+      credits: true,
+      industry: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return updatedUser;
+}
