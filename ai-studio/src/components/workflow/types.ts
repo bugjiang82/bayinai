@@ -14,6 +14,8 @@ export interface NodeData {
     resolution?: '480P' | '720P' | '1080P' | '4k';
     wanxResolution?: '480P' | '720P' | '1080P';
     mode?: 't2v' | 'i2v' | 'f2f';
+    n?: number;
+    thinking?: 'off' | 'low' | 'medium' | 'high';
   };
   credits: number;
   sourceImage?: string;

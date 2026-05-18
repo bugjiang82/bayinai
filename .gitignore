@@ -1,0 +1,24 @@
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.ico
+
+# Videos
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+
+# Archives
+*.tar.gz
+*.zip
+*.rar
+
+# Logs
+*.log

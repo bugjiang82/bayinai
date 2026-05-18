@@ -29,8 +29,8 @@ const COST_MAP: Record<string, number> = {
   image2: 60,
 };
 
-function getImage2Size(aspectRatio: string): string {
-  const sizeMap: Record<string, string> = {
+function getImage2Size(aspectRatio: string): "1024x1024" | "1792x1024" | "1024x1792" {
+  const sizeMap: Record<string, "1024x1024" | "1792x1024" | "1024x1792"> = {
     "1:1": "1024x1024",
     "16:9": "1792x1024",
     "9:16": "1024x1792",
@@ -166,17 +166,15 @@ Instructions:
 
         const response = await openai.images.edit({
           model: modelName,
-          image: originalBuffer,
-          mask: maskBuffer,
-          images: imageBuffers.length > 0 ? imageBuffers : undefined,
+          image: originalBuffer as any,
+          mask: maskBuffer as any,
           prompt: finalPrompt,
-          size: getImage2Size(aspectRatio),
+          size: getImage2Size(aspectRatio) as any,
           quality: quality as "low" | "medium" | "high",
           n: generateCount,
-          thinking: thinking as "off" | "low" | "medium" | "high",
-        });
+        } as any);
 
-        for (const img of response.data) {
+        for (const img of response.data || []) {
           if (img.b64_json) {
             outputImages.push({ base64: img.b64_json });
           } else if (img.url) {

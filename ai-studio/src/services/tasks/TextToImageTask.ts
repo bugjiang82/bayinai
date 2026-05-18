@@ -60,6 +60,7 @@ export class TextToImageTask extends BaseGenerateService {
       n = 1,
       quality = "low",
       thinking = "medium",
+      referenceImages,
     } = params;
 
     const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
@@ -128,7 +129,7 @@ export class TextToImageTask extends BaseGenerateService {
 
         const response = await openai.images.generate(imageParams);
 
-        for (const img of response.data) {
+        for (const img of response.data || []) {
           if (img.b64_json) {
             outputImages.push({ base64: img.b64_json });
           } else if (img.url) {

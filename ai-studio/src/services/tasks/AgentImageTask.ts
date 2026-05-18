@@ -89,7 +89,7 @@ ${negativePrompt}
           quality: "low",
         });
 
-        for (const img of response.data) {
+        for (const img of response.data || []) {
           if (img.b64_json) {
             outputBase64 = img.b64_json;
           }

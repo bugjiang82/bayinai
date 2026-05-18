@@ -320,25 +320,31 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
 
   const isImage2Model = data.config.model?.includes("image2");
 
-  const setImage2N = (n: number) => {
+  const setImage2N = (count: number) => {
     setNodes((nds) =>
-      nds.map((n) =>
-        n.id === props.id ? {
-          ...n,
-          data: { ...n.data, config: { ...n.data, n } }
-        } : n
-      )
+      nds.map((node) => {
+        if (node.id !== props.id) return node;
+        const currentConfig = node.data.config;
+        const newConfig = { ...currentConfig, n: count } as typeof currentConfig & { n: number };
+        return {
+          ...node,
+          data: { ...node.data, config: newConfig }
+        };
+      })
     );
   };
 
   const setImage2Thinking = (thinking: 'off' | 'low' | 'medium' | 'high') => {
     setNodes((nds) =>
-      nds.map((n) =>
-        n.id === props.id ? {
-          ...n,
-          data: { ...n.data, config: { ...n.data, thinking } }
-        } : n
-      )
+      nds.map((node) => {
+        if (node.id !== props.id) return node;
+        const currentConfig = node.data.config;
+        const newConfig = { ...currentConfig, thinking } as typeof currentConfig & { thinking: 'off' | 'low' | 'medium' | 'high' };
+        return {
+          ...node,
+          data: { ...node.data, config: newConfig }
+        };
+      })
     );
   };
 
