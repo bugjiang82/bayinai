@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       resolution = "720P",
       ratio = "16:9",
       reference_image,
+      reference_images,
       first_frame,
       last_frame,
       cost,
@@ -59,8 +60,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error("积分参数错误"), { status: 400 });
     }
 
+    const isHappyHorse = model.includes("happyhorse");
+
     console.log("=================== Workflow Video API ===================");
     console.log("Model:", model);
+    console.log("Is HappyHorse:", isHappyHorse);
     console.log("Prompt:", prompt.substring(0, 50), "...");
     console.log("Cost:", cost);
     console.log("First frame provided:", !!first_frame);
@@ -73,10 +77,12 @@ export async function POST(request: NextRequest) {
     console.log("Last frame starts with data:", last_frame?.startsWith("data:"));
     console.log("Reference image provided:", !!reference_image);
     console.log("Reference image type:", typeof reference_image);
+    console.log("Reference images provided:", !!reference_images);
     console.log("==========================================================");
 
     let firstFrameData: string | undefined;
     let lastFrameData: string | undefined;
+    let referenceImagesData: string[] = [];
 
     if (first_frame) {
       try {
@@ -106,13 +112,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (reference_images && Array.isArray(reference_images)) {
+      for (const img of reference_images) {
+        if (img) {
+          try {
+            const processedImg = await processImageData(img);
+            referenceImagesData.push(processedImg);
+            console.log("Reference image processed successfully, length:", processedImg.length);
+          } catch (e) {
+            console.error("Error processing reference image:", e);
+            throw new Error("处理参考图片失败: " + (e instanceof Error ? e.message : "未知错误"));
+          }
+        }
+      }
+    }
+
     const result = await generateVideo({
       userId: session.user.id,
       prompt,
-      mode: firstFrameData ? "image-to-video" : "text-to-video",
+      mode: firstFrameData || referenceImagesData.length > 0 ? "image-to-video" : "text-to-video",
       model,
       firstFrame: firstFrameData,
       lastFrame: lastFrameData,
+      referenceImages: referenceImagesData,
       duration,
       resolution,
       ratio,

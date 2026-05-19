@@ -1,0 +1,37 @@
+文生图示例代码
+import fs from "fs";
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+async function main() {
+
+  const result = await client.images.generate({
+    model: "gpt-image-1",
+
+    prompt: `
+商场母亲节宣传海报，
+    `,
+
+    size: "1536x1024",
+
+    quality: "low",
+  });
+
+  // base64
+  const imageBase64 = result.data[0].b64_json;
+
+  fs.writeFileSync(
+    "beach.png",
+    Buffer.from(imageBase64, "base64")
+  );
+
+  console.log("生成完成");
+}
+
+main();
+
+
+

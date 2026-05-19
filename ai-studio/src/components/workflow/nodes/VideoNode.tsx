@@ -100,6 +100,20 @@ const MODEL_CONFIG: Record<string, {
     durations: ['5s', '10s'],
     supportImageToVideo: false,
   },
+  "happyhorse-1.0-t2v": {
+    label: "HappyHorse",
+    costPerSecond: 50,
+    resolutions: ['720P', '1080P'],
+    durations: ['5s', '10s', '15s'],
+    supportImageToVideo: false,
+  },
+  "happyhorse-1.0-i2v": {
+    label: "HappyHorse",
+    costPerSecond: 50,
+    resolutions: ['720P', '1080P'],
+    durations: ['5s', '10s', '15s'],
+    supportImageToVideo: true,
+  },
 };
 
 // 计算积分消耗

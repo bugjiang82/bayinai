@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
     const {
       first_frame,
       last_frame,
+      reference_images,
       prompt,
       resolution = "720P",
       duration = 5,
@@ -100,17 +101,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error("请输入提示词"), { status: 400 });
     }
 
-    if (mode === "image-to-video" && !first_frame) {
+    const isHappyHorse = model.includes("happyhorse");
+    if (!isHappyHorse && mode === "image-to-video" && !first_frame) {
       return NextResponse.json(error("请上传起始帧图片"), { status: 400 });
     }
 
     let firstFrameBase64: string | undefined;
     let lastFrameBase64: string | undefined;
+    let referenceImagesBase64: string[] = [];
 
-    if (mode === "image-to-video") {
+    if (mode === "image-to-video" && first_frame) {
       firstFrameBase64 = await convertAndCompressToBase64(first_frame);
       if (last_frame) {
         lastFrameBase64 = await convertAndCompressToBase64(last_frame);
+      }
+    }
+
+    if (reference_images && Array.isArray(reference_images)) {
+      for (const img of reference_images) {
+        if (img) {
+          const base64 = await convertAndCompressToBase64(img);
+          referenceImagesBase64.push(base64);
+        }
       }
     }
 
@@ -120,6 +132,7 @@ export async function POST(request: NextRequest) {
       mode,
       firstFrame: firstFrameBase64 || undefined,
       lastFrame: lastFrameBase64 || undefined,
+      referenceImages: referenceImagesBase64,
       resolution,
       duration,
       model,

@@ -379,6 +379,7 @@ export interface GenerateVideoParams {
   mode: "text-to-video" | "image-to-video";
   firstFrame?: string;
   lastFrame?: string;
+  referenceImages?: string[];
   resolution?: string;
   duration?: number;
   model?: string;
@@ -402,6 +403,7 @@ export async function generateVideo(
     mode,
     firstFrame,
     lastFrame,
+    referenceImages = [],
     resolution = "720P",
     duration = 5,
     model = "wan2.2-kf2v-flash",
@@ -415,12 +417,17 @@ export async function generateVideo(
   }
 
   const isWan27 = model.includes("wan2.7") || model.includes("wan27");
+  const isHappyHorse = model.includes("happyhorse");
   const isTextToVideo = mode === "text-to-video";
   const isWan27I2V = !isTextToVideo && isWan27;
   const isTextToVideoWan27 = isTextToVideo && isWan27;
-  const apiEndpoint = (isTextToVideoWan27 || isWan27I2V)
-    ? "/services/aigc/video-generation/video-synthesis"
-    : "/services/aigc/image2video/video-synthesis";
+
+  let apiEndpoint: string;
+  if (isHappyHorse || isTextToVideoWan27 || isWan27I2V) {
+    apiEndpoint = "/services/aigc/video-generation/video-synthesis";
+  } else {
+    apiEndpoint = "/services/aigc/image2video/video-synthesis";
+  }
 
   const resolveMediaUrl = (input: string | undefined): string | undefined => {
     if (!input) return undefined;
@@ -440,21 +447,41 @@ export async function generateVideo(
   };
 
   const getImageUrl = (imageInput: string): string => {
-    // 如果已经是 http URL，直接返回
     if (imageInput.startsWith("http://") || imageInput.startsWith("https://")) {
       return imageInput;
     }
-    // 如果是 base64，添加前缀
     if (imageInput.startsWith("data:")) {
       return imageInput;
     }
-    // 否则假设是纯 base64，添加前缀
     return `data:image/jpeg;base64,${imageInput}`;
   };
 
   let requestBody: Record<string, unknown>;
 
-  if (isWan27) {
+  if (isHappyHorse) {
+    const processedFirstFrame = firstFrame ? resolveMediaUrl(firstFrame) : undefined;
+    const processedReferenceImages = referenceImages.map(img => resolveMediaUrl(img)).filter(Boolean) as string[];
+
+    const input: Record<string, unknown> = { prompt };
+    if (processedFirstFrame) {
+      input.first_frame_url = processedFirstFrame;
+    }
+    if (processedReferenceImages.length > 0) {
+      input.reference_images = processedReferenceImages;
+    }
+
+    requestBody = {
+      model,
+      input,
+      parameters: {
+        resolution,
+        ratio,
+        duration,
+        prompt_extend: promptExtend,
+        watermark: false,
+      },
+    };
+  } else if (isWan27) {
     if (isTextToVideo) {
       requestBody = {
         model,
@@ -517,6 +544,7 @@ export async function generateVideo(
     console.log("API Endpoint:", `${DASHSCOPE_BASE_URL}${apiEndpoint}`);
     console.log("Model:", model);
     console.log("Is Wan27:", isWan27);
+    console.log("Is HappyHorse:", isHappyHorse);
     console.log("Is Text to Video:", isTextToVideo);
     console.log("Request Body:", JSON.stringify(requestBody, (key, value) => {
       if (key === "url" && typeof value === "string" && value.length > 100) {

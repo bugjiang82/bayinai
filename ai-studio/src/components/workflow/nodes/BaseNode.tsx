@@ -35,6 +35,8 @@ const MODEL_COST_MAP: Record<string, { base: number; type: "fixed" | "per-second
   // 视频模型
   "veo-3.1-lite-generate-preview": { base: 50, type: "per-second" },
   "wan2.2-kf2v-flash": { base: 50, type: "per-second" },
+  "happyhorse-1.0-t2v": { base: 50, type: "per-second" },
+  "happyhorse-1.0-i2v": { base: 50, type: "per-second" },
 };
 
 // 计算积分消耗
@@ -467,6 +469,8 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                       { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2' },
                       { id: 'wan2.7-r2v', name: '万相 2.7' },
                       { id: 'wan2.7-t2v', name: '万相 2.7' },
+                      { id: 'happyhorse-1.0-t2v', name: 'HappyHorse' },
+                      { id: 'happyhorse-1.0-i2v', name: 'HappyHorse' },
                       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
                     ].find(m => m.id === data.config.model)?.name || (data.type === 'video' ? 'Veo 3.1 Lite' : (data.type === 'image' ? 'Gemini 2.5 Flash Image' : 'Gemini 3 Flash'))}
                   </span>
@@ -483,6 +487,8 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', type: ['text'] },
                       { id: 'wan2.7-r2v', name: '万相 2.7 (图生视频)', type: ['video'] },
                       { id: 'wan2.7-t2v', name: '万相 2.7 (文生视频)', type: ['video'] },
+                      { id: 'happyhorse-1.0-t2v', name: 'HappyHorse (文生视频)', type: ['video'] },
+                      { id: 'happyhorse-1.0-i2v', name: 'HappyHorse (图生视频)', type: ['video'] },
                       { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite', type: ['video'] },
                       { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2 (首尾帧)', type: ['video'] },
                     ].filter(m => m.type.includes(data.type)).map(m => (

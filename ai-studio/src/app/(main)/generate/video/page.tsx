@@ -45,10 +45,12 @@ const DURATION_OPTIONS = [
 const MODEL_OPTIONS = {
   "text-to-video": [
     { value: "wan2.7-t2v", label: "万相 2.7", description: "文生视频" },
+    { value: "happyhorse-1.0-t2v", label: "HappyHorse", description: "文生视频" },
   ],
   "image-to-video": [
     { value: "wan2.2-kf2v-flash", label: "万相 2.2", description: "快速生成" },
     { value: "wan2.7-r2v", label: "万相 2.7", description: "高质量" },
+    { value: "happyhorse-1.0-i2v", label: "HappyHorse", description: "支持多图参考" },
   ],
 };
 
@@ -58,6 +60,14 @@ const RESOLUTION_OPTIONS = {
     { value: "1080P", label: "1080P", description: "1920×1080" },
   ],
   "wan2.7-t2v": [
+    { value: "720P", label: "720P", description: "1280×720" },
+    { value: "1080P", label: "1080P", description: "1920×1080" },
+  ],
+  "happyhorse-1.0-t2v": [
+    { value: "720P", label: "720P", description: "1280×720" },
+    { value: "1080P", label: "1080P", description: "1920×1080" },
+  ],
+  "happyhorse-1.0-i2v": [
     { value: "720P", label: "720P", description: "1280×720" },
     { value: "1080P", label: "1080P", description: "1920×1080" },
   ],
@@ -160,7 +170,9 @@ export default function VideoPage() {
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;
-    if (videoMode === "image-to-video" && !startImage) return;
+    
+    const isHappyHorse = model.includes("happyhorse");
+    if (!isHappyHorse && videoMode === "image-to-video" && !startImage) return;
 
     const durationNum = parseInt(duration, 10) || 5;
     const cost = durationNum * 50;
@@ -667,7 +679,7 @@ export default function VideoPage() {
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               )}
               onClick={handleGenerate}
-              disabled={!prompt.trim() || (videoMode === "image-to-video" && !startImage) || credits < (parseInt(duration, 10) || 5) * 50 || isGenerating}
+              disabled={!prompt.trim() || (!model.includes("happyhorse") && videoMode === "image-to-video" && !startImage) || credits < (parseInt(duration, 10) || 5) * 50 || isGenerating}
             >
               {isGenerating ? (
                 <>
@@ -686,7 +698,7 @@ export default function VideoPage() {
                 请输入文字描述后开始生成
               </p>
             )}
-            {videoMode === "image-to-video" && prompt.trim() && !startImage && (
+            {!model.includes("happyhorse") && videoMode === "image-to-video" && prompt.trim() && !startImage && (
               <p className="text-xs text-zinc-600 text-center mt-2">
                 请上传起始图片
               </p>
