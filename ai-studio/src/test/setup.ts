@@ -1,4 +1,4 @@
-import 'vitest/globals';
+export {};
 
 declare global {
   interface Window {
@@ -7,7 +7,7 @@ declare global {
 }
 
 global.indexedDB = global.indexedDB || {
-  open: (name: string, version: number) => {
+  open: (_name: string, _version: number) => {
     let db: any = {
       objectStoreNames: { contains: () => false },
       transaction: () => ({
@@ -19,17 +19,17 @@ global.indexedDB = global.indexedDB || {
       }),
       close: () => {},
     };
-    
-    const request = {
+
+    const request: any = {
       onerror: null,
       onsuccess: null,
       result: db,
     };
-    
+
     setTimeout(() => {
       if (request.onsuccess) request.onsuccess({ target: request });
     }, 0);
-    
+
     return request;
   },
 };

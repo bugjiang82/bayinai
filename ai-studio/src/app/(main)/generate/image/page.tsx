@@ -13,6 +13,7 @@ import DropdownSelector from "@/components/generate/DropdownSelector";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { ModelType } from "@/components/generate/ModelSelector";
+import { createPolicyKey, getImageCost, type ImageModelId, type ImageQuality } from "@/models";
 
 type ImageMode = "text-to-image" | "image-to-image";
 
@@ -329,14 +330,16 @@ export default function UnifiedImagePage() {
   }, []);
 
   const getCreditCost = useCallback((m: string) => {
-    const policyKey = mode === "image-to-image" ? `image-to-image-${m}` : `text-to-image-${m}`;
+    const modelId: ImageModelId = m === "flash" ? "flash" : m === "pro" ? "pro" : "image2";
+    const quality: ImageQuality = resolution === "512" ? "512" : resolution === "2K" ? "2K" : resolution === "4K" ? "4K" : "1K";
+    
+    const policyKey = createPolicyKey(modelId, quality);
     if (creditPolicies[policyKey]) {
       return creditPolicies[policyKey].cost;
     }
-    if (m === "flash") return 1;
-    if (m === "image2") return 50;
-    return 3;
-  }, [creditPolicies, mode]);
+    
+    return getImageCost(modelId, quality);
+  }, [creditPolicies, resolution]);
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;

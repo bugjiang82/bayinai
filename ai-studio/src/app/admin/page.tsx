@@ -34,6 +34,7 @@ import {
   AlertCircle,
   Clock,
   Building2,
+  BookOpen,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +83,11 @@ const NAV_ITEMS: { id: AdminTab; label: string; icon: React.ElementType }[] = [
   { id: "users", label: "用户管理", icon: Users },
   { id: "content", label: "内容管理", icon: FileText },
   { id: "settings", label: "系统设置", icon: Settings },
+];
+
+const OTHER_LINKS = [
+  { href: "/admin/credit-policies", label: "积分策略", icon: Coins },
+  { href: "/admin/docs", label: "开发文档", icon: BookOpen },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1554,6 +1560,23 @@ export default function AdminPage() {
               {item.label}
             </button>
           ))}
+          
+          <div className="pt-4 mt-4 border-t border-white/[0.06] space-y-1">
+            {OTHER_LINKS.map((item) => (
+              <Button
+                key={item.href}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 text-zinc-400 hover:text-zinc-300"
+                asChild
+              >
+                <Link href={item.href}>
+                  <item.icon className="w-4 h-4" />
+                  {item.label}
+                </Link>
+              </Button>
+            ))}
+          </div>
         </nav>
 
         {/* Footer */}

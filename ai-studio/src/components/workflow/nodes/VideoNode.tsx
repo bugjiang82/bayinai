@@ -5,46 +5,11 @@ import { NodeProps, useReactFlow, Node } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { NodeData } from '../types';
 import { generateVideo, checkVideoStatus } from '../services/aiService';
+import { calculateNodeCost } from '../services/costCalculator';
+import { generateVideoThumbnail } from '@/utils/thumbnail';
 import { Video, Film, PlayCircle, RefreshCw, Layers, Clock, Zap, Play, Pause, Square } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
-
-const generateThumbnail = async (videoUrl: string): Promise<string> => {
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.src = videoUrl;
-    
-    video.addEventListener('loadedmetadata', () => {
-      video.currentTime = 0;
-      
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        resolve(videoUrl);
-        return;
-      }
-      
-      canvas.width = video.videoWidth || 320;
-      canvas.height = video.videoHeight || 180;
-      
-      video.addEventListener('seeked', () => {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7);
-        resolve(thumbnailUrl);
-      }, { once: true });
-      
-      video.addEventListener('error', () => {
-        resolve(videoUrl);
-      }, { once: true });
-    });
-    
-    video.addEventListener('error', () => {
-      resolve(videoUrl);
-    }, { once: true });
-  });
-};
 
 const downloadVideo = async (videoUrl: string, fileName: string = 'video') => {
   try {
@@ -64,70 +29,12 @@ const downloadVideo = async (videoUrl: string, fileName: string = 'video') => {
   }
 };
 
-// 模型配置
-const MODEL_CONFIG: Record<string, {
-  label: string;
-  costPerSecond: number;
-  resolutions: string[];
-  durations: string[];
-  supportImageToVideo: boolean;
-}> = {
-  "wan2.7-r2v": {
-    label: "万相 2.7",
-    costPerSecond: 50,
-    resolutions: ['720P', '1080P'],
-    durations: ['5s', '10s', '15s'],
-    supportImageToVideo: true,
-  },
-  "wan2.7-t2v": {
-    label: "万相 2.7",
-    costPerSecond: 50,
-    resolutions: ['720P', '1080P'],
-    durations: ['5s', '10s', '15s'],
-    supportImageToVideo: false,
-  },
-  "wan2.2-kf2v-flash": {
-    label: "万相 2.2",
-    costPerSecond: 50,
-    resolutions: ['480P', '720P', '1080P'],
-    durations: ['3s', '5s', '10s'],
-    supportImageToVideo: true,
-  },
-  "veo-3.1-lite-generate-preview": {
-    label: "Veo 3.1",
-    costPerSecond: 50,
-    resolutions: ['720P'],
-    durations: ['5s', '10s'],
-    supportImageToVideo: false,
-  },
-  "happyhorse-1.0-t2v": {
-    label: "HappyHorse",
-    costPerSecond: 50,
-    resolutions: ['720P', '1080P'],
-    durations: ['5s', '10s', '15s'],
-    supportImageToVideo: false,
-  },
-  "happyhorse-1.0-i2v": {
-    label: "HappyHorse",
-    costPerSecond: 50,
-    resolutions: ['720P', '1080P'],
-    durations: ['5s', '10s', '15s'],
-    supportImageToVideo: true,
-  },
-};
-
-// 计算积分消耗
-const calculateCost = (data: NodeData): number => {
-  const modelKey = data.config.model || "wan2.2-kf2v-flash";
-  const config = MODEL_CONFIG[modelKey] || MODEL_CONFIG["wan2.2-kf2v-flash"];
-
-  if (data.type === "video") {
-    const duration = Number(data.config.duration?.replace("s", "") || 5);
-    return duration * config.costPerSecond;
-  }
-
-  return config.costPerSecond;
-};
+import {
+  getVideoModel,
+  type VideoModelId,
+  type VideoResolution,
+} from '@/models';
+import { useCreditPolicies } from '@/hooks/useCreditPolicies';
 
 export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   const { setNodes, getNodes } = useReactFlow<Node<NodeData>>();
@@ -137,9 +44,10 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const { getVideoCostFromApi, getImageCostFromApi } = useCreditPolicies();
   
   // 计算积分消耗
-  const cost = useMemo(() => calculateCost(data), [data.config.model, data.config.duration, data.type]);
+  const cost = useMemo(() => calculateNodeCost(data, getImageCostFromApi, getVideoCostFromApi), [data.config.model, data.config.duration, data.type, getImageCostFromApi, getVideoCostFromApi]);
 
   const handleGenerate = async () => {
     if (data.isGenerating || data.credits < cost) return;
@@ -252,7 +160,7 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
         if (result.status === "SUCCEEDED") {
           setProgress(100);
           
-          const thumbnailUrl = await generateThumbnail(result.video_url);
+          const thumbnailUrl = await generateVideoThumbnail(result.video_url);
           
           downloadVideo(result.video_url, `video_${Date.now()}`);
           
@@ -341,20 +249,26 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
 
   const nodeWidth = getDynamicWidth();
 
-  const currentModel = data.config.model || "wan2.2-kf2v-flash";
-  const currentConfig = MODEL_CONFIG[currentModel] || MODEL_CONFIG["wan2.2-kf2v-flash"];
-  const currentResolutions = currentConfig.resolutions;
-  const currentDurations = currentConfig.durations;
+  const currentModel = (data.config.model || "wan2.2-kf2v-flash") as VideoModelId;
+  const currentModelInfo = getVideoModel(currentModel);
+  const currentResolutions = currentModelInfo?.supportedResolutions || ["720P"];
+  const currentDurations = currentModelInfo?.supportedDurations.map(d => `${d}s`) || ["5s"];
+  const currentLabel = currentModelInfo?.displayName || "万相 2.2";
 
   const handleModelChange = (model: string) => {
-    const newConfig = MODEL_CONFIG[model] || MODEL_CONFIG["wan2.2-kf2v-flash"];
-    let updates: Partial<NodeData['config']> = { model };
+    const newModelInfo = getVideoModel(model);
+    if (!newModelInfo) return;
 
-    if (!newConfig.resolutions.includes(data.config.wanxResolution || "720P")) {
-      updates.wanxResolution = newConfig.resolutions[0] as '480P' | '720P' | '1080P';
+    const updates: Partial<NodeData['config']> = { model };
+
+    const currentRes = data.config.wanxResolution || "720P";
+    if (!newModelInfo.supportedResolutions.includes(currentRes as VideoResolution)) {
+      updates.wanxResolution = newModelInfo.supportedResolutions[0] as '480P' | '720P' | '1080P';
     }
-    if (!newConfig.durations.includes(data.config.duration || "5s")) {
-      updates.duration = newConfig.durations[0] as '3s' | '5s' | '10s' | '15s';
+    const currentDur = data.config.duration || "5s";
+    const newDurations = newModelInfo.supportedDurations.map(d => `${d}s`);
+    if (!newDurations.includes(currentDur)) {
+      updates.duration = newDurations[0] as '3s' | '5s' | '10s' | '15s';
     }
 
     updateConfig(updates);
@@ -369,7 +283,7 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
           <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all text-slate-400 hover:text-white group">
             <Layers size={16} className="text-slate-500" />
             <span className="text-sm font-bold uppercase tracking-tight">
-              {currentConfig.label} · {data.config.wanxResolution || '720P'} · {data.config.duration || '5s'}
+              {currentLabel} · {data.config.wanxResolution || '720P'} · {data.config.duration || '5s'}
             </span>
           </button>
 

@@ -1,41 +1,23 @@
 import prisma from "@/lib/prisma";
+import {
+  getImageCost,
+  getVideoCostPerSecond,
+  buildDefaultPolicyMap,
+  createPolicyKey,
+} from "@/models";
+import type {
+  ImageModelId,
+  ImageQuality,
+  VideoModelId,
+  VideoResolution,
+  CreditPolicyEntry,
+} from "@/models";
 
-interface CreditPolicy {
-  key: string;
-  name: string;
-  description: string | null;
-  cost: number;
-  unit: string;
-  category: string;
-  isActive: boolean;
-}
-
-interface DefaultPolicy {
-  cost: number;
-  unit: string;
-}
-
-const DEFAULT_POLICIES: Record<string, Omit<DefaultPolicy, "key"> & { key?: string }> = {
-  "text-to-image-flash": { cost: 1, unit: "次" },
-  "text-to-image-pro": { cost: 3, unit: "次" },
-  "text-to-image-image2": { cost: 50, unit: "次" },
-  "image-to-image-flash": { cost: 1, unit: "次" },
-  "image-to-image-pro": { cost: 3, unit: "次" },
-  "image-to-image-image2": { cost: 50, unit: "次" },
-  "architecture-flash": { cost: 3, unit: "次" },
-  "architecture-pro": { cost: 3, unit: "次" },
-  "edit-flash": { cost: 1, unit: "次" },
-  "edit-pro": { cost: 3, unit: "次" },
-  "video-per-second": { cost: 50, unit: "秒" },
-  "workflow-image": { cost: 1, unit: "次" },
-  "automation-test": { cost: 10, unit: "次" },
-};
-
-let cachedPolicies: Map<string, CreditPolicy> | null = null;
+let cachedPolicies: Map<string, CreditPolicyEntry> | null = null;
 let cacheTimestamp: number = 0;
 const CACHE_DURATION = 60 * 1000;
 
-export async function getCreditPolicies(): Promise<Map<string, CreditPolicy>> {
+export async function getCreditPolicies(): Promise<Map<string, CreditPolicyEntry>> {
   const now = Date.now();
 
   if (cachedPolicies && (now - cacheTimestamp) < CACHE_DURATION) {
@@ -47,18 +29,30 @@ export async function getCreditPolicies(): Promise<Map<string, CreditPolicy>> {
       where: { isActive: true },
     });
 
-    cachedPolicies = new Map(policies.map((p) => [p.key, p]));
-    cacheTimestamp = now;
-
-    return cachedPolicies;
+    if (policies.length > 0) {
+      cachedPolicies = new Map(policies.map((p) => [p.key, p]));
+      cacheTimestamp = now;
+      return cachedPolicies;
+    }
   } catch (error) {
     console.error("Failed to fetch credit policies from DB:", error);
-    return new Map();
   }
-}
 
-export function getDefaultPolicy(key: string): DefaultPolicy {
-  return DEFAULT_POLICIES[key] || { cost: 1, unit: "次" };
+  const defaultMap = buildDefaultPolicyMap();
+  cachedPolicies = new Map();
+  for (const [key, value] of Object.entries(defaultMap)) {
+    cachedPolicies.set(key, {
+      key,
+      name: key,
+      description: null,
+      cost: value.cost,
+      unit: value.unit,
+      category: "image",
+      isActive: true,
+    } as CreditPolicyEntry);
+  }
+  cacheTimestamp = now;
+  return cachedPolicies;
 }
 
 export function invalidatePolicyCache(): void {
@@ -74,37 +68,57 @@ export async function getPolicyCost(key: string): Promise<number> {
     return policy.cost;
   }
 
-  return getDefaultPolicy(key).cost;
+  const defaultMap = buildDefaultPolicyMap();
+  return defaultMap[key]?.cost ?? 1;
 }
 
-export async function getPolicyUnit(key: string): Promise<string> {
-  const policies = await getCreditPolicies();
-  const policy = policies.get(key);
+export async function getImageGenerationCost(
+  modelId: ImageModelId,
+  quality: ImageQuality
+): Promise<number> {
+  const policyKey = createPolicyKey(modelId, quality);
+  const dbCost = await getPolicyCost(policyKey);
 
-  if (policy) {
-    return policy.unit;
+  if (dbCost !== undefined && dbCost > 0) {
+    return dbCost;
   }
 
-  return getDefaultPolicy(key).unit;
+  return getImageCost(modelId, quality);
 }
 
-export function getCostByModelAndType(
-  type: "text-to-image" | "image-to-image" | "architecture" | "edit" | "video" | "automation-test" | "workflow-image",
-  model?: string
-): number {
-  const modelKey = model || "flash";
-  const policyKey = `${type}-${modelKey}`;
+export async function getVideoGenerationCostPerSecond(
+  modelId: VideoModelId,
+  resolution: VideoResolution
+): Promise<number> {
+  const policyKey = createPolicyKey(modelId, resolution);
+  const dbCost = await getPolicyCost(policyKey);
 
-  if (DEFAULT_POLICIES[policyKey]) {
-    return DEFAULT_POLICIES[policyKey].cost;
+  if (dbCost !== undefined && dbCost > 0) {
+    return dbCost;
   }
 
-  if (type === "video") {
-    return 50;
-  }
-
-  return 1;
+  return getVideoCostPerSecond(modelId, resolution);
 }
+
+export async function getVideoGenerationTotalCost(
+  modelId: VideoModelId,
+  resolution: VideoResolution,
+  duration: number
+): Promise<number> {
+  const costPerSecond = await getVideoGenerationCostPerSecond(modelId, resolution);
+  return costPerSecond * duration;
+}
+
+export function getDefaultImageCost(modelId: ImageModelId, quality: ImageQuality): number {
+  return getImageCost(modelId, quality);
+}
+
+export function getDefaultVideoCostPerSecond(modelId: VideoModelId, resolution: VideoResolution): number {
+  return getVideoCostPerSecond(modelId, resolution);
+}
+
+export { DEFAULT_POLICIES } from "./creditPolicyCompat";
+export type { CreditPolicyEntry };
 
 export async function getGenerationCost(
   type: "text-to-image" | "image-to-image" | "architecture" | "edit" | "video" | "automation-test" | "workflow-image",
@@ -112,12 +126,22 @@ export async function getGenerationCost(
 ): Promise<number> {
   const modelKey = model || "flash";
   const policyKey = `${type}-${modelKey}`;
-  return await getPolicyCost(policyKey);
+
+  try {
+    const policies = await getCreditPolicies();
+    const policy = Array.from(policies.values()).find(p => p.key === policyKey);
+    if (policy) return policy.cost;
+
+    if (type === "video") return 50;
+
+    const defaultMap = buildDefaultPolicyMap();
+    if (defaultMap[policyKey]) return defaultMap[policyKey].cost;
+  } catch {
+    // fallback
+  }
+
+  const compatModule = await import("./creditPolicyCompat");
+  return compatModule.getCostByModelAndType(type, model);
 }
 
-export async function getVideoCostPerSecond(): Promise<number> {
-  return await getPolicyCost("video-per-second");
-}
-
-export { DEFAULT_POLICIES };
-export type { CreditPolicy, DefaultPolicy };
+export { getCostByModelAndType } from "./creditPolicyCompat";

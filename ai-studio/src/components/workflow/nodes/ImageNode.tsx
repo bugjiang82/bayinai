@@ -1,59 +1,42 @@
 'use client';
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NodeProps, useReactFlow, Node } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { NodeData } from '../types';
 import { generateImage } from '../services/aiService';
+import { calculateNodeCost } from '../services/costCalculator';
+import { createImageThumbnail } from '@/utils/thumbnail';
 import { ImageIcon, Layout, Zap, Monitor, Smartphone, Square, RefreshCw, Upload, Maximize2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-
-type CreditPolicies = Record<string, { cost: number; unit: string }>;
+import { useCreditPolicies } from '@/hooks/useCreditPolicies';
+import {
+  type ImageModelId,
+  type ImageQuality,
+  getImageModelIdByApiId,
+} from '@/models';
 
 export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   const { setNodes, getNodes } = useReactFlow<Node<NodeData>>();
   const data = props.data;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState(0);
-  const [creditPolicies, setCreditPolicies] = useState<CreditPolicies>({});
+  const { getImageCostFromApi } = useCreditPolicies();
 
-  useEffect(() => {
-    const fetchPolicies = async () => {
-      try {
-        const res = await fetch("/api/credits/policies");
-        const json = await res.json();
-        if (json.success && json.data) {
-          setCreditPolicies(json.data);
-        }
-      } catch {
-        // 忽略错误，使用默认积分
-      }
-    };
-    fetchPolicies();
-  }, []);
+  const cost = useMemo(() => {
+    const model = data.config.model || 'gemini-3.1-flash-image-preview';
+    const modelId = getImageModelIdByApiId(model) || 'flash';
 
-  const getCost = useMemo(() => {
-    return (model: string): number => {
-      const policyKey = `text-to-image-${model}`;
-      if (creditPolicies[policyKey]) {
-        return creditPolicies[policyKey].cost;
-      }
-      const defaultCosts: Record<string, number> = {
-        flash: 1,
-        pro: 3,
-        image2: 50,
-      };
-      const modelCost = defaultCosts[model] || 1;
-      if (model === "image2" && data.config.n) {
-        return modelCost * data.config.n;
-      }
-      return modelCost;
-    };
-  }, [creditPolicies, data.config.n]);
+    const quality: ImageQuality = data.config.quality === '512p' ? '512'
+      : data.config.quality === 'standard' ? '1K'
+      : data.config.quality === 'hd' ? '2K'
+      : data.config.quality === '4k' ? '4K'
+      : '1K';
 
-  const cost = useMemo(() => getCost(data.config.model || 'flash'), [data.config.model, getCost]);
+    return getImageCostFromApi(modelId, quality);
+  }, [data.config.model, data.config.quality, getImageCostFromApi]);
 
   const handleGenerate = async () => {
     if (data.isGenerating || data.credits < cost) return;
@@ -105,45 +88,9 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
       
       console.log("图片URL:", url);
 
-      // 完成进度
       setProgress(100);
 
-      // 创建缩略图用于显示，优化拖动性能
-      const createThumbnail = (imgUrl: string): Promise<string> => {
-        return new Promise<string>((resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const maxSize = 512;
-            let thumbWidth = img.width;
-            let thumbHeight = img.height;
-
-            if (thumbWidth > thumbHeight) {
-              if (thumbWidth > maxSize) {
-                thumbHeight = (thumbHeight * maxSize) / thumbWidth;
-                thumbWidth = maxSize;
-              }
-            } else {
-              if (thumbHeight > maxSize) {
-                thumbWidth = (thumbWidth * maxSize) / thumbHeight;
-                thumbHeight = maxSize;
-              }
-            }
-
-            canvas.width = thumbWidth;
-            canvas.height = thumbHeight;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
-            }
-            resolve(canvas.toDataURL('image/jpeg', 0.7));
-          };
-          img.onerror = () => resolve(imgUrl);
-          img.src = imgUrl;
-        });
-      };
-
-      createThumbnail(url).then((thumbnailUrl: string) => {
+      createImageThumbnail(url).then((thumbnailUrl) => {
         setNodes((nds) =>
           nds.map((n) =>
             n.id === props.id

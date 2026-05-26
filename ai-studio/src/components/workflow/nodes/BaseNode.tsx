@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Handle, Position, NodeProps, useReactFlow, Node } from '@xyflow/react';
-import { useDragging, useMultiSelect } from '../WorkflowCanvas';
+import { useDragging, useMultiSelect } from '../context/CanvasInteractionContext';
 import { 
   Plus, 
   RefreshCw, 
@@ -22,34 +22,14 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { NodeData } from '../types';
-
-// 模型积分消耗配置
-const MODEL_COST_MAP: Record<string, { base: number; type: "fixed" | "per-second" }> = {
-  // 图片模型
-  "gemini-2.5-flash-image": { base: 1, type: "fixed" },
-  "gemini-3.1-flash-image-preview": { base: 1, type: "fixed" },
-  
-  // 文本模型
-  "gemini-3-flash-preview": { base: 1, type: "fixed" },
-  
-  // 视频模型
-  "veo-3.1-lite-generate-preview": { base: 50, type: "per-second" },
-  "wan2.2-kf2v-flash": { base: 50, type: "per-second" },
-  "happyhorse-1.0-t2v": { base: 50, type: "per-second" },
-  "happyhorse-1.0-i2v": { base: 50, type: "per-second" },
-};
-
-// 计算积分消耗
-const calculateCost = (data: NodeData): number => {
-  const modelConfig = MODEL_COST_MAP[data.config.model] || { base: 1, type: "fixed" };
-  
-  if (modelConfig.type === "per-second" && data.type === "video") {
-    const duration = Number(data.config.duration?.replace("s", "") || 5);
-    return duration * modelConfig.base;
-  }
-  
-  return modelConfig.base;
-};
+import {
+  type ImageModelId,
+  getCanvasImageModelOptions,
+  getCanvasVideoModelOptions,
+  getImageModelIdByApiId,
+} from '@/models';
+import { useCreditPolicies } from '@/hooks/useCreditPolicies';
+import { calculateNodeCost } from '../services/costCalculator';
 
 interface BaseNodeProps extends NodeProps<Node<NodeData>> {
   children?: React.ReactNode;
@@ -83,9 +63,10 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const isDragging = useDragging();
   const isMultiSelected = useMultiSelect();
   const referencedNodesRef = useRef<Node<NodeData>[]>([]);
+  const { getImageCostFromApi, getVideoCostFromApi } = useCreditPolicies();
   
   // 计算积分消耗
-  const cost = useMemo(() => calculateCost(data), [data.config.model, data.config.duration, data.type]);
+  const cost = useMemo(() => calculateNodeCost(data, getImageCostFromApi, getVideoCostFromApi), [data.config.model, data.config.duration, data.config.quality, data.type, getImageCostFromApi, getVideoCostFromApi]);
 
   // 引用节点计算 - 拖拽时跳过计算以提升性能
   const parentIds = (data.referencedParentIds || []) as string[];
@@ -462,17 +443,19 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                     <div className="w-3 h-0.5 bg-slate-500 group-hover:bg-indigo-400 transition-colors" />
                   </div>
                   <span className="text-sm font-bold text-slate-300">
-                    {[
-                      { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image' },
-                      { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash Image' },
-                      { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite' },
-                      { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2' },
-                      { id: 'wan2.7-r2v', name: '万相 2.7' },
-                      { id: 'wan2.7-t2v', name: '万相 2.7' },
-                      { id: 'happyhorse-1.0-t2v', name: 'HappyHorse' },
-                      { id: 'happyhorse-1.0-i2v', name: 'HappyHorse' },
-                      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
-                    ].find(m => m.id === data.config.model)?.name || (data.type === 'video' ? 'Veo 3.1 Lite' : (data.type === 'image' ? 'Gemini 2.5 Flash Image' : 'Gemini 3 Flash'))}
+                    {(() => {
+                      const textModelNames: Record<string, string> = {
+                        'gemini-3-flash-preview': 'Gemini 3 Flash',
+                      };
+                      const imageModels = getCanvasImageModelOptions();
+                      const videoModels = getCanvasVideoModelOptions();
+                      
+                      const allModels = [...imageModels, ...videoModels];
+                      const modelMap = Object.fromEntries(allModels.map(m => [m.id, m.name]));
+                      
+                      return modelMap[data.config.model] || textModelNames[data.config.model] ||
+                        (data.type === 'video' ? 'Veo 3.1 Lite' : (data.type === 'image' ? 'Gemini Flash' : 'Gemini 3 Flash'));
+                    })()}
                   </span>
                 </div>
                 
@@ -482,15 +465,9 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                   </div>
                   <div className="p-1">
                     {[
-                      { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image', type: ['image'] },
-                      { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash Image', type: ['image'] },
+                      ...getCanvasImageModelOptions(),
                       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', type: ['text'] },
-                      { id: 'wan2.7-r2v', name: '万相 2.7 (图生视频)', type: ['video'] },
-                      { id: 'wan2.7-t2v', name: '万相 2.7 (文生视频)', type: ['video'] },
-                      { id: 'happyhorse-1.0-t2v', name: 'HappyHorse (文生视频)', type: ['video'] },
-                      { id: 'happyhorse-1.0-i2v', name: 'HappyHorse (图生视频)', type: ['video'] },
-                      { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite', type: ['video'] },
-                      { id: 'wan2.2-kf2v-flash', name: 'Wanx 2.2 (首尾帧)', type: ['video'] },
+                      ...getCanvasVideoModelOptions(),
                     ].filter(m => m.type.includes(data.type)).map(m => (
                       <button
                         key={m.id}

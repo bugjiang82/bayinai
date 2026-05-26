@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -48,14 +49,9 @@ export default function WorkspacePage() {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [creating, setCreating] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const { toast, showToast } = useToast();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
-
-  const showToast = useCallback((type: 'success' | 'error', message: string) => {
-    setToast({ type, message });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
 
   const fetchProjects = useCallback(async () => {
     try {

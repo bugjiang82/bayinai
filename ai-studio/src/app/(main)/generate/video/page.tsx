@@ -23,6 +23,16 @@ import ImageUploader from "@/components/shared/ImageUploader";
 import ProgressBar from "@/components/generate/ProgressBar";
 import DropdownSelector from "@/components/generate/DropdownSelector";
 import { useGenerationStore, useIsGenerating, useGenerationProgress, useGenerationError } from "@/stores/generationStore";
+import {
+  VIDEO_RESOLUTION_OPTIONS,
+  VIDEO_DURATION_OPTIONS,
+  VIDEO_ASPECT_RATIO_OPTIONS,
+  getVideoModelOptions,
+  getVideoModel,
+  type VideoModelId,
+  type VideoResolution,
+} from "@/models";
+import { useCreditPolicies, prefetchCreditPolicies } from "@/hooks/useCreditPolicies";
 
 interface VideoResult {
   id: string;
@@ -35,64 +45,30 @@ interface VideoResult {
 
 type VideoMode = "text-to-video" | "image-to-video";
 
-const DURATION_OPTIONS = [
-  { value: "3", label: "3 秒" },
-  { value: "5", label: "5 秒" },
-  { value: "10", label: "10 秒" },
-  { value: "15", label: "15 秒" },
-];
+const DURATION_OPTIONS = VIDEO_DURATION_OPTIONS.map(d => ({ value: d.value, label: d.label }));
 
-const MODEL_OPTIONS = {
-  "text-to-video": [
-    { value: "wan2.7-t2v", label: "万相 2.7", description: "文生视频" },
-    { value: "happyhorse-1.0-t2v", label: "HappyHorse", description: "文生视频" },
-  ],
-  "image-to-video": [
-    { value: "wan2.2-kf2v-flash", label: "万相 2.2", description: "快速生成" },
-    { value: "wan2.7-r2v", label: "万相 2.7", description: "高质量" },
-    { value: "happyhorse-1.0-i2v", label: "HappyHorse", description: "支持多图参考" },
-  ],
-};
+function getModelOptions(mode: VideoMode) {
+  return getVideoModelOptions(mode);
+}
 
-const RESOLUTION_OPTIONS = {
-  "wan2.7-r2v": [
-    { value: "720P", label: "720P", description: "1280×720" },
-    { value: "1080P", label: "1080P", description: "1920×1080" },
-  ],
-  "wan2.7-t2v": [
-    { value: "720P", label: "720P", description: "1280×720" },
-    { value: "1080P", label: "1080P", description: "1920×1080" },
-  ],
-  "happyhorse-1.0-t2v": [
-    { value: "720P", label: "720P", description: "1280×720" },
-    { value: "1080P", label: "1080P", description: "1920×1080" },
-  ],
-  "happyhorse-1.0-i2v": [
-    { value: "720P", label: "720P", description: "1280×720" },
-    { value: "1080P", label: "1080P", description: "1920×1080" },
-  ],
-  default: [
-    { value: "480P", label: "480P", description: "854×480" },
-    { value: "720P", label: "720P", description: "1280×720" },
-    { value: "1080P", label: "1080P", description: "1920×1080" },
-  ],
-};
+function getResolutionOptions(model: string) {
+  const info = getVideoModel(model);
+  if (!info) return VIDEO_RESOLUTION_OPTIONS;
+  return VIDEO_RESOLUTION_OPTIONS.filter(r => info.supportedResolutions.includes(r.value as VideoResolution));
+}
 
-const RATIO_OPTIONS = [
-  { value: "16:9", label: "16:9", description: "横屏" },
-  { value: "9:16", label: "9:16", description: "竖屏" },
-  { value: "1:1", label: "1:1", description: "方形" },
-  { value: "4:3", label: "4:3", description: "标准" },
-  { value: "3:4", label: "3:4", description: "竖版" },
-];
+const RATIO_OPTIONS = VIDEO_ASPECT_RATIO_OPTIONS;
+
+prefetchCreditPolicies();
 
 export default function VideoPage() {
+  const { getVideoCostFromApi } = useCreditPolicies();
   const [videoMode, setVideoMode] = useState<VideoMode>("image-to-video");
   const [startImage, setStartImage] = useState<string | null>(null);
   const [endImage, setEndImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [duration, setDuration] = useState("5");
-  const [resolution, setResolution] = useState("720P");
+  const [resolution, setResolution] = useState<VideoResolution>("720P");
   const [ratio, setRatio] = useState("16:9");
   const [model, setModel] = useState("wan2.2-kf2v-flash");
   const [promptExtend, setPromptExtend] = useState(true);
@@ -128,7 +104,10 @@ export default function VideoPage() {
   }, []);
 
   useEffect(() => {
-    setModel(MODEL_OPTIONS[videoMode][0].value);
+    const options = getModelOptions(videoMode);
+    if (options.length > 0) {
+      setModel(options[0].value);
+    }
   }, [videoMode]);
 
   useEffect(() => {
@@ -139,10 +118,10 @@ export default function VideoPage() {
   }, [session]);
 
   useEffect(() => {
-    const availableResolutions = getResolutionOptions();
+    const availableResolutions = getResolutionOptions(model);
     const resolutionValues = availableResolutions.map(r => r.value);
     if (!resolutionValues.includes(resolution)) {
-      setResolution(availableResolutions[0].value);
+      setResolution(availableResolutions[0]?.value || "720P");
     }
   }, [model, resolution]);
 
@@ -175,7 +154,8 @@ export default function VideoPage() {
     if (!isHappyHorse && videoMode === "image-to-video" && !startImage) return;
 
     const durationNum = parseInt(duration, 10) || 5;
-    const cost = durationNum * 50;
+    const costPerSec = getVideoCostFromApi(model as VideoModelId, resolution as VideoResolution);
+    const cost = durationNum * costPerSec;
     if (credits < cost) return;
 
     startGeneration();
@@ -362,17 +342,13 @@ export default function VideoPage() {
       }
       failGeneration(error instanceof Error ? error.message : "视频生成失败");
     }
-  }, [prompt, duration, resolution, model, credits, startImage, endImage, startGeneration, updateProgress, completeGeneration, failGeneration]);
+  }, [prompt, duration, resolution, model, credits, startImage, endImage, startGeneration, updateProgress, completeGeneration, failGeneration, getVideoCostFromApi]);
 
   const getEstimatedTime = () => {
     const durationNum = parseInt(duration, 10) || 5;
     const baseTime = durationNum * 4;
     const resMultiplier = resolution === "1080P" ? 1.5 : 1;
     return Math.round(baseTime * resMultiplier);
-  };
-
-  const getResolutionOptions = () => {
-    return RESOLUTION_OPTIONS[model as keyof typeof RESOLUTION_OPTIONS] || RESOLUTION_OPTIONS.default;
   };
 
   return (
@@ -610,7 +586,7 @@ export default function VideoPage() {
             <DropdownSelector
               label="模型"
               value={model}
-              options={MODEL_OPTIONS[videoMode]}
+              options={getModelOptions(videoMode)}
               onChange={setModel}
             />
 
@@ -626,8 +602,8 @@ export default function VideoPage() {
             <DropdownSelector
               label="分辨率"
               value={resolution}
-              options={getResolutionOptions()}
-              onChange={setResolution}
+              options={getResolutionOptions(model)}
+              onChange={(v) => setResolution(v as VideoResolution)}
             />
 
             {/* Aspect Ratio */}

@@ -8,7 +8,20 @@ import type { GenType, GenStatus } from "@/types/generation";
 import { TaskFactory } from "./tasks";
 import { deductCredits } from "./credit.service";
 import * as fileService from "./file.service";
-import { getGenerationCost, DEFAULT_POLICIES } from "./creditPolicy.service";
+import {
+  getImageGenerationCost,
+  getVideoGenerationCostPerSecond,
+  getDefaultImageCost,
+} from "./creditPolicy.service";
+import {
+  getImageModelApiName,
+  isImageModelId,
+  getVideoModel,
+  type ImageModelId,
+  type ImageQuality,
+  type VideoModelId,
+  type VideoResolution,
+} from "@/models";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -16,18 +29,6 @@ const ai = new GoogleGenAI({
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || "";
 const DASHSCOPE_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1";
-
-const MODEL_MAP: Record<string, string> = {
-  flash: "gemini-3.1-flash-image-preview",
-  pro: "gemini-3-pro-image-preview",
-  image2: "openai/gpt-5.4-image-2",
-};
-
-const COST_MAP: Record<string, number> = {
-  flash: 1,
-  pro: 3,
-  image2: 50,
-};
 
 // ======================== 图片生成 ========================
 
@@ -114,11 +115,12 @@ export async function generateImage(
     } else {
       // 对于不支持的任务类型，使用旧的实现
       // 这里保留旧的实现以保持向后兼容性
-      const modelName = MODEL_MAP[model] || MODEL_MAP.flash;
-      const costType = genType === "IMAGE_TO_IMAGE" ? "image-to-image" : "text-to-image";
-      const cost = await getGenerationCost(costType, model);
-      const isProModel = modelName.includes("pro");
-      const isImage2Model = model === "image2";
+      const modelId = (isImageModelId(model) ? model : "flash") as ImageModelId;
+      const quality = (imageSize as ImageQuality) || "1K";
+      const modelName = getImageModelApiName(modelId);
+      const cost = await getImageGenerationCost(modelId, quality);
+      const isProModel = modelId === "pro";
+      const isImage2Model = modelId === "image2";
 
       // 检查积分
       const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -416,8 +418,9 @@ export async function generateVideo(
     throw new Error("DashScope API Key 未配置");
   }
 
-  const isWan27 = model.includes("wan2.7") || model.includes("wan27");
-  const isHappyHorse = model.includes("happyhorse");
+  const videoModelInfo = getVideoModel(model);
+  const isWan27 = videoModelInfo?.isWan27 ?? (model.includes("wan2.7") || model.includes("wan27"));
+  const isHappyHorse = videoModelInfo?.isHappyHorse ?? model.includes("happyhorse");
   const isTextToVideo = mode === "text-to-video";
   const isWan27I2V = !isTextToVideo && isWan27;
   const isTextToVideoWan27 = isTextToVideo && isWan27;

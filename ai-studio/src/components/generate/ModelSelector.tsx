@@ -3,61 +3,34 @@
 import React from "react";
 import { Zap, Crown, Sparkles, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { IMAGE_MODELS, IMAGE_MODEL_OPTIONS, type ImageModelId, type ImageQuality } from "@/models";
+import { useCreditPolicies, prefetchCreditPolicies } from "@/hooks/useCreditPolicies";
 
-export type ModelType = "flash" | "pro" | "image2";
-
-interface ModelOption {
-  type: ModelType;
-  name: string;
-  description: string;
-  credits: number;
-  speed: string;
-  quality: string;
-}
-
-const MODELS: ModelOption[] = [
-  {
-    type: "flash",
-    name: "Flash",
-    description: "快速生成，适合日常创作",
-    credits: 1,
-    speed: "~10s",
-    quality: "标准",
-  },
-  {
-    type: "pro",
-    name: "Pro",
-    description: "高质量输出，细节更丰富",
-    credits: 3,
-    speed: "~30s",
-    quality: "高清",
-  },
-  {
-    type: "image2",
-    name: "Image2",
-    description: "超强图像生成，效果最佳",
-    credits: 50,
-    speed: "~60s",
-    quality: "超清",
-  },
-];
+export type ModelType = ImageModelId;
 
 interface ModelSelectorProps {
   value: ModelType;
   onChange: (model: ModelType) => void;
+  quality?: ImageQuality;
   className?: string;
 }
+
+prefetchCreditPolicies();
 
 export default function ModelSelector({
   value,
   onChange,
+  quality = "1K",
   className,
 }: ModelSelectorProps) {
+  const { getImageCostFromApi } = useCreditPolicies();
+
   const getIcon = (type: ModelType) => {
     switch (type) {
       case "flash": return Zap;
       case "pro": return Crown;
       case "image2": return Sparkles;
+      default: return Zap;
     }
   };
 
@@ -65,20 +38,24 @@ export default function ModelSelector({
     <div className={cn("space-y-2", className)}>
       <label className="text-sm font-medium text-zinc-300">模型选择</label>
       <div className="grid grid-cols-2 gap-2">
-        {MODELS.map((model) => {
-          const isSelected = value === model.type;
-          const Icon = getIcon(model.type);
+        {IMAGE_MODEL_OPTIONS.map((opt) => {
+          const isSelected = value === opt.value;
+          const Icon = getIcon(opt.value as ModelType);
+          const modelInfo = IMAGE_MODELS[opt.value as ImageModelId];
+          if (!modelInfo) return null;
+
+          const credits = getImageCostFromApi(opt.value as ImageModelId, quality);
 
           return (
             <button
-              key={model.type}
+              key={opt.value}
               className={cn(
                 "relative flex flex-col items-start p-3 rounded-xl border transition-all duration-200 cursor-pointer text-left",
                 isSelected
                   ? "bg-indigo-500/10 border-indigo-500/30 ring-1 ring-indigo-500/20"
                   : "bg-[#0f0f0f] border-white/[0.08] hover:border-white/[0.15] hover:bg-white/[0.02]"
               )}
-              onClick={() => onChange(model.type)}
+              onClick={() => onChange(opt.value as ModelType)}
             >
               {isSelected && (
                 <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center">
@@ -98,7 +75,7 @@ export default function ModelSelector({
                     isSelected ? "text-indigo-300" : "text-zinc-300"
                   )}
                 >
-                  {model.name}
+                  {opt.label}
                 </span>
               </div>
               <p
@@ -107,7 +84,7 @@ export default function ModelSelector({
                   isSelected ? "text-zinc-400" : "text-zinc-600"
                 )}
               >
-                {model.description}
+                {opt.description}
               </p>
               <div className="flex items-center gap-3">
                 <span
@@ -118,9 +95,9 @@ export default function ModelSelector({
                       : "bg-white/[0.04] text-zinc-500"
                   )}
                 >
-                  {model.credits} 积分/张
+                  {credits} 积分/张
                 </span>
-                <span className="text-xs text-zinc-600">{model.speed}</span>
+                <span className="text-xs text-zinc-600">~{modelInfo.isFlashModel ? "10s" : modelInfo.isProModel ? "30s" : "60s"}</span>
               </div>
             </button>
           );

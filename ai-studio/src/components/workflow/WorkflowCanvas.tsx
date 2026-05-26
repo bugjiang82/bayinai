@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect, createContext, useContext } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   addEdge,
@@ -24,6 +24,9 @@ import { VideoNode } from './nodes/VideoNode';
 import { cn } from './lib/utils';
 import { NodeType } from './types';
 import { chatWithAssistant, Message } from './services/aiService';
+import { getImageModelApiName, getCanvasVideoModelOptions } from '@/models';
+import { DraggingContext, MultiSelectContext } from './context/CanvasInteractionContext';
+import { createImageThumbnail } from '@/utils/thumbnail';
 import {
   Plus,
   Type,
@@ -54,12 +57,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-
-const DraggingContext = createContext<boolean>(false);
-const MultiSelectContext = createContext<boolean>(false);
-
-export const useDragging = () => useContext(DraggingContext);
-export const useMultiSelect = () => useContext(MultiSelectContext);
 
 const nodeTypes = {
   text: TextNode,
@@ -613,7 +610,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         inheritPrompt,
         referencedParentIds: sourceNodeId ? [sourceNodeId] : [],
         config: {
-          model: type === 'text' ? 'gemini-3-flash-preview' : (type === 'image' || type === 'image-edit') ? 'flash' : 'veo-3.1-lite-generate-preview',
+          model: type === 'text' ? 'gemini-3-flash-preview' : (type === 'image' || type === 'image-edit') ? getImageModelApiName('flash') : getCanvasVideoModelOptions()[0]?.id || 'veo-3.1-lite-generate-preview',
           quality: 'standard',
           aspectRatio: type === 'video' ? '16:9' : '1:1',
           duration: '5s',
