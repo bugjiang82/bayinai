@@ -188,6 +188,8 @@ export async function GET(request: NextRequest) {
         status: result.status,
         progress: result.progress,
         videoUrl: result.videoUrl || null,
+        errorCode: result.errorCode || null,
+        errorMessage: result.errorMessage || null,
       })
     );
   } catch (err) {

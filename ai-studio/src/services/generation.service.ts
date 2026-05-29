@@ -179,6 +179,26 @@ export async function generateImage(
               maxRetries: 2,
             });
 
+            const imageFiles: File[] = [];
+
+            for (const refImg of refImages) {
+              let buffer: Buffer;
+              if (refImg.startsWith("/outputs/")) {
+                const filePath = path.join(process.cwd(), "public", refImg);
+                if (fs.existsSync(filePath)) {
+                  buffer = fs.readFileSync(filePath);
+                } else {
+                  throw new Error(`参考图片不存在: ${filePath}`);
+                }
+              } else if (refImg.includes(",")) {
+                const base64 = refImg.split(",")[1];
+                buffer = Buffer.from(base64, "base64");
+              } else {
+                buffer = Buffer.from(refImg, "base64");
+              }
+              imageFiles.push(new File([buffer as BlobPart], "image.png", { type: "image/png" }));
+            }
+
             const imageParams: any = {
               model: "gpt-image-2",
               prompt: fullPrompt,
@@ -187,34 +207,11 @@ export async function generateImage(
               n: params.n || 1,
             };
 
-            // 如果有参考图片，添加到请求中
-            if (refImages.length > 0) {
-              const firstRefImg = refImages[0];
-              let imageUrl: string;
-              
-              if (firstRefImg.startsWith("/outputs/")) {
-                // 本地文件路径
-                const filePath = path.join(process.cwd(), "public", firstRefImg);
-                if (fs.existsSync(filePath)) {
-                  const fileBuffer = fs.readFileSync(filePath);
-                  imageUrl = `data:image/png;base64,${fileBuffer.toString("base64")}`;
-                } else {
-                  throw new Error(`参考图片不存在: ${filePath}`);
-                }
-              } else if (firstRefImg.includes(",")) {
-                // base64 data URL
-                imageUrl = firstRefImg;
-              } else {
-                // 纯 base64 字符串
-                imageUrl = `data:image/png;base64,${firstRefImg}`;
-              }
-
-              imageParams.image_url = {
-                url: imageUrl,
-              };
+            if (imageFiles.length > 0) {
+              imageParams.image = imageFiles;
             }
 
-            const response = await openai.images.generate(imageParams);
+            const response = await openai.images.edit(imageParams);
 
             for (const img of response.data || []) {
               if (img.b64_json) {
@@ -373,6 +370,183 @@ export async function generateImage(
   }
 }
 
+export interface OutpaintParams {
+  userId: string;
+  originalImage: string;
+  paddedImage: string;
+  prompt: string;
+  model?: "flash" | "pro" | "image2";
+  aspectRatio?: string;
+  box?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
+export async function outpaintImage(
+  params: OutpaintParams
+): Promise<GenerateImageResult> {
+  const {
+    userId,
+    originalImage,
+    paddedImage,
+    prompt,
+    model = "flash",
+    aspectRatio = "1:1",
+  } = params;
+
+  const cost = model === "image2" ? 60 : 2;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new Error("用户不存在");
+  }
+  if (user.credits < cost) {
+    throw new Error("积分不足");
+  }
+
+  const modelName =
+    model === "pro" || model === "image2"
+      ? "gemini-3.1-flash-image-preview"
+      : "gemini-2.5-flash-image";
+
+  try {
+    const aspectLabel: Record<string, string> = {
+      "1:1": "正方形 1:1",
+      "16:9": "横屏 16:9",
+      "9:16": "竖屏 9:16",
+      "4:3": "横屏 4:3",
+      free: "自由比例",
+    };
+
+    const structuredPrompt = [
+      "你的任务是执行专业级图像外扩展（outpainting）。图像边缘区域已用白色填充。",
+      "",
+      "核心指令：",
+      `1. 目标宽高比：${aspectLabel[aspectRatio] || aspectRatio}`,
+      `2. 用户提示词：${prompt}`,
+      "3. 保持原图中心内容完全不变、不缩放、不扭曲",
+      "4. 无缝扩展原图色彩、纹理、光线和背景",
+      "5. 确保透视一致、地平线对齐",
+      "6. 画面主题和构图完整自然",
+      "7. 不要添加任何水印或文字",
+      "",
+      "只返回扩展后的完整图像，不要额外文字。",
+    ].join("\n");
+
+    const contents = [
+      { role: "user", parts: [{ text: "原始参考图像（位于中央，请围绕它扩展内容）" }] },
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: "image/png", data: originalImage.replace(/^data:image\/\w+;base64,/, "") } },
+        ],
+      },
+      { role: "user", parts: [{ text: "带有白色填充区域的扩展画布框架（请在下图中执行扩展）" }] },
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: "image/png", data: paddedImage.replace(/^data:image\/\w+;base64,/, "") } },
+        ],
+      },
+      { role: "user", parts: [{ text: structuredPrompt }] },
+    ];
+
+    const resp = await ai.models.generateContent({
+      model: modelName,
+      contents: contents as any,
+      config: {
+        responseModalities: ["TEXT", "IMAGE"],
+      },
+    });
+
+    const outDir = path.join("outputs", userId);
+    if (!fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true });
+    }
+
+    let finalImageData: string | null = null;
+    const parts = resp.candidates?.[0]?.content?.parts;
+
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          finalImageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          break;
+        }
+      }
+    }
+
+    if (!finalImageData) {
+      throw new Error("Gemini 未返回图像");
+    }
+
+    const base64Data = finalImageData.replace(/^data:image\/\w+;base64,/, "");
+    const timestamp = Date.now();
+    const outputFileName = `outpaint_${timestamp}.png`;
+    const outputFilePath = path.join(outDir, outputFileName);
+    fs.writeFileSync(outputFilePath, Buffer.from(base64Data, "base64"));
+
+    const metadata = await sharp(outputFilePath).metadata();
+    const outputWidth = metadata.width || 1024;
+    const outputHeight = metadata.height || 1024;
+
+    const thumbnailFileName = `outpaint_${timestamp}_thumb.png`;
+    const thumbnailFilePath = path.join(outDir, thumbnailFileName);
+    await sharp(outputFilePath)
+      .resize(512, 512, { fit: "inside", withoutEnlargement: true })
+      .toFile(thumbnailFilePath);
+
+    const genType = "EDIT" as GenType;
+    const record = await prisma.generation.create({
+      data: {
+        userId,
+        type: genType,
+        status: "COMPLETED",
+        prompt,
+        params: JSON.stringify({ model: modelName, aspectRatio }),
+        outputUrl: `${outputFileName}`,
+        thumbnailUrl: `${thumbnailFileName}`,
+        width: outputWidth,
+        height: outputHeight,
+        cost,
+        completedAt: new Date(),
+      },
+    });
+
+    await deductCredits(userId, cost);
+
+    return {
+      id: record.id,
+      type: genType,
+      status: "COMPLETED",
+      prompt,
+      outputUrl: `${outputFileName}`,
+      outputBase64: finalImageData,
+      thumbnailUrl: `${thumbnailFileName}`,
+      width: outputWidth,
+      height: outputHeight,
+      cost,
+      createdAt: record.createdAt.toISOString(),
+      completedAt: record.completedAt?.toISOString(),
+    };
+  } catch (err) {
+    await prisma.generation.create({
+      data: {
+        userId,
+        type: "EDIT",
+        status: "FAILED",
+        prompt,
+        params: JSON.stringify({ model: modelName, aspectRatio }),
+        errorMsg: err instanceof Error ? err.message : "未知错误",
+        cost,
+      },
+    });
+    throw err;
+  }
+}
+
 // ======================== 视频生成 ========================
 
 export interface GenerateVideoParams {
@@ -462,27 +636,39 @@ export async function generateVideo(
   let requestBody: Record<string, unknown>;
 
   if (isHappyHorse) {
+    const isHappyHorseI2V = model.includes("i2v");
     const processedFirstFrame = firstFrame ? resolveMediaUrl(firstFrame) : undefined;
     const processedReferenceImages = referenceImages.map(img => resolveMediaUrl(img)).filter(Boolean) as string[];
 
     const input: Record<string, unknown> = { prompt };
-    if (processedFirstFrame) {
-      input.first_frame_url = processedFirstFrame;
+
+    if (isHappyHorseI2V && processedFirstFrame) {
+      input.media = [
+        { type: "first_frame", url: processedFirstFrame },
+      ];
     }
+
     if (processedReferenceImages.length > 0) {
-      input.reference_images = processedReferenceImages;
+      input.media = [
+        ...(input.media as Array<Record<string, string>> || []),
+        ...processedReferenceImages.map(url => ({ type: "reference_image", url })),
+      ];
+    }
+
+    const parameters: Record<string, unknown> = {
+      resolution,
+      duration,
+      watermark: false,
+    };
+
+    if (!isHappyHorseI2V) {
+      parameters.ratio = ratio;
     }
 
     requestBody = {
       model,
       input,
-      parameters: {
-        resolution,
-        ratio,
-        duration,
-        prompt_extend: promptExtend,
-        watermark: false,
-      },
+      parameters,
     };
   } else if (isWan27) {
     if (isTextToVideo) {
@@ -611,7 +797,7 @@ export async function generateVideo(
 
 export async function getVideoStatus(
   taskId: string
-): Promise<{ status: string; progress: number; videoUrl?: string }> {
+): Promise<{ status: string; progress: number; videoUrl?: string; errorCode?: string; errorMessage?: string }> {
   if (!DASHSCOPE_API_KEY) {
     throw new Error("DashScope API Key 未配置");
   }
@@ -645,39 +831,37 @@ export async function getVideoStatus(
 
   const output = result.output || {};
   const taskStatus = output.task_status || result.output?.task_status || "UNKNOWN";
-  const errorCode = output.code || result.code;
-  const errorMessage = output.message || result.message;
 
   console.log("Task status:", taskStatus);
-  console.log("Error code:", errorCode);
-  console.log("Error message:", errorMessage);
 
-  // 如果有明确的错误，返回 FAILED
-  if (errorCode || errorMessage) {
-    console.log("Detected error, returning FAILED");
-    return { status: "FAILED", progress: 0 };
-  }
-
-  // 状态映射
   let status: string;
   let progress: number;
-  
+  let errorCode: string | undefined;
+  let errorMessage: string | undefined;
+
   switch (taskStatus) {
     case "PENDING":
+      status = "PENDING";
+      progress = 20;
+      break;
     case "RUNNING":
-      status = taskStatus;
+      status = "RUNNING";
       progress = 50;
       break;
     case "SUCCEEDED":
-      status = taskStatus;
+      status = "SUCCEEDED";
       progress = 100;
       break;
     case "FAILED":
     case "CANCELED":
       status = "FAILED";
       progress = 0;
+      errorCode = output.code || undefined;
+      errorMessage = output.message || undefined;
+      console.log("Task failed/cancelled, code:", errorCode, "message:", errorMessage);
       break;
     default:
+      console.log("Unknown task status:", taskStatus);
       status = taskStatus;
       progress = 20;
   }
@@ -685,13 +869,15 @@ export async function getVideoStatus(
   const videoUrl = output.video_url || output.videoUrl;
   console.log("Video URL:", videoUrl);
 
-  console.log("Returning:", { status, progress, videoUrl });
+  console.log("Returning:", { status, progress, videoUrl, errorCode, errorMessage });
   console.log("===================================================\n");
 
   return {
     status,
     progress,
     videoUrl,
+    errorCode,
+    errorMessage,
   };
 }
 

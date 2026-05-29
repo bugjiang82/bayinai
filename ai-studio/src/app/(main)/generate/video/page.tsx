@@ -268,8 +268,8 @@ export default function VideoPage() {
 
           const statusData = await statusRes.json();
           console.log("\n======= Poll statusData =======", statusData);
-          const { status, progress: taskProgress, videoUrl } = statusData.data;
-          console.log("Status:", status, "Progress:", taskProgress, "Video URL:", videoUrl);
+          const { status, progress: taskProgress, videoUrl, errorCode, errorMessage } = statusData.data;
+          console.log("Status:", status, "Progress:", taskProgress, "Video URL:", videoUrl, "Error:", errorCode, errorMessage);
 
           // Update progress from server
           if (taskProgress !== undefined) {
@@ -317,7 +317,6 @@ export default function VideoPage() {
             };
             completeGeneration(storeResult);
           } else if (status === "FAILED") {
-            // Task failed
             if (pollingRef.current) {
               clearInterval(pollingRef.current);
               pollingRef.current = null;
@@ -327,7 +326,10 @@ export default function VideoPage() {
               progressIntervalRef.current = null;
             }
 
-            failGeneration("视频生成失败，请重试");
+            const failMsg = errorMessage
+              ? errorCode ? `[${errorCode}] ${errorMessage}` : errorMessage
+              : "视频生成失败，请重试";
+            failGeneration(failMsg);
           }
           // For RUNNING / PENDING / UNKNOWN, continue polling
         } catch (pollError) {
