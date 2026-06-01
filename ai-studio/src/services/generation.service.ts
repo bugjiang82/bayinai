@@ -22,6 +22,7 @@ import {
   type VideoModelId,
   type VideoResolution,
 } from "@/models";
+import { getImage2Size } from "./tasks/image2Utils";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -29,6 +30,8 @@ const ai = new GoogleGenAI({
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || "";
 const DASHSCOPE_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1";
+const ARK_API_KEY = process.env.ARK_API_KEY || "";
+const ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 
 // ======================== 图片生成 ========================
 
@@ -202,7 +205,7 @@ export async function generateImage(
             const imageParams: any = {
               model: "gpt-image-2",
               prompt: fullPrompt,
-              size: "1024x1024",
+              size: getImage2Size(aspectRatio, imageSize),
               quality: "low",
               n: params.n || 1,
             };
@@ -472,7 +475,7 @@ export async function outpaintImage(
     if (parts) {
       for (const part of parts) {
         if (part.inlineData?.data) {
-          finalImageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          finalImageData = part.inlineData.data;
           break;
         }
       }
@@ -482,7 +485,7 @@ export async function outpaintImage(
       throw new Error("Gemini 未返回图像");
     }
 
-    const base64Data = finalImageData.replace(/^data:image\/\w+;base64,/, "");
+    const base64Data = finalImageData;
     const timestamp = Date.now();
     const outputFileName = `outpaint_${timestamp}.png`;
     const outputFilePath = path.join(outDir, outputFileName);
@@ -588,13 +591,14 @@ export async function generateVideo(
     cost = 0,
   } = params;
 
-  if (!DASHSCOPE_API_KEY) {
-    throw new Error("DashScope API Key 未配置");
+  if (!DASHSCOPE_API_KEY && !ARK_API_KEY) {
+    throw new Error("视频生成 API Key 未配置");
   }
 
   const videoModelInfo = getVideoModel(model);
   const isWan27 = videoModelInfo?.isWan27 ?? (model.includes("wan2.7") || model.includes("wan27"));
   const isHappyHorse = videoModelInfo?.isHappyHorse ?? model.includes("happyhorse");
+  const isSeedance = videoModelInfo?.isSeedance ?? model.includes("seedance");
   const isTextToVideo = mode === "text-to-video";
   const isWan27I2V = !isTextToVideo && isWan27;
   const isTextToVideoWan27 = isTextToVideo && isWan27;
@@ -602,6 +606,8 @@ export async function generateVideo(
   let apiEndpoint: string;
   if (isHappyHorse || isTextToVideoWan27 || isWan27I2V) {
     apiEndpoint = "/services/aigc/video-generation/video-synthesis";
+  } else if (isSeedance) {
+    apiEndpoint = "/contents/generations/tasks";
   } else {
     apiEndpoint = "/services/aigc/image2video/video-synthesis";
   }
@@ -706,6 +712,48 @@ export async function generateVideo(
         },
       };
     }
+  } else if (isSeedance) {
+    const resolutionMap: Record<string, string> = {
+      "480P": "480p", "720P": "720p", "1080P": "1080p",
+    };
+    const arkResolution = resolutionMap[resolution] || "720p";
+
+    const content: Record<string, unknown>[] = [
+      { type: "text", text: prompt },
+    ];
+
+    if (!isTextToVideo) {
+      const firstFrameUrl = firstFrame ? resolveMediaUrl(firstFrame) : undefined;
+      const lastFrameUrl = lastFrame ? resolveMediaUrl(lastFrame) : undefined;
+
+      if (firstFrameUrl) {
+        const imgObj: Record<string, unknown> = {
+          type: "image_url",
+          image_url: { url: firstFrameUrl },
+        };
+        if (lastFrameUrl) {
+          imgObj.role = "first_frame";
+        }
+        content.push(imgObj);
+      }
+      if (lastFrameUrl) {
+        content.push({
+          type: "image_url",
+          image_url: { url: lastFrameUrl },
+          role: "last_frame",
+        });
+      }
+    }
+
+    requestBody = {
+      model: "doubao-seedance-1-5-pro-251215",
+      content,
+      resolution: arkResolution,
+      ratio,
+      duration,
+      watermark: false,
+      return_last_frame: !!lastFrame,
+    };
   } else {
     if (isTextToVideo) {
       throw new Error("该模型不支持文生视频，请选择图生视频模式");
@@ -729,11 +777,17 @@ export async function generateVideo(
     };
   }
 
-  console.log("=================== DashScope Request ===================");
-    console.log("API Endpoint:", `${DASHSCOPE_BASE_URL}${apiEndpoint}`);
+  const useArk = isSeedance;
+  const baseUrl = useArk ? ARK_BASE_URL : DASHSCOPE_BASE_URL;
+  const apiKey = useArk ? ARK_API_KEY : DASHSCOPE_API_KEY;
+
+  console.log("=================== Video Generate Request ===================");
+    console.log("Provider:", useArk ? "Ark" : "DashScope");
+    console.log("API Endpoint:", `${baseUrl}${apiEndpoint}`);
     console.log("Model:", model);
     console.log("Is Wan27:", isWan27);
     console.log("Is HappyHorse:", isHappyHorse);
+    console.log("Is Seedance:", isSeedance);
     console.log("Is Text to Video:", isTextToVideo);
     console.log("Request Body:", JSON.stringify(requestBody, (key, value) => {
       if (key === "url" && typeof value === "string" && value.length > 100) {
@@ -741,30 +795,35 @@ export async function generateVideo(
       }
       return value;
     }, 2));
-    console.log("==========================================================");
+    console.log("================================================================");
 
-    const response = await fetch(`${DASHSCOPE_BASE_URL}${apiEndpoint}`, {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    };
+    if (!useArk) {
+      headers["X-DashScope-Async"] = "enable";
+    }
+
+    const response = await fetch(`${baseUrl}${apiEndpoint}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
-        "X-DashScope-Async": "enable",
-      },
+      headers,
       body: JSON.stringify(requestBody),
     }
   );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`DashScope API 调用失败: ${response.status} - ${errorText}`);
+    const provider = useArk ? "Ark" : "DashScope";
+    throw new Error(`${provider} API 调用失败: ${response.status} - ${errorText}`);
   }
 
   const result = await response.json();
-  console.log("\n========== DashScope POST Response ==========");
+  console.log("\n========== Video Generate Response ==========");
   console.log(JSON.stringify(result, null, 2));
   console.log("==============================================\n");
   
-  const taskId = result.output?.task_id || result.request_id;
+  const taskId = useArk ? result.id : (result.output?.task_id || result.request_id);
 
   if (!taskId) {
     throw new Error("未能获取视频生成任务 ID");
@@ -798,23 +857,29 @@ export async function generateVideo(
 export async function getVideoStatus(
   taskId: string
 ): Promise<{ status: string; progress: number; videoUrl?: string; errorCode?: string; errorMessage?: string }> {
-  if (!DASHSCOPE_API_KEY) {
-    throw new Error("DashScope API Key 未配置");
+  const isArkTask = taskId.startsWith("cgt-");
+  const baseUrl = isArkTask ? ARK_BASE_URL : DASHSCOPE_BASE_URL;
+  const apiKey = isArkTask ? ARK_API_KEY : DASHSCOPE_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(`${isArkTask ? "Ark" : "DashScope"} API Key 未配置`);
   }
 
-  console.log("\n================= getVideoStatus =================");
-  console.log("Task ID:", taskId);
-  console.log("API URL:", `${DASHSCOPE_BASE_URL}/tasks/${taskId}`);
+  const statusUrl = isArkTask
+    ? `${ARK_BASE_URL}/contents/generations/tasks/${taskId}`
+    : `${DASHSCOPE_BASE_URL}/tasks/${taskId}`;
 
-  const response = await fetch(
-    `${DASHSCOPE_BASE_URL}/tasks/${taskId}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
-      },
-    }
-  );
+  console.log("\n================= getVideoStatus =================");
+  console.log("Provider:", isArkTask ? "Ark" : "DashScope");
+  console.log("Task ID:", taskId);
+  console.log("Status URL:", statusUrl);
+
+  const response = await fetch(statusUrl, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
 
   console.log("Response status:", response.status);
 
@@ -822,15 +887,23 @@ export async function getVideoStatus(
     const errorText = await response.text();
     console.error("Error response:", errorText);
     throw new Error(
-      `DashScope 状态查询失败: ${response.status} - ${errorText}`
+      `视频状态查询失败: ${response.status} - ${errorText}`
     );
   }
 
   const result = await response.json();
   console.log("Full response:", JSON.stringify(result, null, 2));
 
-  const output = result.output || {};
-  const taskStatus = output.task_status || result.output?.task_status || "UNKNOWN";
+  let taskStatus: string;
+  let output: Record<string, unknown>;
+
+  if (isArkTask) {
+    taskStatus = result.status || "UNKNOWN";
+    output = result.content || {};
+  } else {
+    output = result.output || {};
+    taskStatus = output.task_status as string || result.output?.task_status as string || "UNKNOWN";
+  }
 
   console.log("Task status:", taskStatus);
 
@@ -841,23 +914,34 @@ export async function getVideoStatus(
 
   switch (taskStatus) {
     case "PENDING":
+    case "queued":
       status = "PENDING";
       progress = 20;
       break;
     case "RUNNING":
+    case "running":
       status = "RUNNING";
       progress = 50;
       break;
     case "SUCCEEDED":
+    case "succeeded":
       status = "SUCCEEDED";
       progress = 100;
       break;
     case "FAILED":
     case "CANCELED":
+    case "failed":
+    case "cancelled":
+    case "expired":
       status = "FAILED";
       progress = 0;
-      errorCode = output.code || undefined;
-      errorMessage = output.message || undefined;
+      if (isArkTask && result.error) {
+        errorCode = (result.error as Record<string, unknown>).code as string;
+        errorMessage = (result.error as Record<string, unknown>).message as string;
+      } else {
+        errorCode = output.code as string || undefined;
+        errorMessage = output.message as string || undefined;
+      }
       console.log("Task failed/cancelled, code:", errorCode, "message:", errorMessage);
       break;
     default:
@@ -866,7 +950,7 @@ export async function getVideoStatus(
       progress = 20;
   }
 
-  const videoUrl = output.video_url || output.videoUrl;
+  const videoUrl = (output.video_url as string) || (output.videoUrl as string);
   console.log("Video URL:", videoUrl);
 
   console.log("Returning:", { status, progress, videoUrl, errorCode, errorMessage });

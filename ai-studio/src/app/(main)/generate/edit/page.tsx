@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   X,
   RefreshCw,
+  Maximize2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,8 +33,10 @@ import KonvaCanvas from "@/components/generate/KonvaCanvas";
 import { Toolbox } from "@/components/generate/Toolbox";
 import ComparisonSlider from "@/components/generate/ComparisonSlider";
 import { useEditStore } from "@/store/editStore";
+import OutpaintCanvas, { type OutpaintCanvasRef } from "@/components/generate/OutpaintCanvas";
+import { useOutpaintStore } from "@/store/outpaintStore";
 
-type EditMode = "style-transfer" | "inpaint";
+type EditMode = "style-transfer" | "inpaint" | "outpainting";
 
 interface EditModeOption {
   key: EditMode;
@@ -54,6 +57,12 @@ const EDIT_MODES: EditModeOption[] = [
     label: "局部重绘",
     icon: Paintbrush,
     desc: "选择区域重新绘制",
+  },
+  {
+    key: "outpainting",
+    label: "扩图",
+    icon: Maximize2,
+    desc: "向外扩展画面边界",
   },
 ];
 
@@ -89,6 +98,53 @@ const INPAINT_RATIO_OPTIONS = [
   { value: "3:4", label: "3:4", description: "竖版" },
 ];
 
+const OUTPAINT_MODEL_OPTIONS = [
+  { value: "flash", label: "Flash", description: "快速扩展" },
+  { value: "pro", label: "Pro", description: "高质量扩展" },
+  { value: "image2", label: "Image2", description: "超强图像扩展" },
+];
+
+const OUTPAINT_RATIO_OPTIONS = [
+  { value: "1:1", label: "1:1", description: "方形" },
+  { value: "16:9", label: "16:9", description: "横屏" },
+  { value: "9:16", label: "9:16", description: "竖屏" },
+  { value: "4:3", label: "4:3", description: "标准" },
+  { value: "3:4", label: "3:4", description: "竖版" },
+  { value: "21:9", label: "21:9", description: "超宽屏" },
+  { value: "free", label: "自由", description: "自由比例" },
+  { value: "custom", label: "自定义", description: "输入比例" },
+];
+
+function compressImageForUpload(dataUrl: string, callback: (compressed: string) => void) {
+  const img = new Image();
+  img.onload = () => {
+    const MAX_DIM = 2000;
+    let { naturalWidth: w, naturalHeight: h } = img;
+    if (w <= MAX_DIM && h <= MAX_DIM && dataUrl.length < 500000) {
+      callback(dataUrl);
+      return;
+    }
+
+    if (w > MAX_DIM || h > MAX_DIM) {
+      if (w > h) {
+        h = Math.round(h * (MAX_DIM / w));
+        w = MAX_DIM;
+      } else {
+        w = Math.round(w * (MAX_DIM / h));
+        h = MAX_DIM;
+      }
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { callback(dataUrl); return; }
+    ctx.drawImage(img, 0, 0, w, h);
+    callback(canvas.toDataURL("image/jpeg", 0.85));
+  };
+  img.src = dataUrl;
+}
 
 export default function EditPage() {
   const searchParams = useSearchParams();
@@ -172,6 +228,21 @@ export default function EditPage() {
   const [image2Thinking, setImage2Thinking] = useState("off");
   const [image2ReferenceImages, setImage2ReferenceImages] = useState<string[]>([]);
 
+  const outpaintCanvasRef = useRef<OutpaintCanvasRef>(null);
+  const {
+    prompt: outpaintPrompt,
+    setPrompt: setOutpaintPrompt,
+    aspectRatio: outpaintAspectRatio,
+    setAspectRatio: setOutpaintAspectRatio,
+    customRatio: outpaintCustomRatio,
+    setCustomRatio: setOutpaintCustomRatio,
+    modelName: outpaintModel,
+    setModelName: setOutpaintModel,
+    isProcessing: outpaintIsProcessing,
+    setIsProcessing: setOutpaintIsProcessing,
+    reset: resetOutpaintStore,
+  } = useOutpaintStore();
+
   // 自动检测原图尺寸并计算比例
   const detectImageAspectRatio = useCallback((imageUrl: string): string => {
     if (originalImageSize) {
@@ -195,18 +266,19 @@ export default function EditPage() {
   const handleSourceUpload = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const imageUrl = e.target?.result as string;
-      setSourceImage(imageUrl);
-      setCurrentImage(imageUrl);
-      setResultImage(null);
-      clearShapes();
-      setSelectionPath(null);
-      // 检测图片原始尺寸
-      const img = new Image();
-      img.onload = () => {
-        setOriginalImageSize({ width: img.naturalWidth, height: img.naturalHeight });
-      };
-      img.src = imageUrl;
+      const rawDataUrl = e.target?.result as string;
+      compressImageForUpload(rawDataUrl, (compressed) => {
+        setSourceImage(compressed);
+        setCurrentImage(compressed);
+        setResultImage(null);
+        clearShapes();
+        setSelectionPath(null);
+        const img = new Image();
+        img.onload = () => {
+          setOriginalImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+        img.src = rawDataUrl;
+      });
     };
     reader.readAsDataURL(file);
   }, [setCurrentImage, clearShapes, setSelectionPath]);
@@ -260,7 +332,8 @@ export default function EditPage() {
     setCurrentImage(null);
     clearShapes();
     setSelectionPath(null);
-  }, [setCurrentImage, clearShapes, setSelectionPath]);
+    resetOutpaintStore();
+  }, [setCurrentImage, clearShapes, setSelectionPath, resetOutpaintStore]);
 
   const handleApply = useCallback(async () => {
     if (!sourceImage) return;
@@ -336,12 +409,50 @@ export default function EditPage() {
           }),
         };
 
+        const timeoutMs = model === "image2" ? 180000 : 90000;
         const timeoutId = setTimeout(() => {
           abortControllerRef.current?.abort();
-        }, 60000);
+        }, timeoutMs);
 
         try {
           response = await fetch("/api/generate/inpaint", requestOptions);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } else if (editMode === "outpainting") {
+        if (!outpaintPrompt.trim()) {
+          throw new Error("请输入扩图描述");
+        }
+
+        const paddedImage = await outpaintCanvasRef.current?.buildPaddedImage?.();
+        if (!paddedImage) {
+          throw new Error("无法构建扩展画布");
+        }
+
+        const box = outpaintCanvasRef.current?.getBox?.();
+
+        const requestOptions: RequestInit = {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: abortControllerRef.current?.signal,
+          body: JSON.stringify({
+            originalImage: sourceImage,
+            paddedImage,
+            prompt: outpaintPrompt,
+            model: outpaintModel === "gemini-3.1-flash-image-preview" ? "pro" : outpaintModel === "gpt-image-2" ? "image2" : "flash",
+            aspectRatio: outpaintAspectRatio,
+            box,
+          }),
+        };
+
+        const timeoutId = setTimeout(() => {
+          abortControllerRef.current?.abort();
+        }, 90000);
+
+        try {
+          response = await fetch("/api/generate/outpaint", requestOptions);
         } finally {
           clearTimeout(timeoutId);
         }
@@ -406,7 +517,7 @@ export default function EditPage() {
       }
       abortControllerRef.current = null;
     }
-  }, [sourceImage, credits, editMode, inpaintDescription, structureRef, styleRef, detectImageAspectRatio, generateMask, isApplying]);
+  }, [sourceImage, credits, editMode, inpaintDescription, structureRef, styleRef, detectImageAspectRatio, generateMask, isApplying, outpaintPrompt, outpaintModel, outpaintAspectRatio]);
 
   const renderModeParams = () => {
     switch (editMode) {
@@ -570,9 +681,73 @@ export default function EditPage() {
           </div>
         );
 
+      case "outpainting":
+        return renderOutpaintParams();
+
       default:
         return null;
     }
+  };
+
+  const renderOutpaintParams = () => {
+    return (
+      <div className="space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+        <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3">
+          <p className="text-xs text-indigo-400/80">
+            拖拽画布中的锚点来扩展画面边界：<br />
+            • 四角锚点：自由调整宽高<br />
+            • 边缘锚点：调整上下左右边界<br />
+            • 棋盘格区域为AI生成区域<br />
+            • 原图内容不受影响
+          </p>
+        </div>
+
+        <div>
+          <label className="text-xs text-zinc-400">扩图描述</label>
+          <Textarea
+            value={outpaintPrompt}
+            onChange={(e) => setOutpaintPrompt(e.target.value)}
+            placeholder="描述你希望在扩展区域生成的内容..."
+            className="min-h-[60px] resize-none bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600 mt-1"
+          />
+        </div>
+
+        <DropdownSelector
+          label="大模型"
+          value={outpaintModel === "gemini-2.5-flash-image" ? "flash" : outpaintModel === "gemini-3.1-flash-image-preview" ? "pro" : "image2"}
+          options={OUTPAINT_MODEL_OPTIONS}
+          onChange={(v) =>
+            setOutpaintModel(
+              v === "pro" ? "gemini-3.1-flash-image-preview" : v === "image2" ? "gpt-image-2" : "gemini-2.5-flash-image"
+            )
+          }
+        />
+
+        <DropdownSelector
+          label="画面比例"
+          value={outpaintAspectRatio}
+          options={OUTPAINT_RATIO_OPTIONS}
+          onChange={(v) => setOutpaintAspectRatio(v as any)}
+        />
+
+        {outpaintAspectRatio === "custom" && (
+          <div className="space-y-2 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+            <Input
+              placeholder="输入宽高比，如 3:2"
+              value={outpaintCustomRatio}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9:]/g, "");
+                setOutpaintCustomRatio(val);
+              }}
+              className="bg-[#0f0f0f] border-white/[0.08] text-sm text-zinc-200 placeholder:text-zinc-600"
+            />
+            <p className="text-[10px] text-zinc-600">
+              格式: 宽度:高度，例如 3:2、5:4
+            </p>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -617,6 +792,12 @@ export default function EditPage() {
                       <Toolbox />
                       <KonvaCanvas ref={konvaCanvasRef} className="flex-1" />
                     </>
+                  ) : editMode === "outpainting" ? (
+                    <OutpaintCanvas
+                      ref={outpaintCanvasRef}
+                      className="flex-1"
+                      imageSrc={sourceImage!}
+                    />
                   ) : (
                   <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -819,10 +1000,16 @@ export default function EditPage() {
                 <span
                   className={cn(
                     "font-medium",
-                    credits > 0 && credits < (model === "flash" ? 1 : 3) ? "text-red-400" : "text-zinc-400"
+                    credits > 0 && credits < (
+                      editMode === "outpainting" 
+                        ? (outpaintModel === "gpt-image-2" ? 60 : 2)
+                        : model === "flash" ? 1 : 3
+                    ) ? "text-red-400" : "text-zinc-400"
                   )}
                 >
-                  {model === "flash" ? 1 : 3}
+                  {editMode === "outpainting" 
+                    ? (outpaintModel === "gpt-image-2" ? 60 : 2)
+                    : model === "flash" ? 1 : 3}
                 </span>{
                   " "
                 }
@@ -839,9 +1026,10 @@ export default function EditPage() {
               onClick={handleApply}
               disabled={
                 !sourceImage || 
-                credits < (model === "flash" ? 1 : 3) || 
+                credits < (editMode === "outpainting" ? (outpaintModel === "gpt-image-2" ? 60 : 2) : model === "flash" ? 1 : 3) || 
                 isProcessing ||
-                (editMode === "inpaint" && !inpaintDescription.trim())
+                (editMode === "inpaint" && !inpaintDescription.trim()) ||
+                (editMode === "outpainting" && !outpaintPrompt.trim())
               }
             >
               {isProcessing ? (
