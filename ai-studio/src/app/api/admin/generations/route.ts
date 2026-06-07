@@ -20,8 +20,16 @@ export async function GET(request: NextRequest) {
     const [generations, total] = await Promise.all([
       prisma.generation.findMany({
         where,
-        include: {
-          user: { select: { name: true, email: true } },
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          cost: true,
+          createdAt: true,
+          favorited: true,
+          user: {
+            select: { name: true, email: true },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,

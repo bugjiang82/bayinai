@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { success, error } from "@/types/api";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const GOOGLE_GENAI_API_KEY = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "";
+import { getGoogleGenerativeAI } from "@/lib/ai-clients";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,11 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error("请输入提示词"), { status: 400 });
     }
 
-    if (!GOOGLE_GENAI_API_KEY) {
-      return NextResponse.json(error("Google GenAI API Key 未配置"), { status: 500 });
-    }
-
-    const genAI = new GoogleGenerativeAI(GOOGLE_GENAI_API_KEY);
+    const genAI = getGoogleGenerativeAI();
     const model = genAI.getGenerativeModel({
       model: "gemini-3.1-flash",
       systemInstruction: "你是一个专业的视觉艺术提示词专家。请分析用户提供的图片，提取其核心视觉元素、风格、构图、光影及材质，并将其转化为高质量的英文提示词。",
@@ -57,7 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(success({ text }, "生成成功"));
   } catch (err) {
     const message = err instanceof Error ? err.message : "生成失败";
-    console.error("Text generation error:", err);
+    logger.error("Text generation error:", err);
     return NextResponse.json(error(message), { status: 500 });
   }
 }

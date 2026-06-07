@@ -1,3 +1,4 @@
+import logger from "@/lib/logger";
 import { toast } from "react-hot-toast";
 
 // 模型名称映射
@@ -20,7 +21,7 @@ async function request(endpoint: string, data: any = {}) {
   });
 
   const result = await response.json();
-  console.log("API 响应:", result); // 调试日志
+  logger.info("API 响应:", result); // 调试日志
 
   // 检查 code: 0 表示成功，code: -1 或其他表示失败
   if (result.code !== 0) {
@@ -38,7 +39,7 @@ export async function generateText(prompt: string, imageBase64?: string) {
     });
     return data.text;
   } catch (error) {
-    console.error("Text generation error:", error);
+    logger.error("Text generation error:", error);
     throw error;
   }
 }
@@ -97,7 +98,7 @@ export async function generateImage(prompt: string, config: {
     }
     return imageUrl;
   } catch (error) {
-    console.error("Image generation error:", error);
+    logger.error("Image generation error:", error);
     throw error;
   }
 }
@@ -127,7 +128,7 @@ export async function generateVideo(prompt: string, config: {
 
     return data;
   } catch (error) {
-    console.error("Video generation error:", error);
+    logger.error("Video generation error:", error);
     throw error;
   }
 }
@@ -136,7 +137,7 @@ export async function checkVideoStatus(taskId: string) {
   try {
     const response = await fetch(`/api/workflow/video/status?task_id=${encodeURIComponent(taskId)}`);
     const result = await response.json();
-    console.log("视频状态响应:", result); // 调试日志
+    logger.info("视频状态响应:", result); // 调试日志
     
     // 检查 code: 0 表示成功
     if (result.code !== 0) {
@@ -144,7 +145,7 @@ export async function checkVideoStatus(taskId: string) {
     }
     return result.data;
   } catch (error) {
-    console.error("Video status check error:", error);
+    logger.error("Video status check error:", error);
     throw error;
   }
 }
@@ -169,7 +170,7 @@ export async function chatWithAssistant(messages: Message[], context: string) {
       toolCalls: [],
     };
   } catch (error) {
-    console.error("Assistant chat error:", error);
+    logger.error("Assistant chat error:", error);
     throw error;
   }
 }

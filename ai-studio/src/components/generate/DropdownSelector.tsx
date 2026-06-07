@@ -23,6 +23,7 @@ interface DropdownSelectorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export default function DropdownSelector({
@@ -32,13 +33,14 @@ export default function DropdownSelector({
   onChange,
   placeholder = "请选择",
   className,
+  disabled,
 }: DropdownSelectorProps) {
   const selectedOption = options.find((opt) => opt.value === value);
 
   return (
     <div className={cn("space-y-2", className)}>
       <label className="text-sm font-medium text-zinc-300">{label}</label>
-      <Select value={value} onValueChange={onChange}>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="w-full bg-[#0f0f0f] border-white/[0.08] text-zinc-200 hover:bg-white/[0.02] hover:border-white/[0.15] focus:ring-indigo-500/30 focus:border-indigo-500/30">
           <SelectValue placeholder={placeholder}>
             {selectedOption ? (

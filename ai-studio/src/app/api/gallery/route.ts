@@ -188,7 +188,14 @@ export async function GET(request: NextRequest) {
         favorited: g.favorited ?? false,
         favoritedAt: g.favoritedAt?.toISOString() ?? null,
         thumbnail: g.thumbnailUrl || g.outputUrl || '',
-        model: 'Gemini',
+        model: (() => {
+          try {
+            const parsed = JSON.parse(g.params || '{}');
+            return parsed.model || '';
+          } catch {
+            return '';
+          }
+        })(),
         isFavorite: g.favorited ?? false,
       })),
       total,

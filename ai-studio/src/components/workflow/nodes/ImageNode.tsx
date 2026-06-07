@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import logger from "@/lib/logger";
+import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NodeProps, useReactFlow, Node } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { NodeData } from '../types';
 import { generateImage } from '../services/aiService';
-import { calculateNodeCost } from '../services/costCalculator';
 import { createImageThumbnail } from '@/utils/thumbnail';
-import { ImageIcon, Layout, Zap, Monitor, Smartphone, Square, RefreshCw, Upload, Maximize2 } from 'lucide-react';
+import { ImageIcon, Layout, Zap, Monitor, Smartphone, Square, RefreshCw, Upload, Maximize2, Sparkles, Download, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useCreditPolicies } from '@/hooks/useCreditPolicies';
@@ -23,20 +23,28 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   const data = props.data;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState(0);
-  const { getImageCostFromApi } = useCreditPolicies();
+  const { getCostByType } = useCreditPolicies();
+  const [cost, setCost] = useState(1);
 
-  const cost = useMemo(() => {
-    const model = data.config.model || 'gemini-3.1-flash-image-preview';
-    const modelId = getImageModelIdByApiId(model) || 'flash';
+  // 模型/画质变化时异步获取实时积分成本
+  useEffect(() => {
+    const loadCost = async () => {
+      const model = data.config.model || 'gemini-3.1-flash-image-preview';
+      const modelId = getImageModelIdByApiId(model) || ('flash' as ImageModelId);
 
-    const quality: ImageQuality = data.config.quality === '512p' ? '512'
-      : data.config.quality === 'standard' ? '1K'
-      : data.config.quality === 'hd' ? '2K'
-      : data.config.quality === '4k' ? '4K'
-      : '1K';
+      const qualityMap: Record<string, ImageQuality> = {
+        '512p': '512',
+        standard: '1K',
+        hd: '2K',
+        '4k': '4K',
+      };
+      const resolution = qualityMap[data.config.quality || 'standard'] || '1K';
 
-    return getImageCostFromApi(modelId, quality);
-  }, [data.config.model, data.config.quality, getImageCostFromApi]);
+      const c = await getCostByType("text-to-image", modelId, resolution);
+      setCost(c);
+    };
+    loadCost();
+  }, [data.config.model, data.config.quality, getCostByType]);
 
   const handleGenerate = async () => {
     if (data.isGenerating || data.credits < cost) return;
@@ -78,7 +86,7 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
         baseImages.push(data.sourceImage);
       }
 
-      console.log("开始生成图片...");
+      logger.info("开始生成图片...");
       const url = await generateImage(finalPrompt, { 
         model: data.config.model,
         aspectRatio: data.config.aspectRatio,
@@ -86,7 +94,7 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
         baseImages: baseImages,
       });
       
-      console.log("图片URL:", url);
+      logger.info("图片URL:", url);
 
       setProgress(100);
 
@@ -102,7 +110,7 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
       });
       
     } catch (error: any) {
-      console.error("生成失败:", error);
+      logger.error("生成失败:", error);
       setProgress(0);
       setNodes((nds) => 
         nds.map((n) => 
@@ -341,12 +349,45 @@ export const ImageNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
 
   const nodeWidth = getDynamicWidth();
 
-  console.log("节点数据:", data); // 调试日志
+  logger.info("节点数据:", data); // 调试日志
 
   return (
     <BaseNode
       {...props}
       onGenerate={handleGenerate}
+      renderToolbar={({ onGenerate, onDownload, onFullscreen, onDelete, isGenerating }) => (
+        <div className="absolute left-1/2 -translate-x-1/2 -translate-y-[84px] flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-full shadow-xl z-[1001]">
+          <button onClick={onGenerate} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="Redraw">
+            <RefreshCw size={14} className={isGenerating ? "animate-spin" : ""} />
+          </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <button className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="Upscale">
+            <Sparkles size={14} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDownload(); }}
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 nodrag nopan"
+            title="Download"
+          >
+            <Download size={14} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onFullscreen(); }}
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 cursor-pointer z-[9999] relative"
+            title="全屏预览"
+          >
+            <Maximize2 size={14} />
+          </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <button
+            onClick={onDelete}
+            className="p-2 hover:bg-red-50 rounded-full transition-colors text-red-500"
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
       topContent={!data.output && !data.sourceImage && (
         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-12 z-[999] pointer-events-auto group/upload-btn">
           <button

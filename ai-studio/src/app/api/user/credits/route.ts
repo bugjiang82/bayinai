@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { success, error } from "@/types/api";
 
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
       credits: user.credits || 0
     }));
   } catch (err) {
-    console.error("Get credits error:", err);
+    logger.error("Get credits error:", err);
     const message = err instanceof Error ? err.message : "获取积分失败";
     return NextResponse.json(error(message), { status: 500 });
   }

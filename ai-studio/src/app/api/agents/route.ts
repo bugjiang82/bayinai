@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { getAgents } from "@/services/agent.service";
 import { success, error } from "@/types/api";
 
@@ -49,10 +50,10 @@ const MOCK_AGENTS = [
 export async function GET() {
   try {
     const agents = await getAgents();
-    console.log("Agents from DB:", agents);
+    logger.info("Agents from DB:", agents);
     return NextResponse.json(success(agents));
   } catch (err) {
-    console.error("Error getting agents:", err);
+    logger.error("Error getting agents:", err);
     // 如果数据库查询失败，返回mock数据
     return NextResponse.json(success(MOCK_AGENTS));
   }

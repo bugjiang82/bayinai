@@ -21,6 +21,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logger from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -35,6 +36,7 @@ import ComparisonSlider from "@/components/generate/ComparisonSlider";
 import { useEditStore } from "@/store/editStore";
 import OutpaintCanvas, { type OutpaintCanvasRef } from "@/components/generate/OutpaintCanvas";
 import { useOutpaintStore } from "@/store/outpaintStore";
+import { useCreditPolicies } from "@/hooks/useCreditPolicies";
 
 type EditMode = "style-transfer" | "inpaint" | "outpainting";
 
@@ -243,6 +245,30 @@ export default function EditPage() {
     reset: resetOutpaintStore,
   } = useOutpaintStore();
 
+  // 使用积分策略hook获取实时成本
+  const { getCostByType, getImageCostFromApi } = useCreditPolicies();
+  const [inpaintCost, setInpaintCost] = useState(1);
+  const [outpaintCost, setOutpaintCost] = useState(2);
+
+  // 当模型变化时重新计算积分成本
+  useEffect(() => {
+    const loadCost = async () => {
+      if (editMode === "outpainting") {
+        // outpaintModel 存储的是完整 API 模型名（如 gemini-2.5-flash-image），
+        // 需要转换为短名称（flash/pro/image2）以匹配后台策略键
+        const shortModel = outpaintModel === "gemini-3.1-flash-image-preview" ? "pro"
+          : outpaintModel === "gpt-image-2" ? "image2"
+          : "flash";
+        const cost = await getCostByType("outpaint", shortModel);
+        setOutpaintCost(cost);
+      } else {
+        const cost = await getCostByType("edit", model);
+        setInpaintCost(cost);
+      }
+    };
+    loadCost();
+  }, [editMode, model, outpaintModel, getCostByType]);
+
   // 自动检测原图尺寸并计算比例
   const detectImageAspectRatio = useCallback((imageUrl: string): string => {
     if (originalImageSize) {
@@ -262,6 +288,16 @@ export default function EditPage() {
       }
     };
   }, []);
+
+  // 局部重绘模式：上传图片后自动检测比例并锁定，不可手动修改
+  useEffect(() => {
+    if (editMode === "inpaint" && sourceImage && originalImageSize) {
+      const detected = detectImageAspectRatio(sourceImage);
+      if (detected && detected !== aspectRatio) {
+        setAspectRatio(detected);
+      }
+    }
+  }, [editMode, sourceImage, originalImageSize, detectImageAspectRatio, aspectRatio]);
 
   const handleSourceUpload = useCallback((file: File) => {
     const reader = new FileReader();
@@ -339,12 +375,7 @@ export default function EditPage() {
     if (!sourceImage) return;
     if (isApplying) return;
 
-    const getCost = (m: string) => {
-      if (m === "flash") return 1;
-      if (m === "image2") return 60;
-      return 3;
-    };
-    const cost = getCost(model) * (model === "image2" ? image2Count : 1);
+    const cost = editMode === "outpainting" ? outpaintCost : inpaintCost;
     if (credits < cost) return;
 
     setIsApplying(true);
@@ -470,7 +501,7 @@ export default function EditPage() {
       }
 
       const result = await response.json();
-      console.log("API Response:", result);
+      logger.info("API Response:", result);
 
       if (result.code !== 0) {
         throw new Error(result.message || "生成失败");
@@ -481,15 +512,15 @@ export default function EditPage() {
         return;
       }
 
-      console.log("outputBase64:", result.data.outputBase64);
-      console.log("outputUrl:", result.data.outputUrl);
+      logger.info("outputBase64:", result.data.outputBase64);
+      logger.info("outputUrl:", result.data.outputUrl);
 
       if (result.data.outputBase64) {
         const imageUrl = `data:image/png;base64,${result.data.outputBase64}`;
-        console.log("Setting resultImage from outputBase64:", imageUrl);
+        logger.info("Setting resultImage from outputBase64:", imageUrl);
         setResultImage(imageUrl);
       } else if (result.data.outputUrl) {
-        console.log("Setting resultImage from outputUrl:", result.data.outputUrl);
+        logger.info("Setting resultImage from outputUrl:", result.data.outputUrl);
         setResultImage(result.data.outputUrl);
       } else {
         throw new Error("响应中没有图像数据");
@@ -504,12 +535,12 @@ export default function EditPage() {
       if (currentAttempt !== applyAttemptsRef.current) {
         return;
       }
-      console.error("Edit failed:", error);
+      logger.error("Edit failed:", error);
       setIsProcessing(false);
       setProgress(0);
       setIsApplying(false);
       const errorMessage = error instanceof Error ? error.message : "生成失败，请重试";
-      console.error(errorMessage);
+      logger.error(errorMessage);
     } finally {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
@@ -517,7 +548,7 @@ export default function EditPage() {
       }
       abortControllerRef.current = null;
     }
-  }, [sourceImage, credits, editMode, inpaintDescription, structureRef, styleRef, detectImageAspectRatio, generateMask, isApplying, outpaintPrompt, outpaintModel, outpaintAspectRatio]);
+  }, [sourceImage, credits, editMode, inpaintDescription, structureRef, styleRef, detectImageAspectRatio, generateMask, isApplying, outpaintPrompt, outpaintModel, outpaintAspectRatio, outpaintCost, inpaintCost]);
 
   const renderModeParams = () => {
     switch (editMode) {
@@ -597,10 +628,11 @@ export default function EditPage() {
             
             {/* 图片比例选择 */}
             <DropdownSelector
-              label="图片比例"
+              label="图片比例（自动识别）"
               value={aspectRatio}
               options={INPAINT_RATIO_OPTIONS}
               onChange={setAspectRatio}
+              disabled={true}
             />
 
             {/* Image2 多图参考上传 */}
@@ -1001,15 +1033,11 @@ export default function EditPage() {
                   className={cn(
                     "font-medium",
                     credits > 0 && credits < (
-                      editMode === "outpainting" 
-                        ? (outpaintModel === "gpt-image-2" ? 60 : 2)
-                        : model === "flash" ? 1 : 3
+                      editMode === "outpainting" ? outpaintCost : inpaintCost
                     ) ? "text-red-400" : "text-zinc-400"
                   )}
                 >
-                  {editMode === "outpainting" 
-                    ? (outpaintModel === "gpt-image-2" ? 60 : 2)
-                    : model === "flash" ? 1 : 3}
+                  {editMode === "outpainting" ? outpaintCost : inpaintCost}
                 </span>{
                   " "
                 }
@@ -1026,7 +1054,7 @@ export default function EditPage() {
               onClick={handleApply}
               disabled={
                 !sourceImage || 
-                credits < (editMode === "outpainting" ? (outpaintModel === "gpt-image-2" ? 60 : 2) : model === "flash" ? 1 : 3) || 
+                credits < (editMode === "outpainting" ? outpaintCost : inpaintCost) || 
                 isProcessing ||
                 (editMode === "inpaint" && !inpaintDescription.trim()) ||
                 (editMode === "outpainting" && !outpaintPrompt.trim())

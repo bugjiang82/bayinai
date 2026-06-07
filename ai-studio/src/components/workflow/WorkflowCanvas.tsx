@@ -22,6 +22,7 @@ import { TextNode } from './nodes/TextNode';
 import { ImageNode } from './nodes/ImageNode';
 import { VideoNode } from './nodes/VideoNode';
 import { cn } from './lib/utils';
+import logger from "@/lib/logger";
 import { NodeType } from './types';
 import { chatWithAssistant, Message } from './services/aiService';
 import { getImageModelApiName, getCanvasVideoModelOptions } from '@/models';
@@ -138,7 +139,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
           setUserCredits(result.data.credits);
         }
       } catch (err) {
-        console.error("获取积分失败:", err);
+        logger.error("获取积分失败:", err);
       }
     };
     fetchCredits();
@@ -179,7 +180,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
             setHistoryTotal(result.data.total || allItems.length);
           }
         } catch (err) {
-          console.error("获取历史失败:", err);
+          logger.error("获取历史失败:", err);
         } finally {
           setHistoryLoading(false);
         }
@@ -273,7 +274,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         showToast('error', result.message || '保存失败');
       }
     } catch (err) {
-      console.error('Save project error:', err);
+      logger.error('Save project error:', err);
       showToast('error', '保存失败，请稍后重试');
     } finally {
       setSaveLoading(false);
@@ -291,7 +292,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         showToast('error', result.message || '获取项目列表失败');
       }
     } catch (err) {
-      console.error('Load projects error:', err);
+      logger.error('Load projects error:', err);
       showToast('error', '获取项目列表失败');
     } finally {
       setProjectsLoading(false);
@@ -327,7 +328,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         showToast('error', result.message || '加载项目失败');
       }
     } catch (err) {
-      console.error('Load project error:', err);
+      logger.error('Load project error:', err);
       showToast('error', '加载项目失败');
     } finally {
       setLoadLoading(false);
@@ -362,7 +363,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         setHasUnsavedChanges(false);
       }
     } catch (err) {
-      console.error('Create new project error:', err);
+      logger.error('Create new project error:', err);
     }
   };
 
@@ -391,7 +392,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
     } catch (err) {
-      console.error('Auto-save error:', err);
+      logger.error('Auto-save error:', err);
     } finally {
       setIsSaving(false);
     }
@@ -443,7 +444,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         
         showToast('success', '项目已保存');
       } catch (err) {
-        console.error('Save before exit error:', err);
+        logger.error('Save before exit error:', err);
         showToast('error', '保存失败');
       } finally {
         setIsSaving(false);
@@ -472,7 +473,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         showToast('error', result.message || '删除失败');
       }
     } catch (err) {
-      console.error('Delete project error:', err);
+      logger.error('Delete project error:', err);
       showToast('error', '删除失败');
     }
   };
@@ -701,7 +702,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         response.toolCalls.forEach(executeToolCall);
       }
     } catch (error) {
-      console.error("Assistant send error:", error);
+      logger.error("Assistant send error:", error);
       setMessages(prev => [...prev, { role: 'model', content: "Sorry, I'm having trouble connecting right now." }]);
     } finally {
       setIsAssistantLoading(false);

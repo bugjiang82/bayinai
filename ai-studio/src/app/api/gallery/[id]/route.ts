@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { success, error } from "@/types/api";
@@ -37,7 +38,7 @@ export async function DELETE(
           fs.unlinkSync(outputPath);
         }
       } catch (err) {
-        console.error(`[Gallery Delete] Failed to delete output file: ${outputPath}`, err);
+        logger.error(`[Gallery Delete] Failed to delete output file: ${outputPath}`, err);
         errors.push(`Failed to delete main image: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
     }
@@ -50,7 +51,7 @@ export async function DELETE(
           fs.unlinkSync(thumbPath);
         }
       } catch (err) {
-        console.error(`[Gallery Delete] Failed to delete thumbnail file: ${thumbPath}`, err);
+        logger.error(`[Gallery Delete] Failed to delete thumbnail file: ${thumbPath}`, err);
         errors.push(`Failed to delete thumbnail: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
     }
@@ -60,7 +61,7 @@ export async function DELETE(
 
     // If there were file deletion errors but database record was deleted, still return success with warning
     if (errors.length > 0) {
-      console.warn(`[Gallery Delete] Deletion completed with errors for ${id}:`, errors);
+      logger.warn(`[Gallery Delete] Deletion completed with errors for ${id}:`, errors);
       return NextResponse.json(success({
         deleted: true,
         warnings: errors

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import logger from "@/lib/logger";
+import { useSession } from "next-auth/react";
 import { useEditStore } from '@/store/editStore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,7 +26,7 @@ export const AIPanel: React.FC = () => {
       // 模拟结果
       setResult(currentImage);
     } catch (error) {
-      console.error('生成失败:', error);
+      logger.error('生成失败:', error);
     } finally {
       setIsGenerating(false);
     }

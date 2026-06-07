@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { generateVideo } from "@/services/generation.service";
 import { success, error } from "@/types/api";
+import logger from "@/lib/logger";
 import sharp from "sharp";
 
 async function processImageData(imageData: string): Promise<string> {
@@ -45,7 +46,6 @@ export async function POST(request: NextRequest) {
       reference_images,
       first_frame,
       last_frame,
-      cost,
     } = body;
 
     if (!prompt) {
@@ -56,29 +56,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(error("请选择模型"), { status: 400 });
     }
 
-    if (!cost || cost < 0) {
-      return NextResponse.json(error("积分参数错误"), { status: 400 });
-    }
-
     const isHappyHorse = model.includes("happyhorse");
 
-    console.log("=================== Workflow Video API ===================");
-    console.log("Model:", model);
-    console.log("Is HappyHorse:", isHappyHorse);
-    console.log("Prompt:", prompt.substring(0, 50), "...");
-    console.log("Cost:", cost);
-    console.log("First frame provided:", !!first_frame);
-    console.log("First frame type:", typeof first_frame);
-    console.log("First frame length:", first_frame?.length);
-    console.log("First frame starts with data:", first_frame?.startsWith("data:"));
-    console.log("Last frame provided:", !!last_frame);
-    console.log("Last frame type:", typeof last_frame);
-    console.log("Last frame length:", last_frame?.length);
-    console.log("Last frame starts with data:", last_frame?.startsWith("data:"));
-    console.log("Reference image provided:", !!reference_image);
-    console.log("Reference image type:", typeof reference_image);
-    console.log("Reference images provided:", !!reference_images);
-    console.log("==========================================================");
+    logger.info("=================== Workflow Video API ===================");
+    logger.info("Model:", model);
+    logger.info("Is HappyHorse:", isHappyHorse);
+    logger.info("Prompt:", prompt.substring(0, 50), "...");
+    logger.info("First frame provided:", !!first_frame);
+    logger.info("First frame type:", typeof first_frame);
+    logger.info("First frame length:", first_frame?.length);
+    logger.info("First frame starts with data:", first_frame?.startsWith("data:"));
+    logger.info("Last frame provided:", !!last_frame);
+    logger.info("Last frame type:", typeof last_frame);
+    logger.info("Last frame length:", last_frame?.length);
+    logger.info("Last frame starts with data:", last_frame?.startsWith("data:"));
+    logger.info("Reference image provided:", !!reference_image);
+    logger.info("Reference image type:", typeof reference_image);
+    logger.info("Reference images provided:", !!reference_images);
+    logger.info("==========================================================");
 
     let firstFrameData: string | undefined;
     let lastFrameData: string | undefined;
@@ -87,17 +82,17 @@ export async function POST(request: NextRequest) {
     if (first_frame) {
       try {
         firstFrameData = await processImageData(first_frame);
-        console.log("First frame processed successfully, length:", firstFrameData.length);
+        logger.info("First frame processed successfully, length:", firstFrameData.length);
       } catch (e) {
-        console.error("Error processing first frame:", e);
+        logger.error("Error processing first frame:", e);
         throw new Error("处理首帧图片失败: " + (e instanceof Error ? e.message : "未知错误"));
       }
     } else if (reference_image) {
       try {
         firstFrameData = await processImageData(reference_image);
-        console.log("Reference image processed successfully, length:", firstFrameData.length);
+        logger.info("Reference image processed successfully, length:", firstFrameData.length);
       } catch (e) {
-        console.error("Error processing reference image:", e);
+        logger.error("Error processing reference image:", e);
         throw new Error("处理参考图片失败: " + (e instanceof Error ? e.message : "未知错误"));
       }
     }
@@ -105,9 +100,9 @@ export async function POST(request: NextRequest) {
     if (last_frame) {
       try {
         lastFrameData = await processImageData(last_frame);
-        console.log("Last frame processed successfully, length:", lastFrameData.length);
+        logger.info("Last frame processed successfully, length:", lastFrameData.length);
       } catch (e) {
-        console.error("Error processing last frame:", e);
+        logger.error("Error processing last frame:", e);
         throw new Error("处理尾帧图片失败: " + (e instanceof Error ? e.message : "未知错误"));
       }
     }
@@ -118,9 +113,9 @@ export async function POST(request: NextRequest) {
           try {
             const processedImg = await processImageData(img);
             referenceImagesData.push(processedImg);
-            console.log("Reference image processed successfully, length:", processedImg.length);
+            logger.info("Reference image processed successfully, length:", processedImg.length);
           } catch (e) {
-            console.error("Error processing reference image:", e);
+            logger.error("Error processing reference image:", e);
             throw new Error("处理参考图片失败: " + (e instanceof Error ? e.message : "未知错误"));
           }
         }
@@ -138,7 +133,6 @@ export async function POST(request: NextRequest) {
       duration,
       resolution,
       ratio,
-      cost,
     });
 
     return NextResponse.json(success({
@@ -147,7 +141,7 @@ export async function POST(request: NextRequest) {
       message: result.message,
     }, "视频生成任务已提交"));
   } catch (err) {
-    console.error("Workflow Video API error:", err);
+    logger.error("Workflow Video API error:", err);
     const message = err instanceof Error ? err.message : "生成失败";
     return NextResponse.json(error(message), { status: 500 });
   }

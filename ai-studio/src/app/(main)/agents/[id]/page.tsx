@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import logger from "@/lib/logger";
 import ChatArea from "@/components/agent/ChatArea";
 import type { ChatMessage } from "@/components/agent/ChatArea";
 import type { MessageOption } from "@/components/agent/MessageBubble";
@@ -245,7 +246,7 @@ export default function AgentChatPage() {
 **色彩：** ${result.designBrief.colors?.join('、') || '专业配色'}`;
       }
     } catch (e) {
-      console.error("Failed to parse AI content:", e);
+      logger.error("Failed to parse AI content:", e);
     }
 
     return result;
@@ -304,7 +305,7 @@ export default function AgentChatPage() {
         throw new Error("Failed to send message");
       }
     } catch (err) {
-      console.error("Chat error:", err);
+      logger.error("Chat error:", err);
       setTimeout(() => {
         const aiMsg: ChatMessage = {
           id: `ai-${Date.now()}`,

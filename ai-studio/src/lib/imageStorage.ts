@@ -1,3 +1,5 @@
+import logger from "@/lib/logger";
+
 const LOCAL_STORAGE_THRESHOLD = 2 * 1024 * 1024; // 2MB 以下用 localStorage
 
 const DB_NAME = "bayinai-db";
@@ -34,11 +36,11 @@ export async function saveToStorage(
   if (totalSize < LOCAL_STORAGE_THRESHOLD) {
     localStorage.setItem(storageKey, JSON.stringify(images));
     await clearIndexedDB();
-    console.log("小文件: 使用 localStorage 存储");
+    logger.info("小文件: 使用 localStorage 存储");
   } else {
     await saveToIndexedDB(images);
     localStorage.setItem(storageKey, JSON.stringify([]));
-    console.log("大文件: 使用 IndexedDB 存储");
+    logger.info("大文件: 使用 IndexedDB 存储");
   }
 }
 
@@ -48,20 +50,20 @@ export async function loadFromStorage(storageKey: string): Promise<string[]> {
     if (localData) {
       const parsed = JSON.parse(localData);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        console.log("从 localStorage 加载");
+        logger.info("从 localStorage 加载");
         return parsed;
       }
     }
     
     const idbData = await loadFromIndexedDB();
     if (idbData.length > 0) {
-      console.log("从 IndexedDB 加载");
+      logger.info("从 IndexedDB 加载");
       return idbData;
     }
     
     return [];
   } catch (error) {
-    console.error("加载失败，尝试 IndexedDB:", error);
+    logger.error("加载失败，尝试 IndexedDB:", error);
     try {
       return await loadFromIndexedDB();
     } catch {

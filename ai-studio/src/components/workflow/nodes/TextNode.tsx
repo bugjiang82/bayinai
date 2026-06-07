@@ -1,5 +1,6 @@
 'use client';
 
+import logger from "@/lib/logger";
 import React, { useState } from 'react';
 import { NodeProps, useReactFlow, Node } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
@@ -50,7 +51,7 @@ export const TextNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('复制失败:', err);
+      logger.error('复制失败:', err);
     }
   };
 

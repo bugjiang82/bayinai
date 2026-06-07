@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { success, error } from "@/types/api";
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }));
   } catch (err) {
-    console.error("Get project error:", err);
+    logger.error("Get project error:", err);
     const message = err instanceof Error ? err.message : "获取项目失败";
     return NextResponse.json(error(message), { status: 500 });
   }
@@ -92,7 +93,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }));
   } catch (err) {
-    console.error("Update project error:", err);
+    logger.error("Update project error:", err);
     const message = err instanceof Error ? err.message : "更新项目失败";
     return NextResponse.json(error(message), { status: 500 });
   }
@@ -129,7 +130,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     return NextResponse.json(success({ message: "项目已删除" }));
   } catch (err) {
-    console.error("Delete project error:", err);
+    logger.error("Delete project error:", err);
     const message = err instanceof Error ? err.message : "删除项目失败";
     return NextResponse.json(error(message), { status: 500 });
   }

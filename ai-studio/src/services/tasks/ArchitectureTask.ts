@@ -1,13 +1,12 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import OpenAI from "openai";
+import { ThinkingLevel } from "@google/genai";
+import { getOpenAI, getGoogleGenAI } from "@/lib/ai-clients";
+import logger from "@/lib/logger";
 import type { GenType } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult } from "./GenerateService";
 import { BaseGenerateService } from "./BaseGenerateService";
 import { getGenerationCost } from "../creditPolicy.service";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
-});
+const ai = getGoogleGenAI();
 
 const MODEL_MAP: Record<string, string> = {
   flash: "gemini-3.1-flash-image-preview",
@@ -87,12 +86,7 @@ ${negativePrompt}
       let actualMimeType = "image/png";
 
       if (isImage2Model) {
-        // Image2 模型使用 OpenAI SDK
-        const openai = new OpenAI({
-          apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI || "",
-          timeout: 600 * 1000,
-          maxRetries: 2,
-        });
+        const openai = getOpenAI();
 
         const response = await openai.images.generate({
           model: "gpt-image-2",

@@ -1,5 +1,6 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import OpenAI from "openai";
+import { getOpenAI, getGoogleGenAI, getDASHSCOPE_API_KEY, getARK_API_KEY, DASHSCOPE_BASE_URL, ARK_BASE_URL } from "@/lib/ai-clients";
+import logger from "@/lib/logger";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
@@ -12,6 +13,7 @@ import {
   getImageGenerationCost,
   getVideoGenerationCostPerSecond,
   getDefaultImageCost,
+  getGenerationCost,
 } from "./creditPolicy.service";
 import {
   getImageModelApiName,
@@ -24,14 +26,9 @@ import {
 } from "@/models";
 import { getImage2Size } from "./tasks/image2Utils";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
-});
-
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || "";
-const DASHSCOPE_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1";
-const ARK_API_KEY = process.env.ARK_API_KEY || "";
-const ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
+const ai = getGoogleGenAI();
+const DASHSCOPE_API_KEY = getDASHSCOPE_API_KEY();
+const ARK_API_KEY = getARK_API_KEY();
 
 // ======================== 图片生成 ========================
 
@@ -176,11 +173,7 @@ export async function generateImage(
         if (isImage2Model) {
           // Image2 模型使用 OpenAI SDK
           try {
-            const openai = new OpenAI({
-              apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI || "",
-              timeout: 600 * 1000,
-              maxRetries: 2,
-            });
+            const openai = getOpenAI();
 
             const imageFiles: File[] = [];
 
@@ -400,7 +393,7 @@ export async function outpaintImage(
     aspectRatio = "1:1",
   } = params;
 
-  const cost = model === "image2" ? 60 : 2;
+  const cost = await getGenerationCost("outpaint", model);
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
     throw new Error("用户不存在");
@@ -588,11 +581,23 @@ export async function generateVideo(
     model = "wan2.2-kf2v-flash",
     promptExtend = true,
     ratio = "16:9",
-    cost = 0,
+    cost: inputCost = 0,
   } = params;
+
+  let cost = inputCost;
 
   if (!DASHSCOPE_API_KEY && !ARK_API_KEY) {
     throw new Error("视频生成 API Key 未配置");
+  }
+
+  // 从积分策略数据库重新计算cost，不信任前端传入的值
+  try {
+    const policyCost = await getGenerationCost("video", model, resolution);
+    if (policyCost > 0) {
+      cost = policyCost * duration;
+    }
+  } catch (err) {
+    logger.error("获取视频积分策略失败，使用前端传入值:", err);
   }
 
   const videoModelInfo = getVideoModel(model);
@@ -781,21 +786,21 @@ export async function generateVideo(
   const baseUrl = useArk ? ARK_BASE_URL : DASHSCOPE_BASE_URL;
   const apiKey = useArk ? ARK_API_KEY : DASHSCOPE_API_KEY;
 
-  console.log("=================== Video Generate Request ===================");
-    console.log("Provider:", useArk ? "Ark" : "DashScope");
-    console.log("API Endpoint:", `${baseUrl}${apiEndpoint}`);
-    console.log("Model:", model);
-    console.log("Is Wan27:", isWan27);
-    console.log("Is HappyHorse:", isHappyHorse);
-    console.log("Is Seedance:", isSeedance);
-    console.log("Is Text to Video:", isTextToVideo);
-    console.log("Request Body:", JSON.stringify(requestBody, (key, value) => {
+  logger.info("=================== Video Generate Request ===================");
+    logger.info("Provider:", useArk ? "Ark" : "DashScope");
+    logger.info("API Endpoint:", `${baseUrl}${apiEndpoint}`);
+    logger.info("Model:", model);
+    logger.info("Is Wan27:", isWan27);
+    logger.info("Is HappyHorse:", isHappyHorse);
+    logger.info("Is Seedance:", isSeedance);
+    logger.info("Is Text to Video:", isTextToVideo);
+    logger.info("Request Body:", JSON.stringify(requestBody, (key, value) => {
       if (key === "url" && typeof value === "string" && value.length > 100) {
         return value.substring(0, 100) + "...(truncated, total length: " + value.length + ")";
       }
       return value;
     }, 2));
-    console.log("================================================================");
+    logger.info("================================================================");
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -819,9 +824,9 @@ export async function generateVideo(
   }
 
   const result = await response.json();
-  console.log("\n========== Video Generate Response ==========");
-  console.log(JSON.stringify(result, null, 2));
-  console.log("==============================================\n");
+  logger.info("\n========== Video Generate Response ==========");
+  logger.info(JSON.stringify(result, null, 2));
+  logger.info("==============================================\n");
   
   const taskId = useArk ? result.id : (result.output?.task_id || result.request_id);
 
@@ -869,10 +874,10 @@ export async function getVideoStatus(
     ? `${ARK_BASE_URL}/contents/generations/tasks/${taskId}`
     : `${DASHSCOPE_BASE_URL}/tasks/${taskId}`;
 
-  console.log("\n================= getVideoStatus =================");
-  console.log("Provider:", isArkTask ? "Ark" : "DashScope");
-  console.log("Task ID:", taskId);
-  console.log("Status URL:", statusUrl);
+  logger.info("\n================= getVideoStatus =================");
+  logger.info("Provider:", isArkTask ? "Ark" : "DashScope");
+  logger.info("Task ID:", taskId);
+  logger.info("Status URL:", statusUrl);
 
   const response = await fetch(statusUrl, {
     method: "GET",
@@ -881,18 +886,18 @@ export async function getVideoStatus(
     },
   });
 
-  console.log("Response status:", response.status);
+  logger.info("Response status:", response.status);
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Error response:", errorText);
+    logger.error("Error response:", errorText);
     throw new Error(
       `视频状态查询失败: ${response.status} - ${errorText}`
     );
   }
 
   const result = await response.json();
-  console.log("Full response:", JSON.stringify(result, null, 2));
+  logger.info("Full response:", JSON.stringify(result, null, 2));
 
   let taskStatus: string;
   let output: Record<string, unknown>;
@@ -905,7 +910,7 @@ export async function getVideoStatus(
     taskStatus = output.task_status as string || result.output?.task_status as string || "UNKNOWN";
   }
 
-  console.log("Task status:", taskStatus);
+  logger.info("Task status:", taskStatus);
 
   let status: string;
   let progress: number;
@@ -942,19 +947,19 @@ export async function getVideoStatus(
         errorCode = output.code as string || undefined;
         errorMessage = output.message as string || undefined;
       }
-      console.log("Task failed/cancelled, code:", errorCode, "message:", errorMessage);
+      logger.info("Task failed/cancelled, code:", errorCode, "message:", errorMessage);
       break;
     default:
-      console.log("Unknown task status:", taskStatus);
+      logger.info("Unknown task status:", taskStatus);
       status = taskStatus;
       progress = 20;
   }
 
   const videoUrl = (output.video_url as string) || (output.videoUrl as string);
-  console.log("Video URL:", videoUrl);
+  logger.info("Video URL:", videoUrl);
 
-  console.log("Returning:", { status, progress, videoUrl, errorCode, errorMessage });
-  console.log("===================================================\n");
+  logger.info("Returning:", { status, progress, videoUrl, errorCode, errorMessage });
+  logger.info("===================================================\n");
 
   return {
     status,
@@ -969,7 +974,7 @@ export async function updateVideoResult(
   taskId: string,
   videoUrl: string,
   userId: string,
-  cost?: number
+  inputCost?: number
 ): Promise<void> {
   const generation = await prisma.generation.findFirst({
     where: {
@@ -978,11 +983,33 @@ export async function updateVideoResult(
       },
       userId,
     },
-    select: { id: true, cost: true },
+    select: { id: true, cost: true, params: true },
   });
 
   if (!generation) {
     throw new Error("未找到对应的生成记录");
+  }
+
+  // 从积分策略数据库重新计算cost，确保使用最新策略
+  let cost = inputCost || generation.cost || 0;
+  try {
+    let model = "wan2.2-kf2v-flash";
+    let resolution = "720P";
+    let dur = 5;
+    if (generation.params) {
+      const params = typeof generation.params === "string" 
+        ? JSON.parse(generation.params) 
+        : generation.params;
+      if (params.model) model = params.model;
+      if (params.resolution) resolution = params.resolution;
+      if (params.duration) dur = params.duration;
+    }
+    const policyCost = await getGenerationCost("video", model, resolution);
+    if (policyCost > 0) {
+      cost = policyCost * dur;
+    }
+  } catch (err) {
+    logger.error("获取视频积分策略失败，使用已有值:", err);
   }
 
   const outputDir = path.join(process.cwd(), "public", "outputs", userId);
@@ -1010,13 +1037,13 @@ export async function updateVideoResult(
           const { execSync } = require("child_process");
           execSync(ffmpegCommand, { stdio: "pipe" });
         } catch (thumbError) {
-          console.error("Failed to generate video thumbnail:", thumbError);
+          logger.error("Failed to generate video thumbnail:", thumbError);
           thumbnailPath = null;
         }
       }
     }
   } catch (downloadError) {
-    console.error("Failed to download video:", downloadError);
+    logger.error("Failed to download video:", downloadError);
   }
 
   await prisma.generation.update({
@@ -1026,14 +1053,15 @@ export async function updateVideoResult(
       outputUrl: localVideoPath || videoUrl,
       thumbnailUrl: thumbnailPath ? `/outputs/${userId}/${path.basename(thumbnailPath)}` : null,
       favorited: true,
+      cost,
     },
   });
 
-  if (cost && cost > 0) {
+  if (cost > 0) {
     await deductCredits(
       userId,
       cost,
-      "视频生成",
+      "视频生成完成",
       generation.id
     );
   }

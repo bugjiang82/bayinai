@@ -14,6 +14,7 @@ export const VIDEO_MODELS: Record<VideoModelId, VideoModelInfo> = {
     isWan22: true,
     isWan27: false,
     isHappyHorse: false,
+    isSeedance: false,
   },
   "wan2.7-r2v": {
     id: "wan2.7-r2v",
@@ -28,6 +29,7 @@ export const VIDEO_MODELS: Record<VideoModelId, VideoModelInfo> = {
     isWan22: false,
     isWan27: true,
     isHappyHorse: false,
+    isSeedance: false,
   },
   "wan2.7-t2v": {
     id: "wan2.7-t2v",
@@ -42,6 +44,7 @@ export const VIDEO_MODELS: Record<VideoModelId, VideoModelInfo> = {
     isWan22: false,
     isWan27: true,
     isHappyHorse: false,
+    isSeedance: false,
   },
   "happyhorse-1.0-t2v": {
     id: "happyhorse-1.0-t2v",
@@ -56,6 +59,7 @@ export const VIDEO_MODELS: Record<VideoModelId, VideoModelInfo> = {
     isWan22: false,
     isWan27: false,
     isHappyHorse: true,
+    isSeedance: false,
   },
   "happyhorse-1.0-i2v": {
     id: "happyhorse-1.0-i2v",
@@ -70,6 +74,7 @@ export const VIDEO_MODELS: Record<VideoModelId, VideoModelInfo> = {
     isWan22: false,
     isWan27: false,
     isHappyHorse: true,
+    isSeedance: false,
   },
   "veo-3.1-lite-generate-preview": {
     id: "veo-3.1-lite-generate-preview",
@@ -84,6 +89,22 @@ export const VIDEO_MODELS: Record<VideoModelId, VideoModelInfo> = {
     isWan22: false,
     isWan27: false,
     isHappyHorse: false,
+    isSeedance: false,
+  },
+  "seedance-1.5-pro": {
+    id: "seedance-1.5-pro",
+    name: "Seedance",
+    displayName: "Seedance 1.5 Pro",
+    category: "video",
+    description: "豆包视频生成，支持文生/图生",
+    supportedResolutions: ["480P", "720P", "1080P"],
+    supportedDurations: [4, 5, 8, 10, 12],
+    supportsTextToVideo: true,
+    supportsImageToVideo: true,
+    isWan22: false,
+    isWan27: false,
+    isHappyHorse: false,
+    isSeedance: true,
   },
 };
 
@@ -106,6 +127,7 @@ export const VIDEO_ASPECT_RATIO_OPTIONS = [
   { value: "1:1", label: "1:1", description: "方形" },
   { value: "4:3", label: "4:3", description: "标准" },
   { value: "3:4", label: "3:4", description: "竖版" },
+  { value: "21:9", label: "21:9", description: "超宽屏" },
 ];
 
 export interface VideoModeOption {

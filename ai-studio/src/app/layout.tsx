@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import { AuthProvider } from "@/providers/AuthProvider";
-import { ReactFlowProvider } from "@xyflow/react";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -34,9 +33,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-background text-foreground font-sans">
         <SessionProvider>
           <AuthProvider>
-            <ReactFlowProvider>
-              {children}
-            </ReactFlowProvider>
+            {children}
           </AuthProvider>
         </SessionProvider>
       </body>

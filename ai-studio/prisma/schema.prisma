@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -99,17 +99,17 @@ model Generation {
   agentId        String?
   type           String    @default("TEXT_TO_IMAGE")
   status         String    @default("PENDING")
-  prompt         String
-  negativePrompt String?
-  params         String    @default("{}")
-  inputUrl       String?
-  outputUrl      String?
-  thumbnailUrl   String?
+  prompt         String    @db.Text
+  negativePrompt String?   @db.Text
+  params         String    @db.Text
+  inputUrl       String?   @db.MediumText
+  outputUrl      String?   @db.MediumText
+  thumbnailUrl   String?   @db.MediumText
   width          Int?
   height         Int?
   seed           Int?
   cost           Int       @default(0)
-  errorMsg       String?
+  errorMsg       String?   @db.Text
   startedAt      DateTime?
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -125,15 +125,17 @@ model Generation {
   @@index([createdAt])
   @@index([favorited])
   @@index([favoritedAt])
+  @@index([type, status, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Agent {
   id           String       @id @default(cuid())
   name         String
-  description  String?
+  description  String?      @db.Text
   avatar       String?
-  systemPrompt String
-  config       String       @default("{}")
+  systemPrompt String       @db.Text
+  config       String       @db.Text
   isPublic     Boolean      @default(false)
   sortOrder    Int          @default(0)
   userId       String?
@@ -153,7 +155,7 @@ model CreditLog {
   type      String   @default("RECHARGE")
   amount    Int
   balance   Int
-  remark    String?
+  remark    String?  @db.Text
   refId     String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -161,6 +163,7 @@ model CreditLog {
   @@index([userId])
   @@index([type])
   @@index([createdAt])
+  @@index([userId, type])
 }
 
 model CreditTransfer {
@@ -183,13 +186,13 @@ model CreditTransfer {
 model Template {
   id             String   @id @default(cuid())
   title          String
-  description    String?
+  description    String?  @db.Text
   coverImage     String?
   category       String
-  tags           String   @default("[]")
-  prompt         String
-  negativePrompt String?
-  params         String   @default("{}")
+  tags           String   @db.Text
+  prompt         String   @db.Text
+  negativePrompt String?  @db.Text
+  params         String   @db.Text
   isPublic       Boolean  @default(true)
   useCount       Int      @default(0)
   sortOrder      Int      @default(0)
@@ -208,8 +211,8 @@ model CanvasProject {
   id          String   @id @default(cuid())
   userId      String
   name        String
-  description String?
-  canvasData  String   @default("{}")
+  description String?  @db.Text
+  canvasData  String   @db.Text
   thumbnail   String?
   isDraft     Boolean  @default(true)
   createdAt   DateTime @default(now())

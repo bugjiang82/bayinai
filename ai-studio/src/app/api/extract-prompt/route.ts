@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { getGoogleGenerativeAI } from "@/lib/ai-clients";
 import { success, error } from "@/types/api";
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "");
+const genAI = getGoogleGenerativeAI();
 
 // 定义提取提示词的模型配置
 const model = genAI.getGenerativeModel({
@@ -13,13 +15,13 @@ const model = genAI.getGenerativeModel({
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("提取提示词请求开始...");
+    logger.info("提取提示词请求开始...");
     
     const session = await auth();
-    console.log("Session 信息:", session);
+    logger.info("Session 信息:", session);
 
     if (!session?.user?.id) {
-      console.log("用户未登录，返回 401");
+      logger.info("用户未登录，返回 401");
       return NextResponse.json(error("未登录"), { status: 401 });
     }
 
@@ -27,11 +29,11 @@ export async function POST(request: NextRequest) {
     const { imageBase64, mimeType = "image/jpeg" } = body;
 
     if (!imageBase64) {
-      console.log("未提供图片，返回 400");
+      logger.info("未提供图片，返回 400");
       return NextResponse.json(error("请提供图片"), { status: 400 });
     }
 
-    console.log("开始调用 Gemini API...");
+    logger.info("开始调用 Gemini API...");
     
     // 构建提示词提取请求
     const prompt = "请详细描述这张图片的内容，并输出一段整理好的 AI 绘图提示词。";
@@ -47,18 +49,18 @@ export async function POST(request: NextRequest) {
     ]);
 
     const extractedPrompt = result.response.text();
-    console.log("成功提取提示词");
+    logger.info("成功提取提示词");
 
     return NextResponse.json(success({ prompt: extractedPrompt }, "提取成功"));
   } catch (err) {
-    console.error("提取提示词失败:", err);
+    logger.error("提取提示词失败:", err);
     const message = err instanceof Error ? err.message : "提取失败";
     
     // 确保总是返回有效的 JSON
     try {
       return NextResponse.json(error(message), { status: 500 });
     } catch (jsonErr) {
-      console.error("返回 JSON 响应时出错:", jsonErr);
+      logger.error("返回 JSON 响应时出错:", jsonErr);
       return new Response(
         JSON.stringify({ code: 500, message: message, data: null }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }

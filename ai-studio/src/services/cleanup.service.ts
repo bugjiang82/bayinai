@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import logger from "@/lib/logger";
 import fs from "fs";
 import path from "path";
 

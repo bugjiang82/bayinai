@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { GoogleGenAI, Type } from "@google/genai";
+import { getGoogleGenAI } from "@/lib/ai-clients";
 import { TaskStatus, SubTask, Agent } from "@/types/ai-agent";
 import prisma from "@/lib/prisma";
 
 const REQUIRED_CREDITS = 500;
 
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "" });
+const ai = getGoogleGenAI();
 
 interface ParsedTask {
   id: string;
@@ -153,7 +155,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ tasks, agents, creditsRemaining: user.credits - REQUIRED_CREDITS });
   } catch (err) {
-    console.error("Decompose task error:", err);
+    logger.error("Decompose task error:", err);
     return NextResponse.json({ error: "任务分解失败" }, { status: 500 });
   }
 }

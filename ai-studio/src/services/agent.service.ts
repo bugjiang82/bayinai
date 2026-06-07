@@ -1,7 +1,9 @@
 import prisma from "@/lib/prisma";
+import logger from "@/lib/logger";
 import { GoogleGenAI } from "@google/genai";
+import { getGoogleGenAI } from "@/lib/ai-clients";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "" });
+const ai = getGoogleGenAI();
 
 export async function getAgents() {
   try {
@@ -78,7 +80,7 @@ export async function getAgents() {
       usageCount: agent._count.generations,
     }));
   } catch (err) {
-    console.error("Error fetching agents from DB:", err);
+    logger.error("Error fetching agents from DB:", err);
     // 如果数据库查询失败，返回mock数据
     return [
       {
@@ -283,7 +285,7 @@ export async function getAgentById(id: string) {
       throw new Error("智能体不存在");
     }
   } catch (err) {
-    console.error("Error getting agent:", err);
+    logger.error("Error getting agent:", err);
     // 如果数据库查询失败，返回mock数据
     const mockAgents: Record<string, any> = {
       "image-generator": {
@@ -398,7 +400,7 @@ export async function chatWithAgent(
       where: { id: agentId },
     });
   } catch (err) {
-    console.error("Database error, using mock data:", err);
+    logger.error("Database error, using mock data:", err);
   }
 
   // 如果数据库中没有找到agent，使用mock数据

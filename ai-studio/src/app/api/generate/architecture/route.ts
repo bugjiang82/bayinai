@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { GoogleGenAI } from "@google/genai";
+import { getGoogleGenAI } from "@/lib/ai-clients";
 import fs from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
 import { success, error } from "@/types/api";
 import { getGenerationCost, invalidatePolicyCache } from "@/services/creditPolicy.service";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
-});
+const ai = getGoogleGenAI();
 
 // 图像生成大冒险：全能渲染引擎
 export async function POST(request: NextRequest) {
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
       throw err;
     }
   } catch (err) {
-    console.error("生成失败:", err);
+    logger.error("生成失败:", err);
     const message = err instanceof Error ? err.message : "生成失败";
     return NextResponse.json(error(message), { status: 500 });
   }

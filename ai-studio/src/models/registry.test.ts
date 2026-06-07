@@ -162,7 +162,7 @@ describe("Video Model Registry", () => {
     expect(VIDEO_DURATION_OPTIONS).toHaveLength(4);
   });
 
-  it("VIDEO_ASPECT_RATIO_OPTIONS should have 5 entries", () => {
-    expect(VIDEO_ASPECT_RATIO_OPTIONS).toHaveLength(5);
+  it("VIDEO_ASPECT_RATIO_OPTIONS should have 6 entries", () => {
+    expect(VIDEO_ASPECT_RATIO_OPTIONS).toHaveLength(6);
   });
 });

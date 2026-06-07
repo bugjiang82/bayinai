@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import logger from "@/lib/logger";
 import {
   Terminal,
   Layers,
@@ -74,7 +75,7 @@ export default function AllRoundTestPage() {
           setCredits(json.data.balance);
         }
       } catch {
-        console.error("获取积分失败");
+        logger.error("获取积分失败");
       } finally {
         setCreditsLoading(false);
       }
@@ -212,7 +213,7 @@ export default function AllRoundTestPage() {
                       throw new Error(message.content);
                   }
                 } catch (parseErr) {
-                  console.error("Parse error:", parseErr);
+                  logger.error("Parse error:", parseErr);
                 }
               }
             }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { buildDefaultPolicyMap } from "@/models";
 
@@ -24,7 +25,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
-    console.error("Failed to fetch credit policies:", error);
+    logger.error("Failed to fetch credit policies:", error);
     const fallback = buildDefaultPolicyMap();
     const fallbackResult: Record<string, { cost: number; unit: string }> = {};
     for (const [key, value] of Object.entries(fallback)) {

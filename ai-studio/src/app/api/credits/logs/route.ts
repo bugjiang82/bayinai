@@ -16,11 +16,27 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type") as CreditType | null;
     const page = parseInt(searchParams.get("page") || "1", 10);
     const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
+    const startDate = searchParams.get("startDate") || undefined;
+    const endDate = searchParams.get("endDate") || undefined;
+    const minAmount = searchParams.get("minAmount");
+    const maxAmount = searchParams.get("maxAmount");
+    const model = searchParams.get("model") || undefined;
+    const search = searchParams.get("search") || undefined;
+    const sortBy = (searchParams.get("sortBy") as "amount" | "createdAt") || "createdAt";
+    const sortOrder = (searchParams.get("sortOrder") as "asc" | "desc") || "desc";
 
     const result = await getLogs(session.user.id, {
       type: type || undefined,
       page,
       pageSize,
+      startDate,
+      endDate,
+      minAmount: minAmount ? parseInt(minAmount, 10) : undefined,
+      maxAmount: maxAmount ? parseInt(maxAmount, 10) : undefined,
+      model,
+      search,
+      sortBy,
+      sortOrder,
     });
 
     return NextResponse.json(

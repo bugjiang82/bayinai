@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
+import logger from "@/lib/logger";
 import {
   Play,
   Download,
@@ -25,10 +26,10 @@ import DropdownSelector from "@/components/generate/DropdownSelector";
 import { useGenerationStore, useIsGenerating, useGenerationProgress, useGenerationError } from "@/stores/generationStore";
 import {
   VIDEO_RESOLUTION_OPTIONS,
-  VIDEO_DURATION_OPTIONS,
   VIDEO_ASPECT_RATIO_OPTIONS,
   getVideoModelOptions,
   getVideoModel,
+  getVideoModelDurations,
   type VideoModelId,
   type VideoResolution,
 } from "@/models";
@@ -45,8 +46,6 @@ interface VideoResult {
 
 type VideoMode = "text-to-video" | "image-to-video";
 
-const DURATION_OPTIONS = VIDEO_DURATION_OPTIONS.map(d => ({ value: d.value, label: d.label }));
-
 function getModelOptions(mode: VideoMode) {
   return getVideoModelOptions(mode);
 }
@@ -55,6 +54,11 @@ function getResolutionOptions(model: string) {
   const info = getVideoModel(model);
   if (!info) return VIDEO_RESOLUTION_OPTIONS;
   return VIDEO_RESOLUTION_OPTIONS.filter(r => info.supportedResolutions.includes(r.value as VideoResolution));
+}
+
+function getDurationOptions(model: string) {
+  const durations = getVideoModelDurations(model);
+  return durations.map(d => ({ value: String(d), label: `${d} 秒` }));
 }
 
 const RATIO_OPTIONS = VIDEO_ASPECT_RATIO_OPTIONS;
@@ -75,6 +79,7 @@ export default function VideoPage() {
   const [videoResult, setVideoResult] = useState<VideoResult | null>(null);
   const { data: session } = useSession();
   const [credits, setCredits] = useState<number>(0);
+  const [videoCostPerSec, setVideoCostPerSec] = useState<number>(50); // 实时每积分成本
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -117,6 +122,12 @@ export default function VideoPage() {
     }
   }, [session]);
 
+  // 实时更新视频积分成本
+  useEffect(() => {
+    const costPerSec = getVideoCostFromApi(model as VideoModelId, resolution as VideoResolution);
+    setVideoCostPerSec(costPerSec);
+  }, [model, resolution, getVideoCostFromApi]);
+
   useEffect(() => {
     const availableResolutions = getResolutionOptions(model);
     const resolutionValues = availableResolutions.map(r => r.value);
@@ -124,6 +135,14 @@ export default function VideoPage() {
       setResolution(availableResolutions[0]?.value || "720P");
     }
   }, [model, resolution]);
+
+  useEffect(() => {
+    const availableDurations = getDurationOptions(model);
+    const durationValues = availableDurations.map(d => d.value);
+    if (!durationValues.includes(duration)) {
+      setDuration(availableDurations[0]?.value || "5");
+    }
+  }, [model, duration]);
 
   const handleStartUpload = useCallback((file: File) => {
     setStartImage(URL.createObjectURL(file));
@@ -247,7 +266,7 @@ export default function VideoPage() {
         // Check for timeout first
         const elapsed = Date.now() - startTimeRef.current;
         if (elapsed > MAX_POLLING_TIME) {
-          console.error("Polling timed out after", elapsed, "ms");
+          logger.error("Polling timed out after", elapsed, "ms");
           if (pollingRef.current) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;
@@ -267,9 +286,9 @@ export default function VideoPage() {
           }
 
           const statusData = await statusRes.json();
-          console.log("\n======= Poll statusData =======", statusData);
+          logger.info("\n======= Poll statusData =======", statusData);
           const { status, progress: taskProgress, videoUrl, errorCode, errorMessage } = statusData.data;
-          console.log("Status:", status, "Progress:", taskProgress, "Video URL:", videoUrl, "Error:", errorCode, errorMessage);
+          logger.info("Status:", status, "Progress:", taskProgress, "Video URL:", videoUrl, "Error:", errorCode, errorMessage);
 
           // Update progress from server
           if (taskProgress !== undefined) {
@@ -333,11 +352,11 @@ export default function VideoPage() {
           }
           // For RUNNING / PENDING / UNKNOWN, continue polling
         } catch (pollError) {
-          console.error("Polling error:", pollError);
+          logger.error("Polling error:", pollError);
         }
       }, 3000);
     } catch (error) {
-      console.error("Video generation failed:", error);
+      logger.error("Video generation failed:", error);
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
@@ -596,7 +615,7 @@ export default function VideoPage() {
             <DropdownSelector
               label="视频时长"
               value={duration}
-              options={DURATION_OPTIONS}
+              options={getDurationOptions(model)}
               onChange={setDuration}
             />
 
@@ -641,10 +660,10 @@ export default function VideoPage() {
                 <span
                   className={cn(
                     "font-medium",
-                    credits > 0 && credits < (parseInt(duration, 10) || 5) * 50 ? "text-red-400" : "text-zinc-400"
+                    credits > 0 && credits < (parseInt(duration, 10) || 5) * videoCostPerSec ? "text-red-400" : "text-zinc-400"
                   )}
                 >
-                  {(parseInt(duration, 10) || 5) * 50}
+                  {(parseInt(duration, 10) || 5) * videoCostPerSec}
                 </span>{" "}
                 积分/秒
               </span>
@@ -657,7 +676,7 @@ export default function VideoPage() {
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               )}
               onClick={handleGenerate}
-              disabled={!prompt.trim() || (!model.includes("happyhorse") && videoMode === "image-to-video" && !startImage) || credits < (parseInt(duration, 10) || 5) * 50 || isGenerating}
+              disabled={!prompt.trim() || (!model.includes("happyhorse") && videoMode === "image-to-video" && !startImage) || credits < (parseInt(duration, 10) || 5) * videoCostPerSec || isGenerating}
             >
               {isGenerating ? (
                 <>
@@ -681,7 +700,7 @@ export default function VideoPage() {
                 请上传起始图片
               </p>
             )}
-            {prompt.trim() && credits < (parseInt(duration, 10) || 5) * 50 && (
+            {prompt.trim() && credits < (parseInt(duration, 10) || 5) * videoCostPerSec && (
               <p className="text-xs text-red-400/80 text-center mt-2">
                 积分不足，请充值后重试
               </p>

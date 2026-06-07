@@ -1,21 +1,16 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import OpenAI from "openai";
+import { ThinkingLevel } from "@google/genai";
+import { getOpenAI, getGoogleGenAI } from "@/lib/ai-clients";
+import logger from "@/lib/logger";
 import fs from "fs";
 import path from "path";
 import type { GenType } from "@/types/generation";
 import type { GenerateTaskParams, GenerateTaskResult } from "./GenerateService";
 import { BaseGenerateService } from "./BaseGenerateService";
 import { getGenerationCost } from "../creditPolicy.service";
+import { getImage2Size } from "./image2Utils";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
-});
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI || "",
-  timeout: 600 * 1000,
-  maxRetries: 2,
-});
+const ai = getGoogleGenAI();
+const openai = getOpenAI();
 
 const MODEL_MAP: Record<string, string> = {
   flash: "gemini-3.1-flash-image-preview",
@@ -28,20 +23,6 @@ const COST_MAP: Record<string, number> = {
   pro: 3,
   image2: 50,
 };
-
-function getImage2Size(aspectRatio: string): string {
-  const sizeMap: Record<string, string> = {
-    "1:1": "1024x1024",
-    "16:9": "1792x1024",
-    "9:16": "1024x1792",
-    "4:3": "1024x1024",
-    "3:4": "1024x1024",
-    "3:2": "1024x1024",
-    "2:3": "1024x1024",
-    "21:9": "1792x1024",
-  };
-  return sizeMap[aspectRatio] || "1024x1024";
-}
 
 export class TextToImageTask extends BaseGenerateService {
   getType(): GenType {
@@ -67,7 +48,7 @@ export class TextToImageTask extends BaseGenerateService {
     const isProModel = modelName.includes("pro");
     const isImage2Model = model === "image2";
     const generateCount = isImage2Model ? Math.max(1, Math.min(4, n)) : 1;
-    const cost = await getGenerationCost("text-to-image", model) * generateCount;
+    const cost = await getGenerationCost("text-to-image", model, imageSize) * generateCount;
 
     // 创建生成记录
     const generation = await this.createGenerationRecord(userId, prompt, {
@@ -90,50 +71,55 @@ export class TextToImageTask extends BaseGenerateService {
       const outputImages: { base64?: string; url?: string }[] = [];
 
       if (isImage2Model) {
-        const size = getImage2Size(aspectRatio);
+        const size = getImage2Size(aspectRatio, imageSize);
+        const hasRefImages = referenceImages && referenceImages.length > 0;
 
-        const imageParams: any = {
-          model: modelName,
-          prompt: fullPrompt,
-          size,
-          quality: quality as "low" | "medium" | "high",
-          n: generateCount,
-        };
+        if (hasRefImages) {
+          const imageFiles: File[] = [];
 
-        // 如果有参考图片，添加到请求中
-        if (referenceImages && referenceImages.length > 0) {
-          const firstRefImg = referenceImages[0];
-          let imageUrl: string;
-          
-          if (firstRefImg.startsWith("/outputs/")) {
-            // 本地文件路径
-            const filePath = path.join(process.cwd(), "public", firstRefImg);
-            if (fs.existsSync(filePath)) {
-              const fileBuffer = fs.readFileSync(filePath);
-              imageUrl = `data:image/png;base64,${fileBuffer.toString("base64")}`;
+          for (const refImg of referenceImages) {
+            let buffer: Buffer;
+            if (refImg.startsWith("/outputs/")) {
+              const filePath = path.join(process.cwd(), "public", refImg);
+              if (fs.existsSync(filePath)) {
+                buffer = fs.readFileSync(filePath);
+              } else {
+                throw new Error(`参考图片不存在: ${filePath}`);
+              }
+            } else if (refImg.includes(",")) {
+              const base64 = refImg.split(",")[1];
+              buffer = Buffer.from(base64, "base64");
             } else {
-              throw new Error(`参考图片不存在: ${filePath}`);
+              buffer = Buffer.from(refImg, "base64");
             }
-          } else if (firstRefImg.includes(",")) {
-            // base64 data URL
-            imageUrl = firstRefImg;
-          } else {
-            // 纯 base64 字符串
-            imageUrl = `data:image/png;base64,${firstRefImg}`;
+            imageFiles.push(new File([buffer as BlobPart], "image.png", { type: "image/png" }));
           }
 
-          imageParams.image_url = {
-            url: imageUrl,
-          };
-        }
+          const response = await openai.images.edit({
+            model: modelName,
+            image: imageFiles as any,
+            prompt: fullPrompt,
+            size: size as any,
+            quality: quality as any,
+            n: generateCount,
+          } as any);
 
-        const response = await openai.images.generate(imageParams);
+          for (const img of response.data || []) {
+            if (img.b64_json) outputImages.push({ base64: img.b64_json });
+            else if (img.url) outputImages.push({ url: img.url });
+          }
+        } else {
+          const response = await openai.images.generate({
+            model: modelName,
+            prompt: fullPrompt,
+            size: size as any,
+            quality: quality as any,
+            n: generateCount,
+          } as any);
 
-        for (const img of response.data || []) {
-          if (img.b64_json) {
-            outputImages.push({ base64: img.b64_json });
-          } else if (img.url) {
-            outputImages.push({ url: img.url });
+          for (const img of response.data || []) {
+            if (img.b64_json) outputImages.push({ base64: img.b64_json });
+            else if (img.url) outputImages.push({ url: img.url });
           }
         }
 

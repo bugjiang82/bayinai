@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { getGoogleGenAI } from "@/lib/ai-clients";
 import { SubTask, Agent } from "@/types/ai-agent";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
 import prisma from "@/lib/prisma";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "" });
+const ai = getGoogleGenAI();
 
 interface ExecuteRequest {
   objective: string;
@@ -111,11 +113,11 @@ export async function POST(request: NextRequest) {
                     },
                   });
                 } catch (dbErr) {
-                  console.error("记录生成到数据库失败:", dbErr);
+                  logger.error("记录生成到数据库失败:", dbErr);
                 }
               }
             } catch (imgErr) {
-              console.error(`图片 ${i + 1} 生成失败:`, imgErr);
+              logger.error(`图片 ${i + 1} 生成失败:`, imgErr);
             }
           }
 
@@ -140,7 +142,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("Execute subtask error:", err);
+    logger.error("Execute subtask error:", err);
     return NextResponse.json({ error: "任务执行失败" }, { status: 500 });
   }
 }

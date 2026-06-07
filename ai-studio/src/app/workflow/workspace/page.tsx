@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/useToast';
+import logger from '@/lib/logger';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -19,7 +20,8 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  Check
+  Check,
+  ArrowLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -66,7 +68,7 @@ export default function WorkspacePage() {
         setError(result.message || '获取项目列表失败');
       }
     } catch (err) {
-      console.error('Fetch projects error:', err);
+      logger.error('Fetch projects error:', err);
       setError('网络错误，请稍后重试');
     } finally {
       setLoading(false);
@@ -108,7 +110,7 @@ export default function WorkspacePage() {
         showToast('error', result.message || '创建失败');
       }
     } catch (err) {
-      console.error('Create project error:', err);
+      logger.error('Create project error:', err);
       showToast('error', '创建失败，请稍后重试');
     } finally {
       setCreating(false);
@@ -131,7 +133,7 @@ export default function WorkspacePage() {
         showToast('error', result.message || '删除失败');
       }
     } catch (err) {
-      console.error('Delete project error:', err);
+      logger.error('Delete project error:', err);
       showToast('error', '删除失败');
     }
     setActiveMenu(null);
@@ -152,7 +154,7 @@ export default function WorkspacePage() {
       setSelectedProjects([]);
       fetchProjects();
     } catch (err) {
-      console.error('Delete projects error:', err);
+      logger.error('Delete projects error:', err);
       showToast('error', '删除失败');
     }
     setActiveMenu(null);
@@ -195,6 +197,13 @@ export default function WorkspacePage() {
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-8 py-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
           <div>
+            <Link
+              href="/generate/image"
+              className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white mb-3 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              返回工作区
+            </Link>
             <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">工作空间</h1>
             <p className="text-base text-zinc-400">管理您的创意项目</p>
           </div>

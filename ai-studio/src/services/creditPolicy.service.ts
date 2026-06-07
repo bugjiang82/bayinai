@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import logger from "@/lib/logger";
 import {
   getImageCost,
   getVideoCostPerSecond,
@@ -35,7 +36,7 @@ export async function getCreditPolicies(): Promise<Map<string, CreditPolicyEntry
       return cachedPolicies;
     }
   } catch (error) {
-    console.error("Failed to fetch credit policies from DB:", error);
+    logger.error("Failed to fetch credit policies from DB:", error);
   }
 
   const defaultMap = buildDefaultPolicyMap();
@@ -121,21 +122,40 @@ export { DEFAULT_POLICIES } from "./creditPolicyCompat";
 export type { CreditPolicyEntry };
 
 export async function getGenerationCost(
-  type: "text-to-image" | "image-to-image" | "architecture" | "edit" | "video" | "automation-test" | "workflow-image",
-  model?: string
+  type: "text-to-image" | "image-to-image" | "architecture" | "edit" | "video" | "outpaint" | "automation-test" | "workflow-image",
+  model?: string,
+  qualityOrResolution?: string
 ): Promise<number> {
-  const modelKey = model || "flash";
-  const policyKey = `${type}-${modelKey}`;
+  const modelKey = (model || "flash").toLowerCase().replace(/\./g, "-");
+
+  // 对于图片和视频类型，使用 createPolicyKey 格式以匹配数据库中的策略键
+  let policyKey: string;
+  if (type === "text-to-image" || type === "image-to-image") {
+    const quality = qualityOrResolution || "1K";
+    policyKey = createPolicyKey(modelKey, quality);
+  } else if (type === "video") {
+    const resolution = qualityOrResolution || "720P";
+    policyKey = createPolicyKey(modelKey, resolution);
+  } else {
+    // outpaint, edit, architecture, workflow, automation-test 使用简单格式
+    policyKey = `${type}-${modelKey}`;
+  }
 
   try {
     const policies = await getCreditPolicies();
     const policy = Array.from(policies.values()).find(p => p.key === policyKey);
     if (policy) return policy.cost;
 
+    // 降级：尝试简单格式匹配（兼容旧数据）
+    const simpleKey = `${type}-${modelKey}`;
+    const simplePolicy = Array.from(policies.values()).find(p => p.key === simpleKey);
+    if (simplePolicy) return simplePolicy.cost;
+
     if (type === "video") return 50;
 
     const defaultMap = buildDefaultPolicyMap();
     if (defaultMap[policyKey]) return defaultMap[policyKey].cost;
+    if (defaultMap[simpleKey]) return defaultMap[simpleKey].cost;
   } catch {
     // fallback
   }

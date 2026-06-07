@@ -9,18 +9,16 @@ import {
   Circle,
   Trash2,
   RotateCcw,
+  Undo2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-
-import { Shapes } from 'lucide-react';
 
 const tools: { type: ToolType; icon: React.ElementType; label: string }[] = [
   { type: 'select', icon: MousePointer2, label: '选择' },
   { type: 'brush', icon: Paintbrush, label: '笔刷' },
   { type: 'eraser', icon: Eraser, label: '橡皮擦' },
   { type: 'lasso', icon: Lasso, label: '套索' },
-  { type: 'polygon', icon: Shapes, label: '多边形' },
   { type: 'rect', icon: Square, label: '矩形' },
   { type: 'circle', icon: Circle, label: '圆形' },
 ];
@@ -35,6 +33,8 @@ export const Toolbox: React.FC = () => {
     setBrushSize,
     clearShapes,
     setSelectionPath,
+    undo,
+    historyIndex,
   } = useEditStore();
 
   return (
@@ -52,9 +52,10 @@ export const Toolbox: React.FC = () => {
             <button
               key={type}
               onClick={() => setTool(type)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group ${isActive
-                ? 'bg-editor-accent/20 border border-editor-accent/30'
-                : 'bg-white/5 border border-transparent hover:border-white/10'}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group ${
+                isActive
+                  ? 'bg-editor-accent/20 border border-editor-accent/30'
+                  : 'bg-white/5 border border-transparent hover:border-white/10'}
               `}
             >
               <Icon
@@ -113,6 +114,17 @@ export const Toolbox: React.FC = () => {
       </div>
 
       <div className="mt-auto space-y-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full flex items-center gap-2 text-xs text-white/60 hover:text-white border border-white/5 hover:border-white/10"
+          onClick={undo}
+          disabled={historyIndex < 0}
+        >
+          <Undo2 className="w-4 h-4" />
+          <span className="hidden lg:inline">撤销 (Ctrl+Z)</span>
+        </Button>
+
         <Button
           variant="ghost"
           size="sm"

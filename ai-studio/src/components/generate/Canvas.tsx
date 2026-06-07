@@ -991,14 +991,32 @@ export default function Canvas({
                           </div>
                           <div className="text-[9px] text-white space-y-0.5">
                             <div className="truncate">
-                              {item.model === "pro" || item.model === "gemini-3-pro-image-preview"
-                                ? "Pro 大模型"
-                                : "Flash 大模型"}
+                              {(() => {
+                                const modelLabels: Record<string, string> = {
+                                  flash: "Flash 大模型",
+                                  pro: "Pro 大模型",
+                                  image2: "Image2 大模型",
+                                  "gemini-3-pro-image-preview": "Pro 大模型",
+                                };
+                                return modelLabels[item.model || ""] || `${item.model || "Flash"} 大模型`;
+                              })()}
                             </div>
                             {item.imageSize && (
-                              <div className="text-zinc-300">{item.imageSize} 质量</div>
+                              <div className="text-zinc-300">
+                                {(() => {
+                                  const qualityLabels: Record<string, string> = {
+                                    "512": "512P",
+                                    "1K": "1K",
+                                    "2K": "2K",
+                                    "4K": "4K",
+                                  };
+                                  return qualityLabels[item.imageSize] || item.imageSize;
+                                })()} 质量
+                              </div>
                             )}
-                            <div className="text-zinc-300">{item.aspectRatio || "未知"} 比例</div>
+                            <div className="text-zinc-300">
+                              {item.aspectRatio || (item as any).ratio || "未知"} 比例
+                            </div>
                             {item.createdAt && (
                               <div className="text-zinc-400">{item.createdAt}</div>
                             )}

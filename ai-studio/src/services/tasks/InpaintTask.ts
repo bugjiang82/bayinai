@@ -1,5 +1,6 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import OpenAI from "openai";
+import { ThinkingLevel } from "@google/genai";
+import { getOpenAI, getGoogleGenAI } from "@/lib/ai-clients";
+import logger from "@/lib/logger";
 import fs from "fs";
 import path from "path";
 import type { GenType } from "@/types/generation";
@@ -7,15 +8,8 @@ import type { GenerateTaskParams, GenerateTaskResult } from "./GenerateService";
 import { BaseGenerateService } from "./BaseGenerateService";
 import { getGenerationCost } from "../creditPolicy.service";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
-});
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI || "",
-  timeout: 600 * 1000,
-  maxRetries: 2,
-});
+const ai = getGoogleGenAI();
+const openai = getOpenAI();
 
 const MODEL_MAP: Record<string, string> = {
   flash: "gemini-3.1-flash-image-preview",
@@ -28,20 +22,6 @@ const COST_MAP: Record<string, number> = {
   pro: 5,
   image2: 60,
 };
-
-function getImage2Size(aspectRatio: string): "1024x1024" | "1792x1024" | "1024x1792" {
-  const sizeMap: Record<string, "1024x1024" | "1792x1024" | "1024x1792"> = {
-    "1:1": "1024x1024",
-    "16:9": "1792x1024",
-    "9:16": "1024x1792",
-    "4:3": "1024x1024",
-    "3:4": "1024x1024",
-    "3:2": "1024x1024",
-    "2:3": "1024x1024",
-    "21:9": "1792x1024",
-  };
-  return sizeMap[aspectRatio] || "1024x1024";
-}
 
 export class InpaintTask extends BaseGenerateService {
   getType(): GenType {
@@ -133,46 +113,29 @@ Instructions:
           originalBuffer = Buffer.from(originalImage, "base64");
         }
 
-        let maskBuffer: Buffer | undefined;
+        const originalFile = new File([originalBuffer as BlobPart], "original.png", { type: "image/png" });
+
+        let maskFile: File | undefined;
         if (maskImage) {
+          let maskBuffer: Buffer;
           if (maskImage.includes(",")) {
             maskBuffer = Buffer.from(maskImage.split(",")[1], "base64");
           } else {
             maskBuffer = Buffer.from(maskImage, "base64");
           }
+          maskFile = new File([maskBuffer as BlobPart], "mask.png", { type: "image/png" });
         }
 
-        const imageBuffers: { image: Buffer }[] = [];
-        for (const refImg of referenceImages) {
-          let refBuffer: Buffer;
-          if (refImg.includes(",")) {
-            refBuffer = Buffer.from(refImg.split(",")[1], "base64");
-          } else if (refImg.startsWith("/outputs/") || refImg.startsWith("http")) {
-            const filePath = refImg.startsWith("/outputs/")
-              ? path.join(process.cwd(), "public", refImg)
-              : refImg;
-            if (fs.existsSync(filePath)) {
-              refBuffer = fs.readFileSync(filePath);
-            } else {
-              const response = await fetch(refImg);
-              const arrayBuffer = await response.arrayBuffer();
-              refBuffer = Buffer.from(arrayBuffer);
-            }
-          } else {
-            refBuffer = Buffer.from(refImg, "base64");
-          }
-          imageBuffers.push({ image: refBuffer });
-        }
-
-        const response = await openai.images.edit({
+        const editParams: any = {
           model: modelName,
-          image: originalBuffer as any,
-          mask: maskBuffer as any,
+          image: originalFile,
           prompt: finalPrompt,
-          size: getImage2Size(aspectRatio) as any,
-          quality: quality as "low" | "medium" | "high",
-          n: generateCount,
-        } as any);
+        };
+        if (maskFile) {
+          editParams.mask = maskFile;
+        }
+
+        const response = await openai.images.edit(editParams);
 
         for (const img of response.data || []) {
           if (img.b64_json) {

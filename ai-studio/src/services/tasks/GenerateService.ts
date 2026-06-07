@@ -24,5 +24,5 @@ export interface GenerateTaskResult {
 export interface GenerateService {
   execute(params: GenerateTaskParams): Promise<GenerateTaskResult>;
   getType(): GenType;
-  getCost(model?: string): number;
+  getCost(model?: string, qualityOrResolution?: string): Promise<number>;
 }

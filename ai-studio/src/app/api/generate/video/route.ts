@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { generateVideo, getVideoStatus, updateVideoResult } from "@/services/generation.service";
 import { success, error } from "@/types/api";
@@ -179,7 +180,7 @@ export async function GET(request: NextRequest) {
       try {
         await updateVideoResult(taskId, result.videoUrl, session.user.id);
       } catch (e) {
-        console.error("Failed to update video result:", e);
+        logger.error("Failed to update video result:", e);
       }
     }
 

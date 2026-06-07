@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getAllDefaultPolicies, clearDefaultPolicyCache } from "@/models";
@@ -43,7 +44,7 @@ export async function GET() {
       isDefault,
     });
   } catch (error) {
-    console.error("Failed to fetch credit policies:", error);
+    logger.error("Failed to fetch credit policies:", error);
     return NextResponse.json({ error: "获取积分策略失败" }, { status: 500 });
   }
 }
@@ -91,7 +92,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: "积分策略更新成功" });
   } catch (error) {
-    console.error("Failed to update credit policies:", error);
+    logger.error("Failed to update credit policies:", error);
     return NextResponse.json({ error: "更新积分策略失败" }, { status: 500 });
   }
 }
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "未知操作" }, { status: 400 });
   } catch (error) {
-    console.error("Failed to process credit policy action:", error);
+    logger.error("Failed to process credit policy action:", error);
     return NextResponse.json({ error: "操作失败" }, { status: 500 });
   }
 }

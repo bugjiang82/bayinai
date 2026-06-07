@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { success, error } from "@/types/api";
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(success({ projects }));
   } catch (err) {
-    console.error("Get projects error:", err);
+    logger.error("Get projects error:", err);
     const message = err instanceof Error ? err.message : "获取项目列表失败";
     return NextResponse.json(error(message), { status: 500 });
   }
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
       }
     }), { status: 201 });
   } catch (err) {
-    console.error("Create project error:", err);
+    logger.error("Create project error:", err);
     const message = err instanceof Error ? err.message : "保存项目失败";
     return NextResponse.json(error(message), { status: 500 });
   }

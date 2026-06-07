@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import Image from "next/image";
+import NextImage from "next/image";
 import { useRouter } from "next/navigation";
+import logger from "@/lib/logger";
 import { Loader2 } from "lucide-react";
 import { useGenerationStore, type GenerationResult as StoreResult } from "@/stores/generationStore";
 import Canvas from "@/components/generate/Canvas";
@@ -13,7 +14,33 @@ import DropdownSelector from "@/components/generate/DropdownSelector";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { ModelType } from "@/components/generate/ModelSelector";
-import { createPolicyKey, getImageCost, type ImageModelId, type ImageQuality } from "@/models";
+import type { ImageModelId, ImageQuality } from "@/models";
+import { useCreditPolicies } from "@/hooks/useCreditPolicies";
+import { saveToStorage, loadFromStorage } from "@/lib/imageStorage";
+
+/** 压缩图片用于上传存储：限制最大尺寸 2000px，超过则缩放并转 JPEG */
+function compressImageForUpload(dataUrl: string, callback: (compressed: string) => void) {
+  const img = new Image();
+  img.onload = () => {
+    const MAX_DIM = 2000;
+    let { naturalWidth: w, naturalHeight: h } = img;
+    if (w <= MAX_DIM && h <= MAX_DIM && dataUrl.length < 500000) {
+      callback(dataUrl);
+      return;
+    }
+    if (w > MAX_DIM || h > MAX_DIM) {
+      if (w > h) { h = Math.round(h * (MAX_DIM / w)); w = MAX_DIM; }
+      else { w = Math.round(w * (MAX_DIM / h)); h = MAX_DIM; }
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { callback(dataUrl); return; }
+    ctx.drawImage(img, 0, 0, w, h);
+    callback(canvas.toDataURL("image/jpeg", 0.85));
+  };
+  img.src = dataUrl;
+}
 
 type ImageMode = "text-to-image" | "image-to-image";
 
@@ -92,19 +119,40 @@ export default function UnifiedImagePage() {
   const [thinkingLevel, setThinkingLevel] = useState("minimal");
   const [images, setImages] = useState<CanvasImage[]>([]);
   const [credits, setCredits] = useState(100);
-  const [creditPolicies, setCreditPolicies] = useState<Record<string, { cost: number; unit: string }>>({});
+  const [imageCreditCost, setImageCreditCost] = useState(1);
+  const { getImageCostFromApi, getCostByType } = useCreditPolicies();
 
-  const [referenceImages, setReferenceImages] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem("unified-image-reference-images");
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
+  // 模型/分辨率变化时异步获取实时积分成本
+  useEffect(() => {
+    const loadCost = async () => {
+      const modelId: ImageModelId = model === "pro" ? "pro" : model === "image2" ? "image2" : "flash";
+      const quality: ImageQuality = resolution === "512" ? "512" : resolution === "2K" ? "2K" : resolution === "4K" ? "4K" : "1K";
+      const cost = await getCostByType("text-to-image", modelId, quality);
+      setImageCreditCost(cost);
+    };
+    loadCost();
+  }, [model, resolution, getCostByType]);
+
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
   const [referenceWeight, setReferenceWeight] = useState(0.7);
   const [transformType, setTransformType] = useState<TransformType>("style-transfer");
   const [image2Count, setImage2Count] = useState(1);
   const [image2Thinking, setImage2Thinking] = useState("off");
+  const [originalImageSize, setOriginalImageSize] = useState<{ width: number; height: number } | null>(null);
+
+  /** 根据图片宽高比自动匹配 SIZE_OPTIONS 中的比例 */
+  const detectImageAspectRatio = useCallback((width: number, height: number): string => {
+    const ratio = width / height;
+    if (Math.abs(ratio - 1) < 0.1) return "1:1";
+    if (ratio > 2.0) return "21:9";
+    if (ratio > 1.6) return "16:9";
+    if (ratio > 1.2) return "4:3";
+    if (ratio < 0.45) return "9:16";
+    if (ratio < 0.6) return "3:4";
+    if (ratio < 0.85) return "9:16";
+    return "1:1";
+  }, []);
 
   const [history, setHistory] = useState<Array<{
     id: string;
@@ -123,6 +171,13 @@ export default function UnifiedImagePage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const historyPageSize = 18;
+
+  // 从 localStorage/IndexedDB 异步加载参考图片
+  useEffect(() => {
+    loadFromStorage("unified-image-reference-images").then((saved) => {
+      if (saved.length > 0) setReferenceImages(saved);
+    }).catch(() => {}).finally(() => setImagesLoaded(true));
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -148,21 +203,6 @@ export default function UnifiedImagePage() {
   }, []);
 
   useEffect(() => {
-    const fetchPolicies = async () => {
-      try {
-        const res = await fetch("/api/credits/policies");
-        const json = await res.json();
-        if (json.success && json.data) {
-          setCreditPolicies(json.data);
-        }
-      } catch {
-        // 忽略错误，使用默认积分显示
-      }
-    };
-    fetchPolicies();
-  }, []);
-
-  useEffect(() => {
     setParams({
       prompt,
       negativePrompt,
@@ -181,9 +221,12 @@ export default function UnifiedImagePage() {
     localStorage.removeItem("image-upload");
   }, []);
 
+  // 使用 saveToStorage（自动选择 localStorage/IndexedDB）避免配额超限
   useEffect(() => {
-    localStorage.setItem("unified-image-reference-images", JSON.stringify(referenceImages));
-  }, [referenceImages]);
+    if (imagesLoaded) {
+      saveToStorage(referenceImages, "unified-image-reference-images");
+    }
+  }, [referenceImages, imagesLoaded]);
 
   useEffect(() => {
     async function loadHistory(page = 1) {
@@ -193,28 +236,17 @@ export default function UnifiedImagePage() {
         const res = await fetch(`/api/generate/history?type=TEXT_TO_IMAGE&type=IMAGE_TO_IMAGE&type=INPAINT&type=EDIT&status=COMPLETED&pageSize=${historyPageSize}&page=${page}`);
         if (res.ok) {
           const json = await res.json();
-          console.log("History API response:", json);
+          logger.info("History API response:", json);
           if (json.code === 0 && json.data?.list) {
             const newItems = json.data.list.map((item: any) => {
-              let modelVal = "flash";
-              let imageSize = "1K";
-              let aspectRatio = "";
-              if (item.params) {
-                try {
-                  const params = typeof item.params === 'string' ? JSON.parse(item.params) : item.params;
-                  modelVal = params.model || "flash";
-                  imageSize = params.imageSize || "1K";
-                  aspectRatio = params.aspectRatio || "";
-                } catch {}
-              }
               return {
                 id: item.id,
                 url: item.outputUrl,
                 thumb: item.thumbnailUrl || item.outputUrl,
                 prompt: item.prompt,
-                model: modelVal,
-                imageSize,
-                aspectRatio,
+                model: item.model || "flash",
+                imageSize: item.imageSize || "1K",
+                aspectRatio: item.aspectRatio || "",
                 createdAt: item.createdAt ? formatTime(item.createdAt) : "",
                 type: item.type,
                 inputUrl: item.inputUrl,
@@ -263,25 +295,14 @@ export default function UnifiedImagePage() {
         const json = await res.json();
         if (json.code === 0 && json.data?.list) {
           const newItems = json.data.list.map((item: any) => {
-            let modelVal = "flash";
-            let imageSize = "1K";
-            let aspectRatio = "";
-            if (item.params) {
-              try {
-                const params = typeof item.params === 'string' ? JSON.parse(item.params) : item.params;
-                modelVal = params.model || "flash";
-                imageSize = params.imageSize || "1K";
-                aspectRatio = params.aspectRatio || "";
-              } catch {}
-            }
             return {
               id: item.id,
               url: item.outputUrl,
               thumb: item.thumbnailUrl || item.outputUrl,
               prompt: item.prompt,
-              model: modelVal,
-              imageSize,
-              aspectRatio,
+              model: item.model || "flash",
+              imageSize: item.imageSize || "1K",
+              aspectRatio: item.aspectRatio || "",
               createdAt: item.createdAt ? formatTime(item.createdAt) : "",
               type: item.type,
               inputUrl: item.inputUrl,
@@ -320,32 +341,36 @@ export default function UnifiedImagePage() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      setReferenceImages((prev) => [...prev, dataUrl]);
+      // 检测原始尺寸并自动适配比例
+      const img = new Image();
+      img.onload = () => {
+        setOriginalImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+        if (mode === "image-to-image") {
+          const detectedRatio = detectImageAspectRatio(img.naturalWidth, img.naturalHeight);
+          const matchedSize = SIZE_OPTIONS.find(s => s.ratio === detectedRatio);
+          if (matchedSize && matchedSize.ratio !== selectedSize.ratio) {
+            setSelectedSize(matchedSize);
+          }
+        }
+      };
+      img.src = dataUrl;
+      // 压缩后存入 referenceImages，避免 base64 体积过大导致 localStorage 配额超限
+      compressImageForUpload(dataUrl, (compressed) => {
+        setReferenceImages((prev) => [...prev, compressed]);
+      });
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [mode, selectedSize.ratio, detectImageAspectRatio]);
 
   const handleRemoveImage = useCallback((index: number) => {
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  const getCreditCost = useCallback((m: string) => {
-    const modelId: ImageModelId = m === "flash" ? "flash" : m === "pro" ? "pro" : "image2";
-    const quality: ImageQuality = resolution === "512" ? "512" : resolution === "2K" ? "2K" : resolution === "4K" ? "4K" : "1K";
-    
-    const policyKey = createPolicyKey(modelId, quality);
-    if (creditPolicies[policyKey]) {
-      return creditPolicies[policyKey].cost;
-    }
-    
-    return getImageCost(modelId, quality);
-  }, [creditPolicies, resolution]);
-
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;
     if (mode === "image-to-image" && referenceImages.length === 0) return;
 
-    const creditsPerImage = getCreditCost(model);
+    const creditsPerImage = imageCreditCost;
     const totalCost = model === "image2" ? creditsPerImage * image2Count : creditsPerImage;
     if (credits < totalCost) return;
 
@@ -413,7 +438,7 @@ export default function UnifiedImagePage() {
       };
       completeGeneration(storeResult);
     } catch (error) {
-      console.error("Generation failed:", error);
+      logger.error("Generation failed:", error);
       failGeneration();
     }
   }, [
@@ -429,6 +454,7 @@ export default function UnifiedImagePage() {
     referenceWeight,
     transformType,
     currentParams,
+    imageCreditCost,
     simulateProgress,
     completeGeneration,
     failGeneration,
@@ -525,7 +551,7 @@ export default function UnifiedImagePage() {
                         key={index}
                         className="relative group aspect-square rounded-lg overflow-hidden border border-white/[0.08]"
                       >
-                        <Image
+                        <NextImage
                           src={img}
                           alt={`参考图 ${index + 1}`}
                           fill
@@ -654,9 +680,9 @@ export default function UnifiedImagePage() {
                 消耗{" "}
                 <span className={cn(
                   "font-medium",
-                  credits > 0 && credits < getCreditCost(model) ? "text-red-400" : "text-zinc-400"
+                  credits > 0 && credits < imageCreditCost ? "text-red-400" : "text-zinc-400"
                 )}>
-                  {getCreditCost(model)}
+                  {imageCreditCost}
                 </span>{" "}
                 积分/个
               </span>
@@ -672,7 +698,7 @@ export default function UnifiedImagePage() {
               disabled={
                 !prompt.trim() ||
                 (mode === "image-to-image" && referenceImages.length === 0) ||
-                credits < getCreditCost(model) ||
+                credits < imageCreditCost ||
                 isGenerating
               }
             >
@@ -688,7 +714,7 @@ export default function UnifiedImagePage() {
                 请上传参考图片
               </p>
             )}
-            {prompt.trim() && credits < getCreditCost(model) && (
+            {prompt.trim() && credits < imageCreditCost && (
               <p className="text-xs text-red-400/80 text-center mt-2">
                 积分不足，请充值后重试
               </p>

@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useGenerationStore } from "@/stores/generationStore";
+import logger from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
@@ -222,7 +223,7 @@ export default function ArchitecturePage() {
           setHasApiKey(selected);
         }
       } catch (e) {
-        console.error("Failed to check API key status", e);
+        logger.error("Failed to check API key status", e);
       } finally {
         setIsCheckingKey(false);
       }
@@ -479,7 +480,7 @@ export default function ArchitecturePage() {
       setCredits((prev) => Math.max(0, prev - totalCost));
 
     } catch (error: any) {
-      console.error("Generation failed:", error);
+      logger.error("Generation failed:", error);
       const errorMsg = error.message || "";
       if (errorMsg.includes("PERMISSION_DENIED") || errorMsg.includes("Requested entity was not found")) {
         setHasApiKey(false);

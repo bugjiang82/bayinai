@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { GoogleGenAI, Type } from "@google/genai";
+import { getGoogleGenAI } from "@/lib/ai-clients";
 import { SubTask } from "@/types/ai-agent";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "" });
+const ai = getGoogleGenAI();
 
 interface InteractionOption {
   id: string;
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
     const data: InteractionResponse = JSON.parse(response.text || "{}");
     return NextResponse.json(data);
   } catch (err) {
-    console.error("Generate interactions error:", err);
+    logger.error("Generate interactions error:", err);
     return NextResponse.json({ error: "生成交互选项失败" }, { status: 500 });
   }
 }

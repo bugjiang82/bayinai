@@ -1,15 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NodeProps, useReactFlow, Node } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { NodeData } from '../types';
 import { generateVideo, checkVideoStatus } from '../services/aiService';
-import { calculateNodeCost } from '../services/costCalculator';
 import { generateVideoThumbnail } from '@/utils/thumbnail';
-import { Video, Film, PlayCircle, RefreshCw, Layers, Clock, Zap, Play, Pause, Square } from 'lucide-react';
+import { Video, Film, PlayCircle, RefreshCw, Layers, Clock, Zap, Play, Pause, Square, Download, Trash2, Maximize2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
+import { VideoPlayer } from '@/components/generate/Canvas';
+import logger from "@/lib/logger";
 
 const downloadVideo = async (videoUrl: string, fileName: string = 'video') => {
   try {
@@ -25,7 +27,7 @@ const downloadVideo = async (videoUrl: string, fileName: string = 'video') => {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   } catch (error) {
-    console.error('Failed to download video:', error);
+    logger.error('Failed to download video:', error);
   }
 };
 
@@ -33,6 +35,7 @@ import {
   getVideoModel,
   type VideoModelId,
   type VideoResolution,
+  VIDEO_ASPECT_RATIO_OPTIONS,
 } from '@/models';
 import { useCreditPolicies } from '@/hooks/useCreditPolicies';
 
@@ -44,10 +47,21 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
-  const { getVideoCostFromApi, getImageCostFromApi } = useCreditPolicies();
-  
-  // 计算积分消耗
-  const cost = useMemo(() => calculateNodeCost(data, getImageCostFromApi, getVideoCostFromApi), [data.config.model, data.config.duration, data.type, getImageCostFromApi, getVideoCostFromApi]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const { getCostByType } = useCreditPolicies();
+  const [cost, setCost] = useState(50);
+
+  // 模型/分辨率/时长变化时异步获取实时积分成本
+  useEffect(() => {
+    const loadCost = async () => {
+      const modelId = (data.config.model || "wan2.2-kf2v-flash") as VideoModelId;
+      const resolution = (data.config.wanxResolution || '720P') as VideoResolution;
+      const duration = Number(data.config.duration?.replace('s', '') || 5);
+      const perSec = await getCostByType("video", modelId, resolution);
+      setCost(perSec * duration);
+    };
+    loadCost();
+  }, [data.config.model, data.config.wanxResolution, data.config.duration, getCostByType]);
 
   const handleGenerate = async () => {
     if (data.isGenerating || data.credits < cost) return;
@@ -73,7 +87,7 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
         (n.data.output || n.data.sourceImage) && (n.type === 'image' || n.type === 'image-edit')
       );
       
-      console.log("VideoNode: Found", imageParentNodes.length, "image parent nodes");
+      logger.info("VideoNode: Found", imageParentNodes.length, "image parent nodes");
       
       let firstFrame: string | undefined;
       let lastFrame: string | undefined;
@@ -81,18 +95,18 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
       
       if (imageParentNodes.length >= 1) {
         firstFrame = (imageParentNodes[0].data.output || imageParentNodes[0].data.sourceImage) as string;
-        console.log("VideoNode: Using first frame from", imageParentNodes[0].id);
+        logger.info("VideoNode: Using first frame from", imageParentNodes[0].id);
       }
       
       if (imageParentNodes.length >= 2) {
         lastFrame = (imageParentNodes[1].data.output || imageParentNodes[1].data.sourceImage) as string;
-        console.log("VideoNode: Using last frame from", imageParentNodes[1].id);
+        logger.info("VideoNode: Using last frame from", imageParentNodes[1].id);
       }
       
       // 也检查旧的 inheritImage 和 sourceImage
       if (!firstFrame && (data.inheritImage || data.sourceImage)) {
         referenceImage = data.inheritImage || data.sourceImage;
-        console.log("VideoNode: Using reference image");
+        logger.info("VideoNode: Using reference image");
       }
       
       // 提交视频生成任务
@@ -129,7 +143,7 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
       // 开始轮询视频状态
       pollVideoStatus(props.id, result.task_id);
     } catch (error) {
-      console.error("Video generation error:", error);
+      logger.error("Video generation error:", error);
       setProgress(0);
       setNodes((nds) =>
         nds.map((n) =>
@@ -204,7 +218,7 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
           setTimeout(poll, 2000);
         }
       } catch (error) {
-        console.error("Polling error:", error);
+        logger.error("Polling error:", error);
         // 出错后继续轮询
         setTimeout(poll, 3000);
       }
@@ -275,15 +289,50 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
   };
 
   return (
+    <>
     <BaseNode
       {...props}
       onGenerate={handleGenerate}
+      renderToolbar={({ onGenerate, onDelete, isGenerating }) => (
+        <div className="absolute left-1/2 -translate-x-1/2 -translate-y-[84px] flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-full shadow-xl z-[1001]">
+          <button onClick={onGenerate} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="Redraw">
+            <RefreshCw size={14} className={isGenerating ? "animate-spin" : ""} />
+          </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const videoUrl = data.sourceImage || data.output;
+              if (videoUrl) downloadVideo(videoUrl as string, data.label || 'video');
+            }}
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 nodrag nopan"
+            title="Download"
+          >
+            <Download size={14} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 cursor-pointer z-[9999] relative"
+            title="全屏预览"
+          >
+            <Maximize2 size={14} />
+          </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <button
+            onClick={onDelete}
+            className="p-2 hover:bg-red-50 rounded-full transition-colors text-red-500"
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
       renderConfig={() => (
         <div className="relative group/config">
           <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all text-slate-400 hover:text-white group">
             <Layers size={16} className="text-slate-500" />
             <span className="text-sm font-bold uppercase tracking-tight">
-              {currentLabel} · {data.config.wanxResolution || '720P'} · {data.config.duration || '5s'}
+              {currentLabel} · {data.config.wanxResolution || '720P'} · {data.config.duration || '5s'}{data.config.aspectRatio ? ` · ${data.config.aspectRatio}` : ''}
             </span>
           </button>
 
@@ -323,6 +372,27 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
                     )}
                   >
                     {dur}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="text-sm font-bold text-slate-500 pl-1 uppercase tracking-wider">画面比例</div>
+              <div className="flex bg-white/5 rounded-2xl p-1 border border-white/5">
+                {VIDEO_ASPECT_RATIO_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateConfig({ aspectRatio: opt.value as any })}
+                    className={cn(
+                      "flex-1 py-2 text-[10px] font-black uppercase transition-all rounded-xl",
+                      (data.config.aspectRatio === opt.value || (!data.config.aspectRatio && opt.value === "16:9"))
+                        ? "bg-white/10 text-white shadow-xl"
+                        : "text-slate-500 hover:text-slate-300"
+                    )}
+                    title={opt.description}
+                  >
+                    {opt.label}
                   </button>
                 ))}
               </div>
@@ -469,5 +539,26 @@ export const VideoNode: React.FC<NodeProps<Node<NodeData>>> = (props) => {
         </div>
       </div>
     </BaseNode>
+    {isFullscreen && (data.sourceImage || data.output) && createPortal(
+      <div
+        className="fixed inset-0 z-[99999] bg-black flex items-center justify-center"
+        onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
+      >
+        <div
+          className="relative w-[90vw] h-[90vh] max-w-[1200px] rounded-2xl overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <VideoPlayer
+            videoUrl={(data.sourceImage || data.output) as string}
+            onClose={() => setIsFullscreen(false)}
+            prompt={data.prompt}
+            autoPlay={true}
+            fileName={data.label || 'video'}
+          />
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
 };

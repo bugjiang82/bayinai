@@ -13,6 +13,7 @@ import {
   Plus,
   Trash2,
   AlertCircle,
+  ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ interface CreditPolicy {
 const CATEGORY_LABELS: Record<string, string> = {
   image: "图片生成",
   video: "视频生成",
+  outpaint: "扩图",
   architecture: "进阶设计",
   edit: "图片编辑",
   workflow: "工作流",
@@ -40,6 +42,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   image: <ImageIcon className="w-4 h-4" />,
   video: <Video className="w-4 h-4" />,
+  outpaint: <ScanLine className="w-4 h-4" />,
 };
 
 export default function CreditPoliciesPage() {

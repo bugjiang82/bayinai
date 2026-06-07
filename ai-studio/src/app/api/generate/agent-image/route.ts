@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { GoogleGenAI } from "@google/genai";
+import { getGoogleGenAI } from "@/lib/ai-clients";
 import fs from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
 import { success, error } from "@/types/api";
 import sharp from "sharp";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY || "",
-});
+const ai = getGoogleGenAI();
 
 export async function POST(request: NextRequest) {
   try {
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
         await sharp(filepath).resize(256, 256, { fit: "inside" }).jpeg({ quality: 70 }).toFile(thumbPath);
         thumbnailUrl = `/outputs/${session.user.id}/${thumbFilename}`;
       } catch (thumbErr) {
-        console.error("缩略图生成失败:", thumbErr);
+        logger.error("缩略图生成失败:", thumbErr);
       }
 
       await prisma.user.update({
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
       throw err;
     }
   } catch (err) {
-    console.error("生成失败:", err);
+    logger.error("生成失败:", err);
     const message = err instanceof Error ? err.message : "生成失败";
     return NextResponse.json(error(message), { status: 500 });
   }

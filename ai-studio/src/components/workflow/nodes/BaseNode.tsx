@@ -24,18 +24,30 @@ import { cn } from '../lib/utils';
 import { NodeData } from '../types';
 import {
   type ImageModelId,
+  type ImageQuality,
+  type VideoModelId,
+  type VideoResolution,
   getCanvasImageModelOptions,
   getCanvasVideoModelOptions,
   getImageModelIdByApiId,
 } from '@/models';
 import { useCreditPolicies } from '@/hooks/useCreditPolicies';
-import { calculateNodeCost } from '../services/costCalculator';
+import logger from "@/lib/logger";
+import { useWorkflowStore } from "@/store/workflowStore";
 
 interface BaseNodeProps extends NodeProps<Node<NodeData>> {
   children?: React.ReactNode;
   onGenerate: () => void;
   renderConfig?: () => React.ReactNode;
   topContent?: React.ReactNode;
+  renderToolbar?: (actions: {
+    onGenerate: () => void;
+    onDownload: () => void;
+    onFullscreen: () => void;
+    onDelete: () => void;
+    isGenerating: boolean;
+    hasOutput: boolean;
+  }) => React.ReactNode;
 }
 
 export const BaseNode: React.FC<BaseNodeProps> = ({ 
@@ -45,7 +57,8 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   children, 
   onGenerate,
   renderConfig,
-  topContent
+  topContent,
+  renderToolbar
 }) => {
   const { setNodes, getNodes, setEdges } = useReactFlow<Node<NodeData>>();
   const [isEditingName, setIsEditingName] = useState(false);
@@ -63,10 +76,31 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const isDragging = useDragging();
   const isMultiSelected = useMultiSelect();
   const referencedNodesRef = useRef<Node<NodeData>[]>([]);
-  const { getImageCostFromApi, getVideoCostFromApi } = useCreditPolicies();
-  
-  // 计算积分消耗
-  const cost = useMemo(() => calculateNodeCost(data, getImageCostFromApi, getVideoCostFromApi), [data.config.model, data.config.duration, data.config.quality, data.type, getImageCostFromApi, getVideoCostFromApi]);
+  const { getCostByType } = useCreditPolicies();
+  const [cost, setCost] = useState(1);
+
+  // 模型/参数变化时异步获取实时积分成本
+  useEffect(() => {
+    const loadCost = async () => {
+      if (data.type === 'video') {
+        const modelId = (data.config.model || "wan2.2-kf2v-flash") as VideoModelId;
+        const resolution = (data.config.wanxResolution || '720P') as VideoResolution;
+        const duration = Number(data.config.duration?.replace('s', '') || 5);
+        const perSec = await getCostByType("video", modelId, resolution);
+        setCost(perSec * duration);
+      } else {
+        const model = data.config.model || 'gemini-3.1-flash-image-preview';
+        const modelId = getImageModelIdByApiId(model) || ('flash' as ImageModelId);
+        const qualityMap: Record<string, ImageQuality> = {
+          '512p': '512', standard: '1K', hd: '2K', '4k': '4K',
+        };
+        const quality = qualityMap[data.config.quality || 'standard'] || '1K';
+        const c = await getCostByType("text-to-image", modelId, quality);
+        setCost(c);
+      }
+    };
+    loadCost();
+  }, [data.config.model, data.config.duration, data.config.quality, data.config.wanxResolution, data.type, getCostByType]);
 
   // 引用节点计算 - 拖拽时跳过计算以提升性能
   const parentIds = (data.referencedParentIds || []) as string[];
@@ -211,6 +245,46 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
     return scaledImageWidth > viewportWidth || scaledImageHeight > viewportHeight;
   }, [imageDimensions, previewScale]);
 
+  useEffect(() => {
+    if (!isDraggingImage) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      const scaledW = imageDimensions.width * previewScale;
+      const scaledH = imageDimensions.height * previewScale;
+      const maxX = Math.max(0, (scaledW - rect.width) / 2);
+      const maxY = Math.max(0, (scaledH - rect.height) / 2);
+
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+
+      setOffset(prev => {
+        const newX = prev.x + dx;
+        const newY = prev.y + dy;
+        return {
+          x: Math.max(-maxX, Math.min(maxX, newX)),
+          y: Math.max(-maxY, Math.min(maxY, newY)),
+        };
+      });
+      setDragStart({ x: e.clientX, y: e.clientY });
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingImage(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove, { passive: false });
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingImage, dragStart, imageDimensions, previewScale]);
+
   return (
     <div 
       className={cn(
@@ -221,6 +295,14 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       {selected && !isDragging && (
+        renderToolbar ? renderToolbar({
+          onGenerate,
+          onDownload: handleDownload,
+          onFullscreen: () => setIsFullscreen(true),
+          onDelete: () => setNodes(nds => nds.filter(n => n.id !== id)),
+          isGenerating: !!data.isGenerating,
+          hasOutput: !!(data.output || data.sourceImage),
+        }) : (
         <div className="absolute left-1/2 -translate-x-1/2 -translate-y-[84px] flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-full shadow-xl z-[1001]">
           <button onClick={onGenerate} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="Redraw">
             <RefreshCw size={14} className={data.isGenerating ? "animate-spin" : ""} />
@@ -239,12 +321,12 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
           <button 
             onClick={(e) => { 
               e.stopPropagation(); 
-              console.log("Fullscreen button clicked (top toolbar)");
-              console.log("Fullscreen clicked, entire data:", data);
-              console.log("Fullscreen clicked, data.output:", data.output); 
-              console.log("Fullscreen clicked, data.sourceImage:", data.sourceImage);
+              logger.info("Fullscreen button clicked (top toolbar)");
+    logger.info("Fullscreen clicked, entire data:", data);
+    logger.info("Fullscreen clicked, data.output:", data.output);
+    logger.info("Fullscreen clicked, data.sourceImage:", data.sourceImage);
               const hasImage = data.output || data.sourceImage;
-              console.log("Has image data:", hasImage);
+              logger.info("Has image data:", hasImage);
               setIsFullscreen(true); 
             }}
             className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600 cursor-pointer z-[9999] relative" 
@@ -261,7 +343,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
             <Trash2 size={14} />
           </button>
         </div>
-      )}
+        ))}
 
       <div className="absolute -top-7 left-0 flex items-center gap-2 px-1 z-20">
         {isEditingName ? (
@@ -379,7 +461,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                     <Download size={18} />
                   </button>
                   <button 
-                    onClick={(e) => { e.stopPropagation(); console.log("Fullscreen clicked, data.output:", data.output); console.log("Fullscreen clicked, data.sourceImage:", data.sourceImage); setIsFullscreen(true); }}
+                    onClick={(e) => { e.stopPropagation(); logger.info("Fullscreen clicked, data.output:", data.output); logger.info("Fullscreen clicked, data.sourceImage:", data.sourceImage); setIsFullscreen(true); }}
                     className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors nodrag nopan"
                     title="Fullscreen preview"
                   >
@@ -574,7 +656,10 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
               <div 
                 ref={viewportRef}
                 className="relative bg-black/40 overflow-hidden"
-                style={{ height: 'calc(100% - 60px)' }}
+                style={{ 
+                  height: 'calc(100% - 60px)',
+                  cursor: isDraggingImage ? 'grabbing' : canDrag ? 'grab' : 'default'
+                }}
                 onWheel={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -585,22 +670,10 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                   if (e.button !== 0) return;
                   if (!canDrag) return;
                   e.preventDefault();
+                  e.stopPropagation();
                   setIsDraggingImage(true);
                   setDragStart({ x: e.clientX, y: e.clientY });
                 }}
-                onMouseMove={(e) => {
-                  if (!isDraggingImage) return;
-                  if (!canDrag) {
-                    setIsDraggingImage(false);
-                    return;
-                  }
-                  const dx = e.clientX - dragStart.x;
-                  const dy = e.clientY - dragStart.y;
-                  setOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-                  setDragStart({ x: e.clientX, y: e.clientY });
-                }}
-                onMouseUp={() => setIsDraggingImage(false)}
-                onMouseLeave={() => setIsDraggingImage(false)}
               >
                 <div className="absolute inset-0 flex items-center justify-center">
                   <img

@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { X, Sparkles, Lightbulb, Image, Clipboard, Check, GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logger from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -163,12 +164,12 @@ export default function PromptInput({
                 setExtractedPrompt(prompt);
                 setShowCopyButton(true);
               } else {
-                console.error('提取提示词失败:', result.message);
+                logger.error('提取提示词失败:', result.message);
                 setExtractedPrompt(`提取失败: ${result.message}`);
                 setShowCopyButton(false);
               }
             } catch (error) {
-              console.error('提取提示词失败:', error);
+              logger.error('提取提示词失败:', error);
               setExtractedPrompt(`提取失败: ${error instanceof Error ? error.message : '未知错误'}`);
               setShowCopyButton(false);
             } finally {
@@ -183,7 +184,7 @@ export default function PromptInput({
       
       input.click();
     } catch (error) {
-      console.error('提取提示词失败:', error);
+      logger.error('提取提示词失败:', error);
       setIsExtracting(false);
     }
   }, []);
