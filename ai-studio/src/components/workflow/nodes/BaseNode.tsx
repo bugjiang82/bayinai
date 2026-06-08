@@ -33,7 +33,6 @@ import {
 } from '@/models';
 import { useCreditPolicies } from '@/hooks/useCreditPolicies';
 import logger from "@/lib/logger";
-import { useWorkflowStore } from "@/store/workflowStore";
 
 interface BaseNodeProps extends NodeProps<Node<NodeData>> {
   children?: React.ReactNode;
@@ -536,7 +535,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
                       const modelMap = Object.fromEntries(allModels.map(m => [m.id, m.name]));
                       
                       return modelMap[data.config.model] || textModelNames[data.config.model] ||
-                        (data.type === 'video' ? 'Veo 3.1 Lite' : (data.type === 'image' ? 'Gemini Flash' : 'Gemini 3 Flash'));
+                        (data.type === 'video' ? 'Seedance 1.5 Pro' : (data.type === 'image' ? 'Gemini Flash' : 'Gemini 3 Flash'));
                     })()}
                   </span>
                 </div>

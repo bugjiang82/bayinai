@@ -6,7 +6,7 @@ const MODEL_NAME_MAP: Record<string, string> = {
   "gemini-3-flash-preview": "Gemini 3 Flash",
   "gemini-2.5-flash-image": "Gemini 2.5 Flash Image",
   "gemini-3.1-flash-image-preview": "Gemini 3.1 Flash Image",
-  "veo-3.1-lite-generate-preview": "Veo 3.1 Lite",
+  "seedance-1.5-pro": "Seedance 1.5 Pro",
   "wan2.2-kf2v-flash": "Wanx 2.2",
 };
 

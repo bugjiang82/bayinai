@@ -24,7 +24,6 @@ const VIDEO_MODEL_DISPLAY_NAMES: Record<string, string> = {
   "wan2.7-t2v": "万相 2.7 (文生)",
   "happyhorse-1.0-t2v": "HappyHorse (文生)",
   "happyhorse-1.0-i2v": "HappyHorse (图生)",
-  "veo-3.1-lite-generate-preview": "Veo 3.1",
 };
 
 export default function CreditPoliciesTestPage() {

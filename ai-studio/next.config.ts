@@ -6,6 +6,14 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**" },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: "/outputs/:path*",
+        destination: "/api/outputs/:path*",
+      },
+    ];
+  },
   allowedDevOrigins: ["43.155.210.242", "43.160.203.178", "43.133.251.144", "43.165.174.234"],
   experimental: {
     optimizePackageImports: [

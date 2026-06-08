@@ -611,7 +611,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
         inheritPrompt,
         referencedParentIds: sourceNodeId ? [sourceNodeId] : [],
         config: {
-          model: type === 'text' ? 'gemini-3-flash-preview' : (type === 'image' || type === 'image-edit') ? getImageModelApiName('flash') : getCanvasVideoModelOptions()[0]?.id || 'veo-3.1-lite-generate-preview',
+          model: type === 'text' ? 'gemini-3-flash-preview' : (type === 'image' || type === 'image-edit') ? getImageModelApiName('flash') : getCanvasVideoModelOptions()[0]?.id || 'seedance-1.5-pro',
           quality: 'standard',
           aspectRatio: type === 'video' ? '16:9' : '1:1',
           duration: '5s',

@@ -119,7 +119,7 @@ function getGradient(id: string): string {
 // ─── Mock data ───────────────────────────────────────────────────────────────
 
 function generateMockItems(page: number, pageSize: number): GalleryItem[] {
-  const models = ["Imagen 3", "Imagen 4", "Veo 2", "Gemma"];
+  const models = ["Imagen 3", "Imagen 4", "Seedance", "Gemma"];
   const prompts = [
     "现代极简主义建筑外观，玻璃幕墙，蓝天白云",
     "日式禅意庭院，枯山水设计，樱花飘落",

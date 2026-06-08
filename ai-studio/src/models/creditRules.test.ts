@@ -143,10 +143,6 @@ describe("Video Credit Rules", () => {
     expect(getVideoCostPerSecond("happyhorse-1.0-i2v", "1080P")).toBe(55);
   });
 
-  it("veo 3.1 should cost 50 per second", () => {
-    expect(getVideoCostPerSecond("veo-3.1-lite-generate-preview", "720P")).toBe(50);
-  });
-
   it("should return 50 as fallback for unknown model/resolution", () => {
     expect(getVideoCostPerSecond("unknown" as any, "720P")).toBe(50);
   });

@@ -92,7 +92,6 @@ describe("Video Model Registry", () => {
     expect(modelIds).toContain("wan2.7-t2v");
     expect(modelIds).toContain("happyhorse-1.0-t2v");
     expect(modelIds).toContain("happyhorse-1.0-i2v");
-    expect(modelIds).toContain("veo-3.1-lite-generate-preview");
   });
 
   it("wan2.2 should support 480P, 720P, 1080P", () => {
@@ -139,7 +138,6 @@ describe("Video Model Registry", () => {
 
   it("getVideoModelResolutions should return correct resolutions", () => {
     expect(getVideoModelResolutions("wan2.2-kf2v-flash")).toEqual(["480P", "720P", "1080P"]);
-    expect(getVideoModelResolutions("veo-3.1-lite-generate-preview")).toEqual(["720P"]);
     expect(getVideoModelResolutions("nonexistent")).toEqual(["720P"]);
   });
 

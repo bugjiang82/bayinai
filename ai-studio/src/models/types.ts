@@ -1,7 +1,7 @@
 export type ModelCategory = "image" | "video" | "text";
 
 export type ImageModelId = "flash" | "pro" | "image2";
-export type VideoModelId = "wan2.2-kf2v-flash" | "wan2.7-r2v" | "wan2.7-t2v" | "happyhorse-1.0-t2v" | "happyhorse-1.0-i2v" | "veo-3.1-lite-generate-preview" | "seedance-1.5-pro";
+export type VideoModelId = "wan2.2-kf2v-flash" | "wan2.7-r2v" | "wan2.7-t2v" | "happyhorse-1.0-t2v" | "happyhorse-1.0-i2v" | "seedance-1.5-pro";
 
 export type ImageQuality = "512" | "1K" | "2K" | "4K";
 export type VideoResolution = "480P" | "720P" | "1080P";

@@ -5,6 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getGoogleGenAI } from "@/lib/ai-clients";
 import fs from "fs";
 import path from "path";
+import sharp from "sharp";
 import prisma from "@/lib/prisma";
 import { success, error } from "@/types/api";
 import { getGenerationCost, invalidatePolicyCache } from "@/services/creditPolicy.service";
@@ -155,6 +156,17 @@ export async function POST(request: NextRequest) {
 
       const outputUrl = `/outputs/${session.user.id}/${filename}`;
 
+      // 生成缩略图
+      let thumbnailUrl: string | null = null;
+      try {
+        const thumbFilename = `${generation.id}_thumb.jpg`;
+        const thumbPath = path.join(outputDir, thumbFilename);
+        await sharp(filepath).resize(256, 256, { fit: "inside" }).jpeg({ quality: 70 }).toFile(thumbPath);
+        thumbnailUrl = `/outputs/${session.user.id}/${thumbFilename}`;
+      } catch (thumbErr) {
+        logger.error("缩略图生成失败:", thumbErr);
+      }
+
       // 扣除积分
       await prisma.user.update({
         where: { id: session.user.id },
@@ -180,6 +192,7 @@ export async function POST(request: NextRequest) {
         data: {
           status: "COMPLETED",
           outputUrl,
+          thumbnailUrl,
           completedAt: now,
         },
       });

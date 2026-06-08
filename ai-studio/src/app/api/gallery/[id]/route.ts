@@ -98,12 +98,12 @@ export async function POST(
       return NextResponse.json(error("作品不存在"), { status: 404 });
     }
 
-    // 使用 params 字段来存储收藏状态
-    const currentParams = (JSON.parse(generation.params || '{}') as Record<string, unknown>) || {};
+    // 使用 favorited 专用字段来存储收藏状态
     await prisma.generation.update({
       where: { id },
       data: {
-        params: JSON.stringify({ ...currentParams, favorite: !!favorite }),
+        favorited: !!favorite,
+        favoritedAt: favorite ? new Date() : null,
       },
     });
 

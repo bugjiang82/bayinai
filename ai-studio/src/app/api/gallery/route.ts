@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
     const typeFilter = searchParams.get('type') || 'all';
     const timeFilter = searchParams.get('time') || 'all';
     const searchQuery = searchParams.get('q');
+    const favoritedParam = searchParams.get('favorited');
 
     // 构建缓存键
     const cacheKey = getCacheKey(session.user.id, {
@@ -120,6 +121,7 @@ export async function GET(request: NextRequest) {
       type: typeFilter,
       time: timeFilter,
       q: searchQuery || '',
+      favorited: favoritedParam || '',
     });
 
     // 尝试从缓存获取数据
@@ -132,13 +134,15 @@ export async function GET(request: NextRequest) {
     const where: PrismaWhere = {
       userId: session.user.id,
       status: 'COMPLETED',
-      favorited: true,
     };
+    if (favoritedParam !== null) {
+      where.favorited = favoritedParam === 'true';
+    }
 
     // 类型过滤
     if (typeFilter === 'image') {
       where.type = {
-        in: ['TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE', 'INPAINT', 'ARCHITECTURE'],
+        in: ['TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE', 'INPAINT', 'EDIT', 'ARCHITECTURE'],
       };
     } else if (typeFilter === 'video') {
       where.type = {

@@ -212,7 +212,7 @@ model CanvasProject {
   userId      String
   name        String
   description String?  @db.Text
-  canvasData  String   @db.Text
+  canvasData  String   @db.LongText
   thumbnail   String?
   isDraft     Boolean  @default(true)
   createdAt   DateTime @default(now())

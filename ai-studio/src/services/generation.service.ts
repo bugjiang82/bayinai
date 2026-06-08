@@ -457,7 +457,7 @@ export async function outpaintImage(
       },
     });
 
-    const outDir = path.join("outputs", userId);
+    const outDir = path.join(process.cwd(), "public", "outputs", userId);
     if (!fs.existsSync(outDir)) {
       fs.mkdirSync(outDir, { recursive: true });
     }
@@ -502,8 +502,8 @@ export async function outpaintImage(
         status: "COMPLETED",
         prompt,
         params: JSON.stringify({ model: modelName, aspectRatio }),
-        outputUrl: `${outputFileName}`,
-        thumbnailUrl: `${thumbnailFileName}`,
+        outputUrl: `/outputs/${userId}/${outputFileName}`,
+        thumbnailUrl: `/outputs/${userId}/${thumbnailFileName}`,
         width: outputWidth,
         height: outputHeight,
         cost,

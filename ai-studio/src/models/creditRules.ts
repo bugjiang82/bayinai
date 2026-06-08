@@ -32,8 +32,6 @@ export const DEFAULT_VIDEO_CREDIT_RULES: VideoCreditRule[] = [
   { policyKey: createPolicyKey("happyhorse-1-0-i2v", "720P"), modelId: "happyhorse-1.0-i2v", resolution: "720P", name: "HappyHorse (图生) - 720P", description: "按秒计费", costPerSecond: 35, unit: "秒" },
   { policyKey: createPolicyKey("happyhorse-1-0-i2v", "1080P"), modelId: "happyhorse-1.0-i2v", resolution: "1080P", name: "HappyHorse (图生) - 1080P", description: "按秒计费", costPerSecond: 55, unit: "秒" },
 
-  { policyKey: createPolicyKey("veo-3-1-lite-generate-preview", "720P"), modelId: "veo-3.1-lite-generate-preview", resolution: "720P", name: "Veo 3.1 - 720P", description: "按秒计费", costPerSecond: 50, unit: "秒" },
-
   { policyKey: createPolicyKey("seedance-1-5-pro", "480P"), modelId: "seedance-1.5-pro", resolution: "480P", name: "Seedance 1.5 Pro - 480P", description: "按秒计费", costPerSecond: 30, unit: "秒" },
   { policyKey: createPolicyKey("seedance-1-5-pro", "720P"), modelId: "seedance-1.5-pro", resolution: "720P", name: "Seedance 1.5 Pro - 720P", description: "按秒计费", costPerSecond: 50, unit: "秒" },
   { policyKey: createPolicyKey("seedance-1-5-pro", "1080P"), modelId: "seedance-1.5-pro", resolution: "1080P", name: "Seedance 1.5 Pro - 1080P", description: "按秒计费", costPerSecond: 80, unit: "秒" },

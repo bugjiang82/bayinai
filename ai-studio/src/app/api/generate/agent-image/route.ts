@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
         type: "TEXT_TO_IMAGE",
         status: "PROCESSING",
         prompt,
+        params: JSON.stringify({ model, imageSize, aspectRatio }),
         cost,
       },
     });
