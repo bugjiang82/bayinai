@@ -10,6 +10,7 @@ import {
   Download, 
   Maximize2, 
   ChevronUp,
+  ChevronDown,
   Sparkles,
   Send,
   Trash2,
@@ -63,6 +64,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const [isEditingName, setIsEditingName] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isPickingParent, setIsPickingParent] = useState(false);
+  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
   const [showMentions, setShowMentions] = useState<{ x: number; y: number; index: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [previewScale, setPreviewScale] = useState(1);
@@ -293,7 +295,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {selected && !isDragging && (
+      {selected && !isDragging && !isMultiSelected && (
         renderToolbar ? renderToolbar({
           onGenerate,
           onDownload: handleDownload,
@@ -450,24 +452,35 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2 pr-2">
-              {(data.output || data.sourceImage) && (
-                <>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleDownload(); }}
-                    className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors nodrag nopan"
-                    title="Download"
-                  >
-                    <Download size={18} />
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); logger.info("Fullscreen clicked, data.output:", data.output); logger.info("Fullscreen clicked, data.sourceImage:", data.sourceImage); setIsFullscreen(true); }}
-                    className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors nodrag nopan"
-                    title="Fullscreen preview"
-                  >
-                    <Maximize2 size={18} />
-                  </button>
-                </>
-              )}
+              {((data.output || data.sourceImage) || true) && (
+                  <>
+                    {(data.output || data.sourceImage) && (
+                      <>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+                          className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors nodrag nopan"
+                          title="Download"
+                        >
+                          <Download size={18} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); logger.info("Fullscreen clicked, data.output:", data.output); logger.info("Fullscreen clicked, data.sourceImage:", data.sourceImage); setIsFullscreen(true); }}
+                          className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors nodrag nopan"
+                          title="Fullscreen preview"
+                        >
+                          <Maximize2 size={18} />
+                        </button>
+                      </>
+                    )}
+                    <button 
+                      onClick={() => setIsPromptExpanded(!isPromptExpanded)}
+                      className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors"
+                      title={isPromptExpanded ? "收起提示词区域" : "展开提示词区域"}
+                    >
+                      {isPromptExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                  </>
+                )}
             </div>
           </div>
 
@@ -505,9 +518,9 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
               </div>
             )}
             <textarea
-              rows={1}
-              style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
-              className="w-full bg-transparent text-xl text-slate-200 focus:outline-none active:outline-none transition-all resize-none placeholder:text-slate-600 font-medium leading-relaxed min-h-[56px]"
+                rows={isPromptExpanded ? 12 : 4}
+                style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+                className="w-full bg-transparent text-base text-slate-200 focus:outline-none active:outline-none transition-all resize-none placeholder:text-slate-600 font-medium leading-relaxed nodrag nowheel"
               placeholder="描述您想要生成的内容。使用 @ 引用节点。"
               value={data.prompt}
               onChange={handlePromptChange}

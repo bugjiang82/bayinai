@@ -175,9 +175,9 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ initialProjectId }) => 
           const response = await fetch(`/api/generate/history?type=${types}&pageSize=100`);
           const result = await response.json();
           if (result.code === 0) {
-            const allItems = result.data.list || [];
-            setHistoryItems(allItems);
-            setHistoryTotal(result.data.total || allItems.length);
+            const allItems = (result.data.list || []).filter((item: any) => item.thumbnailUrl || item.outputUrl);
+              setHistoryItems(allItems);
+              setHistoryTotal(allItems.length);
           }
         } catch (err) {
           logger.error("获取历史失败:", err);

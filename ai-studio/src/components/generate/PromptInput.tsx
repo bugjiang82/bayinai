@@ -34,7 +34,7 @@ export default function PromptInput({
   value,
   onChange,
   placeholder = "描述你想要生成的图像，越详细效果越好...\n\n例如：一座现代风格的建筑，玻璃幕墙，蓝天白云，高清摄影",
-  maxLength = 2000,
+  maxLength = 4000,
   className,
   showQuickPrompts = true,
   storageKey = "prompt-input",
